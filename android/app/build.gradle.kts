@@ -29,11 +29,29 @@ android {
         versionName = flutter.versionName
     }
 
+    // A fixed key (from android/key.properties, written by CI from repo
+    // secrets) signs every build the same way, so a new APK installs over the
+    // previous one. Without it, builds fall back to the per-machine debug key.
+    val keyProps = java.util.Properties().apply {
+        val f = rootProject.file("key.properties")
+        if (f.exists()) f.inputStream().use { load(it) }
+    }
+    val hasKey = keyProps.getProperty("storeFile") != null
+
+    signingConfigs {
+        if (hasKey) {
+            create("fixed") {
+                storeFile = file(keyProps.getProperty("storeFile"))
+                storePassword = keyProps.getProperty("storePassword")
+                keyAlias = keyProps.getProperty("keyAlias")
+                keyPassword = keyProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(if (hasKey) "fixed" else "debug")
         }
     }
 }
