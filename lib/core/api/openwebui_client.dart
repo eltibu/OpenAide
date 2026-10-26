@@ -69,13 +69,13 @@ class OpenWebUiClient {
     Map<String, String>? query,
   }) async {
     final url = _uri(path, query);
-    final req = http.Request(method, url)
-      ..headers.addAll(_headers)
-      // Redirects are surfaced instead of followed: POSTs can't follow them,
-      // and [discover] uses them to find the right address.
-      ..followRedirects = false;
-    if (body != null) req.body = jsonEncode(body);
-    final res = await http.Response.fromStream(await _http.send(req));
+    final res = await http.Response.fromStream(
+      await _open(() {
+        final req = http.Request(method, url)..headers.addAll(_headers);
+        if (body != null) req.body = jsonEncode(body);
+        return req;
+      }),
+    );
     final text = utf8.decode(res.bodyBytes);
     if (res.isRedirect || (res.statusCode >= 300 && res.statusCode < 400)) {
       final location = res.headers['location'];
@@ -102,6 +102,41 @@ class OpenWebUiClient {
     } on FormatException {
       throw ApiException(res.statusCode, _notOpenWebUi);
     }
+  }
+
+  /// Sends a request built by [build]. Redirects are surfaced instead of
+  /// followed (POSTs can't follow them, and [discover] uses them to find the
+  /// right address). Failures to connect at all, such as a phone's DNS
+  /// lookup briefly failing, are retried; the request never left the phone,
+  /// so retrying can't duplicate anything.
+  Future<http.StreamedResponse> _open(http.BaseRequest Function() build) async {
+    const delays = [Duration(milliseconds: 600), Duration(seconds: 2)];
+    for (var attempt = 0; ; attempt++) {
+      final req = build()..followRedirects = false;
+      try {
+        return await _http.send(req);
+      } catch (e) {
+        if (!isConnectError(e)) rethrow;
+        if (attempt >= delays.length) {
+          throw ApiException(
+            0,
+            "Can't reach ${req.url.host}. Check your internet connection, "
+            'then tap Retry.',
+          );
+        }
+        await Future<void>.delayed(delays[attempt]);
+      }
+    }
+  }
+
+  /// True for errors where no connection was made (DNS, refused, offline).
+  static bool isConnectError(Object e) {
+    final text = '$e';
+    return text.contains('Failed host lookup') ||
+        text.contains('Connection refused') ||
+        text.contains('Network is unreachable') ||
+        text.contains('No route to host') ||
+        text.contains('Connection failed');
   }
 
   static const _notOpenWebUi =
@@ -245,15 +280,23 @@ class OpenWebUiClient {
     required List<Map<String, dynamic>> messages,
     Map<String, dynamic> extraParams = const {},
   }) async* {
-    final req = http.Request('POST', _uri('/api/chat/completions'))
-      ..headers.addAll({..._headers, 'Accept': 'text/event-stream'})
-      ..body = jsonEncode({
-        'model': model,
-        'messages': messages,
-        'stream': true,
-        ...extraParams,
-      });
-    final res = await _http.send(req);
+    final res = await _open(
+      () => http.Request('POST', _uri('/api/chat/completions'))
+        ..headers.addAll({..._headers, 'Accept': 'text/event-stream'})
+        ..body = jsonEncode({
+          'model': model,
+          'messages': messages,
+          'stream': true,
+          ...extraParams,
+        }),
+    );
+    if (res.statusCode >= 300 && res.statusCode < 400) {
+      throw ApiException(
+        res.statusCode,
+        'Your sign-in expired. Sign out and sign in again.',
+        redirectTo: Uri.tryParse(res.headers['location'] ?? ''),
+      );
+    }
     if (res.statusCode >= 400) {
       throw ApiException(res.statusCode, await res.stream.bytesToString());
     }

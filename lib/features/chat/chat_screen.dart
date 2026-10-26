@@ -71,7 +71,8 @@ class ChatScreen extends ConsumerWidget {
               content: Text(state.error!),
               actions: [
                 TextButton(
-                  onPressed: () => ref.invalidate(modelsProvider),
+                  onPressed: () =>
+                      ref.read(chatControllerProvider.notifier).retry(),
                   child: const Text('Retry'),
                 ),
               ],
@@ -81,7 +82,10 @@ class ChatScreen extends ConsumerWidget {
                 ? const Center(child: CircularProgressIndicator())
                 : state.messages.isEmpty
                 ? const _EmptyState()
-                : _MessageList(messages: state.messages),
+                : _MessageList(
+                    messages: state.messages,
+                    streaming: state.streaming,
+                  ),
           ),
           _Composer(streaming: state.streaming),
         ],
@@ -106,8 +110,9 @@ class _EmptyState extends ConsumerWidget {
 }
 
 class _MessageList extends StatelessWidget {
-  const _MessageList({required this.messages});
+  const _MessageList({required this.messages, required this.streaming});
   final List<ChatMessage> messages;
+  final bool streaming;
 
   @override
   Widget build(BuildContext context) {
@@ -142,7 +147,12 @@ class _MessageList extends StatelessWidget {
         }
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: m.content.isEmpty
+          child: m.content.isEmpty && !(streaming && i == 0)
+              ? Text(
+                  'No reply. Tap Retry above to ask again.',
+                  style: TextStyle(color: scheme.error),
+                )
+              : m.content.isEmpty
               ? const Align(
                   alignment: Alignment.centerLeft,
                   child: SizedBox.square(

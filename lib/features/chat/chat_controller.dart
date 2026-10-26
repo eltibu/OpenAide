@@ -105,7 +105,6 @@ class ChatController extends Notifier<ChatState> {
 
     try {
       var chat = state.chat;
-      final isFirstTurn = chat == null;
       final user = ChatMessage(
         id: _uuid.v4(),
         role: 'user',
@@ -119,84 +118,120 @@ class ChatController extends Notifier<ChatState> {
       if (chat == null) {
         final draft = Chat(
           id: '',
-          title: 'New Chat',
+          title: _titleFrom(user.content),
           messages: {},
           models: [modelId],
         )..append(user);
         // Created on the server first, so the chat exists there even if the
         // app is closed mid-reply.
         chat = await client.createChat(draft);
+        state = state.copyWith(chat: chat);
+        await _reply(chat, modelId, isFirstTurn: true);
       } else {
         chat
           ..models = [modelId]
           ..append(user);
+        await _reply(chat, modelId);
       }
-
-      final assistant = ChatMessage(
-        id: _uuid.v4(),
-        role: 'assistant',
-        content: '',
-        parentId: user.id,
-        model: modelId,
-      );
-      chat.append(assistant);
-      state = state.copyWith(chat: chat);
-
-      final history = [
-        for (final m in chat.thread)
-          if (m.id != assistant.id) {'role': m.role, 'content': m.content},
-      ];
-
-      final done = _done = Completer<void>();
-      _sub = client
-          .streamCompletion(model: modelId, messages: history)
-          .listen(
-            (delta) {
-              assistant.content += delta;
-              state = state.copyWith();
-            },
-            onError: (Object e) {
-              state = state.copyWith(error: '$e');
-              if (!done.isCompleted) done.complete();
-            },
-            onDone: () {
-              if (!done.isCompleted) done.complete();
-            },
-            cancelOnError: true,
-          );
-      await done.future;
-      await _finish();
-
-      if (isFirstTurn && assistant.content.isNotEmpty) {
-        final title = await client.generateTitle(modelId, [
-          ...history,
-          {'role': 'assistant', 'content': assistant.content},
-        ]);
-        // Servers can turn title generation off; then, like the web UI,
-        // name the chat after the first message.
-        chat.title = (title != null && title.isNotEmpty)
-            ? title
-            : _titleFrom(user.content);
-        await client.saveChat(chat);
-        state = state.copyWith();
-      }
-      ref.invalidate(chatListProvider);
     } catch (e) {
       state = state.copyWith(streaming: false, error: '$e');
     }
   }
 
-  /// Marks the reply done and writes the chat back to the server.
-  Future<void> _finish() async {
+  /// Retries whatever failed last: a reply that never arrived is requested
+  /// again; a reply that arrived but wasn't saved is saved again.
+  Future<void> retry() async {
     final chat = state.chat;
-    if (!state.streaming || chat == null) return;
+    final modelId = state.modelId;
+    if (state.streaming || chat == null || modelId == null) {
+      ref.invalidate(modelsProvider);
+      state = state.copyWith(clearError: true);
+      return;
+    }
     final tip = chat.messages[chat.currentId];
-    tip?.extra['done'] = true;
+    state = state.copyWith(clearError: true);
+    if (tip != null && tip.role == 'assistant' && tip.content.isEmpty) {
+      // Drop the empty reply and ask again from its user message.
+      final parent = chat.messages[tip.parentId];
+      parent?.childrenIds.remove(tip.id);
+      chat.messages.remove(tip.id);
+      chat.currentId = parent?.id;
+    }
+    final last = chat.messages[chat.currentId];
+    if (last != null && last.role == 'user') {
+      state = state.copyWith(streaming: true);
+      await _reply(chat, modelId);
+    } else {
+      await _save(chat);
+    }
+  }
+
+  /// Streams an assistant reply under the chat's current tip, then saves.
+  Future<void> _reply(
+    Chat chat,
+    String modelId, {
+    bool isFirstTurn = false,
+  }) async {
+    final client = ref.read(clientProvider);
+    final assistant = ChatMessage(
+      id: _uuid.v4(),
+      role: 'assistant',
+      content: '',
+      parentId: chat.currentId,
+      model: modelId,
+    );
+    chat.append(assistant);
+    state = state.copyWith(chat: chat);
+
+    final history = [
+      for (final m in chat.thread)
+        if (m.id != assistant.id) {'role': m.role, 'content': m.content},
+    ];
+
+    final done = _done = Completer<void>();
+    _sub = client
+        .streamCompletion(model: modelId, messages: history)
+        .listen(
+          (delta) {
+            assistant.content += delta;
+            state = state.copyWith();
+          },
+          onError: (Object e) {
+            state = state.copyWith(error: '$e');
+            if (!done.isCompleted) done.complete();
+          },
+          onDone: () {
+            if (!done.isCompleted) done.complete();
+          },
+          cancelOnError: true,
+        );
+    await done.future;
+    _sub = null;
+    assistant.extra['done'] = true;
     state = state.copyWith(streaming: false);
+    // An empty reply isn't saved; Retry asks for it again.
+    if (assistant.content.isEmpty) return;
+
+    if (isFirstTurn) {
+      final title = await client.generateTitle(modelId, [
+        ...history,
+        {'role': 'assistant', 'content': assistant.content},
+      ]);
+      // Servers can turn title generation off; then, like the web UI, the
+      // chat keeps the first message as its name.
+      if (title != null && title.isNotEmpty) chat.title = title;
+    }
+    await _save(chat);
+  }
+
+  /// Writes the chat back to the server.
+  Future<void> _save(Chat chat) async {
     try {
       await ref.read(clientProvider).saveChat(chat);
+      state = state.copyWith();
+      ref.invalidate(chatListProvider);
     } catch (e) {
-      state = state.copyWith(error: 'Reply not saved to server: $e');
+      state = state.copyWith(error: 'Reply not saved to server yet. $e');
     }
   }
 }
