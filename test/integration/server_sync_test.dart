@@ -4,9 +4,11 @@
 //     flutter test test/integration
 //
 // It creates one chat on the server and deletes it at the end.
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:nexus_assistant/core/api/chat_socket.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
 import 'package:nexus_assistant/core/models/chat.dart';
 
@@ -16,8 +18,22 @@ void main() {
   final password = Platform.environment['OWUI_PASSWORD'];
   final skip = url == null ? 'Set OWUI_URL, OWUI_EMAIL, OWUI_PASSWORD' : null;
 
+  /// Waits until the server has saved [replyId] as done.
+  Future<ChatMessage> savedReply(
+    OpenWebUiClient client,
+    String chatId,
+    String replyId,
+  ) async {
+    for (var i = 0; i < 60; i++) {
+      final m = (await client.chat(chatId)).messages[replyId];
+      if (m != null && (m.done || m.error != null)) return m;
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+    }
+    throw TimeoutException('reply $replyId never finished');
+  }
+
   test(
-    'chat round-trips through the server',
+    'the server runs, streams and saves each reply',
     () async {
       final client = OpenWebUiClient(baseUrl: url!);
       await client.signIn(email!, password!);
@@ -27,47 +43,69 @@ void main() {
       expect(models, isNotEmpty);
       final model = models.first.id;
 
-      final user = ChatMessage(id: 'u-test', role: 'user', content: 'ping');
-      final created = await client.createChat(
-        Chat(id: '', title: 'New Chat', messages: {}, models: [model])
-          ..append(user),
+      final socket = ChatSocket(baseUrl: url, token: client.token!);
+      final sessionId = await socket.ready(
+        timeout: const Duration(seconds: 10),
       );
-      expect(created.id, isNotEmpty);
+      expect(sessionId, isNotNull);
+      final live = <Map<String, dynamic>>[];
+      final sub = socket.events.listen(live.add);
+
+      // First turn: a new chat, with live events over the socket.
+      final user = ChatMessage(id: 'u-test', role: 'user', content: 'ping');
+      final first = await client.startTurn(
+        model: model,
+        chatId: null,
+        userMessage: user,
+        replyId: 'a-test',
+        messages: [
+          {'role': 'user', 'content': 'ping'},
+        ],
+        sessionId: sessionId!,
+      );
+      final chatId = first.chatId;
+      expect(chatId, isNotEmpty);
 
       try {
-        final reply = await client
-            .streamCompletion(
-              model: model,
-              messages: [
-                {'role': 'user', 'content': 'ping'},
-              ],
-            )
-            .join();
-        expect(reply, isNotEmpty);
+        final reply = await savedReply(client, chatId, 'a-test');
+        expect(reply.error, isNull);
+        expect(reply.content, isNotEmpty);
+        expect(live.where((e) => e['message_id'] == 'a-test'), isNotEmpty);
 
-        created.append(
-          ChatMessage(
-            id: 'a-test',
-            role: 'assistant',
-            content: reply,
-            parentId: 'u-test',
-            model: model,
-          ),
+        // Second turn without a live socket: still saved on the server.
+        final next = ChatMessage(
+          id: 'u-test-2',
+          role: 'user',
+          content: 'again',
+          parentId: 'a-test',
         );
-        created.title =
-            await client.generateTitle(model, [
-              {'role': 'user', 'content': 'ping'},
-              {'role': 'assistant', 'content': reply},
-            ]) ??
-            'Untitled';
-        await client.saveChat(created);
+        await client.startTurn(
+          model: model,
+          chatId: chatId,
+          userMessage: next,
+          replyId: 'a-test-2',
+          messages: [
+            {'role': 'user', 'content': 'ping'},
+            {'role': 'assistant', 'content': reply.content},
+            {'role': 'user', 'content': 'again'},
+          ],
+          sessionId: 'nexus-app-test',
+        );
+        final second = await savedReply(client, chatId, 'a-test-2');
+        expect(second.content, isNotEmpty);
 
-        final fetched = await client.chat(created.id);
-        expect(fetched.thread.map((m) => m.content), ['ping', reply]);
-        expect(fetched.title, created.title);
-        expect((await client.chats()).map((c) => c.id), contains(created.id));
+        final fetched = await client.chat(chatId);
+        expect(fetched.thread.map((m) => m.id), [
+          'u-test',
+          'a-test',
+          'u-test-2',
+          'a-test-2',
+        ]);
+        expect((await client.chats()).map((c) => c.id), contains(chatId));
       } finally {
-        await client.deleteChat(created.id);
+        await sub.cancel();
+        socket.dispose();
+        await client.deleteChat(chatId);
       }
     },
     skip: skip,

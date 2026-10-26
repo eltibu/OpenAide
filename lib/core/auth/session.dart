@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../features/auth/sso_login_screen.dart' show clearBrowserCookies;
+import '../api/chat_socket.dart';
 import '../api/openwebui_client.dart';
 
 /// Server URL plus token (JWT from sign-in, or an `sk-` API key), and the
@@ -146,4 +147,17 @@ final clientProvider = Provider<OpenWebUiClient>((ref) {
   final session = ref.watch(sessionProvider).value;
   if (session == null) throw StateError('Not signed in');
   return session.client();
+});
+
+/// One live connection per signed-in session, for streaming replies.
+final chatSocketProvider = Provider<ChatSocket>((ref) {
+  final session = ref.watch(sessionProvider).value;
+  if (session == null) throw StateError('Not signed in');
+  final socket = ChatSocket(
+    baseUrl: session.serverUrl,
+    token: session.token,
+    cookie: session.cookie,
+  );
+  ref.onDispose(socket.dispose);
+  return socket;
 });

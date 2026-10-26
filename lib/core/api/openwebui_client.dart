@@ -313,31 +313,52 @@ class OpenWebUiClient {
     }
   }
 
-  /// Exchanges the first turn for a short title using the server's
-  /// configured title model, matching what the web UI does.
-  Future<String?> generateTitle(
-    String model,
-    List<Map<String, dynamic>> messages,
-  ) async {
-    try {
-      final res = await _send(
-        'POST',
-        '/api/v1/tasks/title/completions',
-        body: {'model': model, 'messages': messages, 'stream': false},
-      ) as Map?;
-      final choices = res?['choices'] as List?;
-      final content =
-          ((choices?.firstOrNull as Map?)?['message'] as Map?)?['content'];
-      if (content is! String) return null;
-      // Newer servers return JSON like {"title": "..."}.
-      final match = RegExp(r'\{[\s\S]*\}').firstMatch(content);
-      if (match != null) {
-        final j = jsonDecode(match.group(0)!);
-        if (j is Map && j['title'] is String) return j['title'] as String;
-      }
-      return content.trim().replaceAll('"', '');
-    } catch (_) {
-      return null;
+  /// Starts a reply the way the web UI does: Open WebUI stores the user
+  /// message and an empty reply [replyId] in the chat, then runs the model as
+  /// a background task with the chat's tools, memory and filters, saves the
+  /// answer on the server, and pushes progress to socket [sessionId].
+  ///
+  /// [chatId] null starts a new chat. Returns the chat id and the task ids.
+  Future<({String chatId, List<String> taskIds})> startTurn({
+    required String model,
+    required String? chatId,
+    required ChatMessage userMessage,
+    required String replyId,
+    required List<Map<String, dynamic>> messages,
+    required String sessionId,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/chat/completions',
+      body: {
+        'model': model,
+        'messages': messages,
+        'stream': true,
+        'chat_id': ?chatId,
+        'parent_id': userMessage.parentId,
+        'id': replyId,
+        'user_message': {
+          ...userMessage.toJson(),
+          'models': [model],
+        },
+        'session_id': sessionId,
+        'background_tasks': {'title_generation': true, 'tags_generation': true},
+      },
+    );
+    if (res is! Map || res['chat_id'] is! String) {
+      throw ApiException(
+        500,
+        'This Open WebUI is too old for the app (it did not start the reply '
+        'as a server task). Update Open WebUI and try again.',
+      );
     }
+    return (
+      chatId: res['chat_id'] as String,
+      taskIds: (res['task_ids'] as List? ?? []).whereType<String>().toList(),
+    );
   }
+
+  /// Stops a running reply; what was written so far stays saved.
+  Future<void> stopTask(String taskId) =>
+      _send('POST', '/api/tasks/stop/$taskId');
 }

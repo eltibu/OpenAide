@@ -31,7 +31,9 @@ class ChatMessage {
     return ChatMessage(
       id: json['id'] as String,
       role: json['role'] as String? ?? 'user',
-      content: _contentText(json['content']),
+      content: _contentText(json['content']).isNotEmpty
+          ? _contentText(json['content'])
+          : outputText(json['output']),
       parentId: json['parentId'] as String?,
       childrenIds:
           (json['childrenIds'] as List?)?.whereType<String>().toList() ?? [],
@@ -55,6 +57,28 @@ class ChatMessage {
   /// Fields we don't model yet (files, sources, usage, statusHistory...).
   /// Preserved verbatim so saving from the app never drops server data.
   final Map<String, dynamic> extra;
+
+  /// True once the server has finished writing this reply.
+  bool get done => extra['done'] == true;
+
+  /// The server's error for this reply, if it failed.
+  String? get error {
+    final e = extra['error'];
+    if (e is Map) return '${e['content'] ?? e['message'] ?? e}';
+    return e?.toString();
+  }
+
+  /// Text from an Open WebUI `output` list (Responses-style items), which
+  /// newer servers fill alongside or instead of `content`.
+  static String outputText(Object? output) {
+    if (output is! List) return '';
+    return [
+      for (final item in output.whereType<Map>())
+        if (item['type'] == 'message')
+          for (final part in (item['content'] as List? ?? []).whereType<Map>())
+            if (part['text'] is String) part['text'] as String,
+    ].join('\n');
+  }
 
   Map<String, dynamic> toJson() => {
     ...extra,
@@ -115,7 +139,8 @@ class Chat {
     );
   }
 
-  final String id;
+  /// Empty until the server has created the chat.
+  String id;
   String title;
   final Map<String, ChatMessage> messages;
   String? currentId;

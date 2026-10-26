@@ -82,4 +82,36 @@ void main() {
     final chunks = await parseSse(Stream.value(utf8.encode(raw))).toList();
     expect(chunks.map(deltaContent).join(), 'Hello');
   });
+
+  test('a reply saved only as output items still shows its text', () {
+    final m = ChatMessage.fromJson({
+      'id': 'a1',
+      'role': 'assistant',
+      'content': '',
+      'done': true,
+      'output': [
+        {'type': 'function_call', 'name': 'search'},
+        {
+          'type': 'message',
+          'content': [
+            {'type': 'output_text', 'text': 'Found it.'},
+          ],
+        },
+      ],
+    });
+    expect(m.content, 'Found it.');
+    expect(m.done, isTrue);
+    expect(m.error, isNull);
+  });
+
+  test('a failed reply exposes the server error', () {
+    final m = ChatMessage.fromJson({
+      'id': 'a1',
+      'role': 'assistant',
+      'content': '',
+      'done': true,
+      'error': {'content': 'Model not found'},
+    });
+    expect(m.error, 'Model not found');
+  });
 }

@@ -10,7 +10,7 @@ Status: early development (step 1 of the [roadmap](docs/ARCHITECTURE.md#roadmap)
 - Pick any model your server exposes
 - Streaming chat, with stop
 - Chats are created and saved on the server and listed from it
-- Automatic chat titles using the server's title model
+- Replies run on the server like in the web UI, so tools, memory and titles work
 
 ## Build
 

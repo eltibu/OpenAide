@@ -87,6 +87,7 @@ class ChatScreen extends ConsumerWidget {
                 : _MessageList(
                     messages: state.messages,
                     streaming: state.streaming,
+                    status: state.status,
                   ),
           ),
           _Composer(streaming: state.streaming),
@@ -112,9 +113,14 @@ class _EmptyState extends ConsumerWidget {
 }
 
 class _MessageList extends StatelessWidget {
-  const _MessageList({required this.messages, required this.streaming});
+  const _MessageList({
+    required this.messages,
+    required this.streaming,
+    this.status,
+  });
   final List<ChatMessage> messages;
   final bool streaming;
+  final String? status;
 
   @override
   Widget build(BuildContext context) {
@@ -149,20 +155,30 @@ class _MessageList extends StatelessWidget {
         }
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          child: m.content.isEmpty && !(streaming && i == 0)
-              ? Text(
-                  'No reply. Tap Retry above to ask again.',
+          child: m.content.isNotEmpty
+              ? MarkdownBlock(data: m.content, config: mdConfig)
+              : streaming && i == 0
+              ? Row(
+                  children: [
+                    const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    if (status != null && status!.isNotEmpty) ...[
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          status!,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ],
+                )
+              : Text(
+                  m.error ?? 'No reply. Tap Retry above to ask again.',
                   style: TextStyle(color: scheme.error),
-                )
-              : m.content.isEmpty
-              ? const Align(
-                  alignment: Alignment.centerLeft,
-                  child: SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                )
-              : MarkdownBlock(data: m.content, config: mdConfig),
+                ),
         );
       },
     );

@@ -16,13 +16,14 @@ lib/
   main.dart                     app shell, theme, signed-in vs login routing
   core/
     api/openwebui_client.dart   REST client (auth, config, models, chats, completions)
-    api/sse.dart                Server-Sent Events parsing for streaming replies
+    api/chat_socket.dart        Open WebUI's live socket (reply progress)
+    api/sse.dart                Server-Sent Events parsing
     auth/session.dart           server URL + token in secure storage, Riverpod providers
     models/chat.dart            Open WebUI chat tree (history.messages / currentId)
     models/model_info.dart      model metadata, raw JSON kept for future fields
   features/
     auth/login_screen.dart      server URL, email/password or API key
-    chat/chat_controller.dart   send, stream, stop, save-to-server, title generation
+    chat/chat_controller.dart   send, live reply, stop, retry (the server saves everything)
     chat/chat_screen.dart       chat UI, model picker, chat list drawer
 ```
 
@@ -30,11 +31,13 @@ State management is Riverpod 3.
 
 ## How a message is sent
 
-1. On the first message, the chat is created on the server (`POST /api/v1/chats/new`) before any reply streams, so it exists there even if the app is closed mid-reply.
-2. The user and assistant messages are added to the message tree (`parentId` / `childrenIds`, `currentId` = visible tip), the same structure the web UI uses for edits and regenerations.
-3. The reply streams from `POST /api/chat/completions` (OpenAI-compatible SSE).
-4. When the reply finishes or is stopped, the full chat is saved back (`POST /api/v1/chats/{id}`).
-5. After the first reply, a title is generated with the server's title task (`/api/v1/tasks/title/completions`) and saved.
+The app sends a reply the same way the web UI does (Open WebUI 0.12+), so the server does all the work and keeps all the data:
+
+1. The app opens Open WebUI's live socket (`/ws/socket.io`, Socket.IO) once per sign-in.
+2. `POST /api/chat/completions` carries the new user message, an id for the empty reply, the chat id (none for a new chat) and the socket's session id. The server saves both messages in the chat (creating the chat if needed) and answers at once with the chat id and task id.
+3. The server runs the reply as a background task with the model's tools, memory, knowledge and filters, and saves the answer, its tool results and the title in the chat.
+4. Progress arrives over the socket as `events` (`response:completion` text deltas, `status`, `chat:title`, `chat:completion` with `done`). If the socket is down, the app checks the saved chat every few seconds instead.
+5. When the reply is done, the app reloads the chat from the server, which stays the source of truth. Stop calls `POST /api/tasks/stop/{task_id}`; Retry asks again for the same user message, which adds a new reply next to the failed one, like Regenerate.
 
 ## Open WebUI endpoints used so far
 
@@ -46,8 +49,9 @@ State management is Riverpod 3.
 | Models | `GET /api/models` |
 | Chat list | `GET /api/v1/chats/?page=N` |
 | Read / create / update / delete chat | `GET`, `POST /api/v1/chats/new`, `POST`, `DELETE /api/v1/chats/{id}` |
-| Streaming completion | `POST /api/chat/completions` |
-| Title generation | `POST /api/v1/tasks/title/completions` |
+| Start a reply (server-run task) | `POST /api/chat/completions` |
+| Live reply progress | Socket.IO `/ws/socket.io`, `events` |
+| Stop a reply | `POST /api/tasks/stop/{task_id}` |
 
 ## Roadmap
 
