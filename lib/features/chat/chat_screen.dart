@@ -405,9 +405,11 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   void _send() {
     final value = _text.text;
-    if (value.trim().isEmpty) return;
+    final controller = ref.read(chatControllerProvider.notifier);
+    // Keep the draft when it can't go anywhere yet, rather than losing it.
+    if (value.trim().isEmpty || !controller.canSend) return;
     _text.clear();
-    ref.read(chatControllerProvider.notifier).send(value);
+    controller.send(value);
   }
 
   @override
@@ -452,7 +454,14 @@ class _ComposerState extends ConsumerState<_Composer> {
                 : IconButton.filled(
                     tooltip: 'Send',
                     icon: const Icon(Icons.arrow_upward),
-                    onPressed: _send,
+                    onPressed:
+                        ref.watch(
+                          chatControllerProvider.select(
+                            (s) => s.modelId != null && !s.loading,
+                          ),
+                        )
+                        ? _send
+                        : null,
                   ),
           ],
         ),

@@ -14,7 +14,9 @@ class ChatMessage {
     this.model,
     int? timestamp,
     Map<String, dynamic>? extra,
-  }) : childrenIds = childrenIds ?? [],
+    this.structuredContent,
+  }) : _loadedText = content,
+       childrenIds = childrenIds ?? [],
        timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
        extra = extra ?? {};
 
@@ -39,6 +41,7 @@ class ChatMessage {
           (json['childrenIds'] as List?)?.whereType<String>().toList() ?? [],
       model: json['model'] as String?,
       timestamp: (json['timestamp'] as num?)?.toInt(),
+      structuredContent: json['content'] is String ? null : json['content'],
       extra: {
         for (final e in json.entries)
           if (!known.contains(e.key)) e.key: e.value,
@@ -53,6 +56,11 @@ class ChatMessage {
   final List<String> childrenIds;
   final String? model;
   final int timestamp;
+
+  /// The server's `content` when it isn't plain text (images, other parts).
+  /// Written back as it was, so saving never drops those parts.
+  final Object? structuredContent;
+  final String _loadedText;
 
   /// Fields we don't model yet (files, sources, usage, statusHistory...).
   /// Preserved verbatim so saving from the app never drops server data.
@@ -133,7 +141,9 @@ class ChatMessage {
     ...extra,
     'id': id,
     'role': role,
-    'content': content,
+    'content': structuredContent != null && content == _loadedText
+        ? structuredContent
+        : content,
     'parentId': parentId,
     'childrenIds': childrenIds,
     'timestamp': timestamp,

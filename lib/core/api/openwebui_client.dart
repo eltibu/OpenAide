@@ -157,13 +157,12 @@ class OpenWebUiClient {
     final schemes = hasScheme ? [''] : ['https://', 'http://'];
     final candidates = <String>[];
     for (final scheme in schemes) {
-      final full = _normalize('$scheme$typed');
-      final uri = Uri.parse(full);
-      candidates.add(full);
-      final origin = uri
-          .replace(path: '', query: null, fragment: null)
-          .toString();
-      candidates.add(_normalize(origin.replaceAll(RegExp(r'[?#]$'), '')));
+      // A pasted chat link can carry ?query or #fragment: drop them, then
+      // try the address as given and the bare site.
+      final uri = Uri.parse(_normalize('$scheme$typed'));
+      candidates
+        ..add(_normalize('${uri.origin}${uri.path}'))
+        ..add(uri.origin);
     }
     Object? lastError;
     final tried = <String>{};

@@ -5,6 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.webkit.CookieManager
+import android.webkit.WebStorage
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -26,7 +27,12 @@ class MainActivity : FlutterActivity() {
                         manager.flush()
                         result.success(manager.getCookie(call.argument<String>("url")))
                     }
-                    "clear" -> CookieManager.getInstance().removeAllCookies { result.success(it) }
+                    // Sign-out: cookies and the page storage that holds the
+                    // Open WebUI token, so the next sign-in really asks.
+                    "clear" -> CookieManager.getInstance().removeAllCookies {
+                        WebStorage.getInstance().deleteAllData()
+                        result.success(it)
+                    }
                     else -> result.notImplemented()
                 }
             }

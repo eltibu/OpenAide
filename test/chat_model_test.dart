@@ -171,4 +171,21 @@ void main() {
     expect(m.sources.single.name, 'Example');
     expect(m.sources.single.url, 'https://example.com');
   });
+
+  test('saving keeps images and other non-text parts of a message', () {
+    final parts = [
+      {'type': 'text', 'text': 'What is this?'},
+      {
+        'type': 'image_url',
+        'image_url': {'url': 'data:image/png;base64,AAAA'},
+      },
+    ];
+    final m = ChatMessage.fromJson({
+      'id': 'u1',
+      'role': 'user',
+      'content': parts,
+    });
+    expect(m.content, 'What is this?');
+    expect(m.toJson()['content'], parts);
+  });
 }

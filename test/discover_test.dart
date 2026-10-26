@@ -46,6 +46,19 @@ void main() {
     );
   });
 
+  test(
+    'a pasted link with ?query and #fragment still finds the site',
+    () async {
+      expect(
+        await OpenWebUiClient.discover(
+          'home.lan:3000/c/abc123?models=nexus#bottom',
+          httpClient: _server,
+        ),
+        'http://home.lan:3000',
+      );
+    },
+  );
+
   test('keeps an address that already works', () async {
     expect(
       await OpenWebUiClient.discover(

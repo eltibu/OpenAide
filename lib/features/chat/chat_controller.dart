@@ -88,6 +88,9 @@ class _Run {
   final finished = Completer<void>();
   List<String> taskIds = const [];
 
+  /// Stop was tapped, possibly before the server returned task ids.
+  bool stopped = false;
+
   void finish() {
     if (!finished.isCompleted) finished.complete();
   }
@@ -96,9 +99,19 @@ class _Run {
 class ChatController extends Notifier<ChatState> {
   _Run? _run;
 
+  /// Bumped whenever what's on screen changes (another chat, a new chat, a
+  /// new account), so a fetch that finishes late can tell it is stale.
+  int _view = 0;
+
   @override
   ChatState build() {
-    ref.onDispose(() => _run?.finish());
+    // Another account (or signing out) starts from a clean slate, so the
+    // previous account's chat never shows or receives messages.
+    ref.watch(sessionProvider.select((s) => s.value?.token));
+    ref.onDispose(() {
+      _view++;
+      _run?.finish();
+    });
     // Connect early so the first reply streams live.
     Future.microtask(() {
       try {
@@ -114,11 +127,13 @@ class ChatController extends Notifier<ChatState> {
       state = state.copyWith(features: {...state.features, id: on});
 
   void newChat() {
+    _view++;
     _run?.finish();
     state = ChatState(modelId: state.modelId);
   }
 
   Future<void> open(String id) async {
+    final view = ++_view;
     _run?.finish();
     state = state.copyWith(
       loading: true,
@@ -129,12 +144,14 @@ class ChatController extends Notifier<ChatState> {
     );
     try {
       final chat = await ref.read(clientProvider).chat(id);
+      if (view != _view) return;
       state = state.copyWith(
         chat: chat,
         modelId: chat.models.firstOrNull ?? state.modelId,
         loading: false,
       );
     } catch (e) {
+      if (view != _view) return;
       state = state.copyWith(loading: false, error: '$e');
     }
   }
@@ -143,20 +160,30 @@ class ChatController extends Notifier<ChatState> {
   Future<void> stop() async {
     final run = _run;
     if (run == null) return;
+    run.stopped = true;
+    await _stopTasks(run);
+    run.finish();
+  }
+
+  Future<void> _stopTasks(_Run run) async {
     final client = ref.read(clientProvider);
     for (final id in run.taskIds) {
       try {
         await client.stopTask(id);
       } catch (_) {}
     }
-    run.finish();
   }
+
+  /// False while there is nowhere to send: no model yet, a chat still
+  /// loading, or a reply still running.
+  bool get canSend =>
+      state.modelId != null && !state.loading && !state.streaming;
 
   /// Sends [text] after the visible conversation, or, with [editOf], as an
   /// edited version of that message: a new branch next to it, as on the web.
   Future<void> send(String text, {ChatMessage? editOf}) async {
     final modelId = state.modelId;
-    if (text.trim().isEmpty || modelId == null || state.streaming) return;
+    if (!canSend || text.trim().isEmpty || modelId == null) return;
     final chat =
         state.chat ??
         Chat(
@@ -248,6 +275,7 @@ class ChatController extends Notifier<ChatState> {
     );
     chat.append(reply);
     final run = _run = _Run(reply);
+    final view = _view;
     state = state.copyWith(
       chat: chat,
       streaming: true,
@@ -280,22 +308,25 @@ class ChatController extends Notifier<ChatState> {
       );
       chat.id = started.chatId;
       run.taskIds = started.taskIds;
+      // Stop tapped while the request was on its way: stop it now.
+      if (run.stopped) await _stopTasks(run);
       ref.invalidate(chatListProvider);
       unawaited(_poll(chat.id, run));
       await run.finished.future;
     } catch (e) {
-      state = state.copyWith(error: '$e');
+      if (view == _view) state = state.copyWith(error: '$e');
     } finally {
       await sub.cancel();
       if (identical(_run, run)) _run = null;
     }
-    if (!identical(state.chat, chat)) return; // the person moved on
+    if (view != _view) return; // the person moved on
 
     // The server's copy is the truth: it has the saved reply, its title,
     // sources and tool results.
     if (chat.id.isNotEmpty) {
       try {
         final saved = await client.chat(chat.id);
+        if (view != _view) return;
         state = state.copyWith(chat: saved);
         ref.invalidate(chatListProvider);
       } catch (_) {}
@@ -314,6 +345,7 @@ class ChatController extends Notifier<ChatState> {
   }
 
   void _onEvent(Chat chat, _Run run, Map<String, dynamic> event) {
+    if (run.finished.isCompleted) return; // stopped, or the person moved on
     final reply = run.reply;
     final outer = event['data'];
     if (outer is! Map) return;
