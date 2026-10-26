@@ -73,6 +73,28 @@ int? buildFromTag(String? tag) {
   return m == null ? null : int.parse(m.group(1)!);
 }
 
+/// The highest-numbered published release that has the app's APK.
+AvailableUpdate? newestRelease(List<dynamic> releases) {
+  AvailableUpdate? best;
+  for (final r in releases.whereType<Map>()) {
+    if (r['draft'] == true) continue;
+    final build = buildFromTag(r['tag_name'] as String?);
+    final asset = (r['assets'] as List? ?? [])
+        .whereType<Map>()
+        .where((a) => a['name'] == _assetName)
+        .firstOrNull;
+    if (build == null || asset == null) continue;
+    if (best == null || build > best.build) {
+      best = AvailableUpdate(
+        build: build,
+        assetApiUrl: asset['url'] as String,
+        notes: (r['body'] as String? ?? '').trim(),
+      );
+    }
+  }
+  return best;
+}
+
 /// How a build is shown to people: `0.1.<build>`.
 String versionName(int build) => '0.1.$build';
 
@@ -117,7 +139,11 @@ class Updater extends Notifier<UpdateState> {
       final info = await PackageInfo.fromPlatform();
       final current = int.tryParse(info.buildNumber) ?? 0;
       final res = await http.get(
-        Uri.parse('https://api.github.com/repos/$updateRepo/releases/latest'),
+        // Several builds can finish out of order, so GitHub's "latest" isn't
+        // always the newest: look at recent releases and take the highest.
+        Uri.parse(
+          'https://api.github.com/repos/$updateRepo/releases?per_page=20',
+        ),
         headers: {..._headers(token), 'Accept': 'application/vnd.github+json'},
       );
       if (res.statusCode == 404) {
@@ -132,23 +158,12 @@ class Updater extends Notifier<UpdateState> {
       if (res.statusCode != 200) {
         throw HttpException('GitHub answered ${res.statusCode}.');
       }
-      final release = jsonDecode(res.body) as Map<String, dynamic>;
-      final latest = buildFromTag(release['tag_name'] as String?) ?? 0;
-      final asset = (release['assets'] as List? ?? [])
-          .whereType<Map>()
-          .where((a) => a['name'] == _assetName)
-          .firstOrNull;
-      if (latest <= current || asset == null) {
+      final newest = newestRelease(jsonDecode(res.body) as List);
+      if (newest == null || newest.build <= current) {
         state = UpToDate(current);
         return;
       }
-      state = UpdateFound(
-        AvailableUpdate(
-          build: latest,
-          assetApiUrl: asset['url'] as String,
-          notes: (release['body'] as String? ?? '').trim(),
-        ),
-      );
+      state = UpdateFound(newest);
     } catch (e) {
       state = quiet ? const UpdateIdle() : UpdateFailed(_message(e));
     }
