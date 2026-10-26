@@ -105,6 +105,12 @@ class ChatMessage {
     ];
   }
 
+  /// Photos and files sent with this message.
+  List<Attachment> get attachments => [
+    for (final f in (extra['files'] as List? ?? const []).whereType<Map>())
+      Attachment.fromJson(f.cast<String, dynamic>()),
+  ];
+
   /// Web pages, files and knowledge the reply drew on.
   List<Source> get sources {
     final raw = extra['sources'];
@@ -294,4 +300,86 @@ class Source {
   const Source({required this.name, this.url});
   final String name;
   final String? url;
+}
+
+/// A photo or file on a message, in the web UI's shape: `id` and `url` are
+/// the server file id; `type` is `image` for inline images (data URLs) and
+/// `file` otherwise, with `content_type` telling photos apart.
+class Attachment {
+  Attachment({
+    required this.type,
+    required this.name,
+    this.id,
+    this.url,
+    this.contentType,
+    this.size,
+    Map<String, dynamic>? raw,
+  }) : raw = raw ?? {};
+
+  factory Attachment.fromJson(Map<String, dynamic> json) => Attachment(
+    type: json['type'] as String? ?? 'file',
+    name: json['name'] as String? ?? '',
+    id: json['id'] as String?,
+    url: json['url'] as String?,
+    contentType: json['content_type'] as String?,
+    size: (json['size'] as num?)?.toInt(),
+    raw: json,
+  );
+
+  /// Builds the entry for a file the server just stored ([uploaded] is the
+  /// upload response), exactly as the web UI adds it to a message.
+  factory Attachment.uploaded(Map<String, dynamic> uploaded, {int? size}) {
+    final meta = (uploaded['meta'] as Map?) ?? const {};
+    final id = uploaded['id'] as String;
+    final name = '${meta['name'] ?? uploaded['filename'] ?? 'file'}';
+    final contentType = (meta['content_type'] ?? uploaded['content_type'])
+        ?.toString();
+    final collection =
+        meta['collection_name'] ?? uploaded['collection_name'] ?? '';
+    final json = <String, dynamic>{
+      'type': 'file',
+      'file': uploaded,
+      'id': id,
+      'url': id,
+      'name': name,
+      'collection_name': collection,
+      'status': 'uploaded',
+      'size': size ?? meta['size'],
+      'error': '',
+      'content_type': ?contentType,
+    };
+    return Attachment.fromJson(json);
+  }
+
+  final String type;
+  final String name;
+  final String? id;
+  final String? url;
+  final String? contentType;
+  final int? size;
+
+  /// The entry as the server stores it, written back unchanged.
+  final Map<String, dynamic> raw;
+
+  /// Photos the model looks at (SVG is text, not a picture).
+  bool get isImage {
+    if (type == 'image') return true;
+    final base = (contentType ?? '').split(';').first.trim().toLowerCase();
+    return base.startsWith('image/') && base != 'image/svg+xml';
+  }
+
+  /// A data: URL to show directly, when the image is inline.
+  String? get dataUrl => url != null && url!.startsWith('data:') ? url : null;
+
+  /// The server file id to fetch the bytes from, if it lives on the server.
+  String? get fileId {
+    if (id != null) return id;
+    final u = url;
+    if (u == null || u.startsWith('data:') || u.startsWith('http')) {
+      return null;
+    }
+    return u;
+  }
+
+  Map<String, dynamic> toJson() => raw;
 }

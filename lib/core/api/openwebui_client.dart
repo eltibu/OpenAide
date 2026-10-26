@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../models/chat.dart';
 import '../models/model_info.dart';
@@ -365,6 +366,84 @@ class OpenWebUiClient {
       taskIds: (res['task_ids'] as List? ?? []).whereType<String>().toList(),
     );
   }
+
+  /// Uploads a file the way the web UI's attach button does and returns the
+  /// server's file record. [process] extracts the text for the model to read;
+  /// photos skip it, since the model looks at them directly.
+  Future<Map<String, dynamic>> uploadFile(
+    List<int> bytes,
+    String filename, {
+    String? contentType,
+    bool process = true,
+  }) async {
+    final url = _uri('/api/v1/files/', {'process': '$process'});
+    final res = await http.Response.fromStream(
+      await _open(() {
+        final req = http.MultipartRequest('POST', url)
+          ..headers.addAll(authHeaders)
+          ..headers['Accept'] = 'application/json'
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: filename,
+              contentType: contentType == null
+                  ? null
+                  : MediaType.parse(contentType),
+            ),
+          );
+        return req;
+      }),
+    );
+    final text = utf8.decode(res.bodyBytes);
+    if (res.statusCode >= 400) {
+      var message = text;
+      try {
+        final j = jsonDecode(text);
+        if (j is Map && j['detail'] != null) message = '${j['detail']}';
+      } on FormatException {
+        // Non-JSON error body; use as-is.
+      }
+      throw ApiException(res.statusCode, message);
+    }
+    final j = jsonDecode(text);
+    if (j is! Map || j['id'] is! String) {
+      throw ApiException(res.statusCode, _notOpenWebUi);
+    }
+    return j.cast<String, dynamic>();
+  }
+
+  /// Waits while the server reads an uploaded document, as the web UI does
+  /// before letting it be sent. Returns the server's problem with the file,
+  /// or null once it's ready.
+  Future<String?> waitForFile(
+    String id, {
+    Duration every = const Duration(seconds: 1),
+    Duration limit = const Duration(minutes: 5),
+  }) async {
+    final end = DateTime.now().add(limit);
+    while (DateTime.now().isBefore(end)) {
+      final res = await _send('GET', '/api/v1/files/$id/process/status');
+      final status = res is Map ? res['status'] : null;
+      if (status == 'completed' || status == null) return null;
+      if (status == 'failed') {
+        final file = await _send('GET', '/api/v1/files/$id');
+        final data = file is Map ? file['data'] : null;
+        return '${(data is Map ? data['error'] : null) ?? 'The server could not read this file.'}';
+      }
+      await Future<void>.delayed(every);
+    }
+    return 'The server is still reading this file.';
+  }
+
+  /// Where an uploaded file's bytes are served (needs [authHeaders]).
+  Uri fileContentUri(String id) => _uri('/api/v1/files/$id/content');
+
+  /// Sign-in headers alone, for images and uploads.
+  Map<String, String> get authHeaders => {
+    if (token != null) 'Authorization': 'Bearer $token',
+    if (cookie != null && cookie!.isNotEmpty) 'Cookie': cookie!,
+  };
 
   /// Stops a running reply; what was written so far stays saved.
   Future<void> stopTask(String taskId) =>

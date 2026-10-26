@@ -38,6 +38,7 @@ class ChatState {
     this.error,
     this.status,
     this.features = const {},
+    this.attachments = const [],
     this.revision = 0,
   });
 
@@ -52,6 +53,9 @@ class ChatState {
 
   /// Features the person switched on or off in this chat (web search...).
   final Map<String, bool> features;
+
+  /// Photos and files waiting in the composer for the next message.
+  final List<PendingAttachment> attachments;
 
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
@@ -69,6 +73,7 @@ class ChatState {
     String? status,
     bool clearStatus = false,
     Map<String, bool>? features,
+    List<PendingAttachment>? attachments,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -77,8 +82,36 @@ class ChatState {
     error: clearError ? null : error ?? this.error,
     status: clearStatus ? null : status ?? this.status,
     features: features ?? this.features,
+    attachments: attachments ?? this.attachments,
     revision: revision + 1,
   );
+}
+
+/// A photo or file in the composer: uploading, uploaded, or failed.
+class PendingAttachment {
+  const PendingAttachment({
+    required this.key,
+    required this.name,
+    required this.isImage,
+    this.bytes,
+    this.uploaded,
+    this.error,
+    this.warning,
+  });
+
+  final String key;
+  final String name;
+  final bool isImage;
+
+  /// The photo itself, for the preview while it uploads.
+  final List<int>? bytes;
+  final Attachment? uploaded;
+  final String? error;
+
+  /// Sent anyway, but the server couldn't read it (the web UI's warning).
+  final String? warning;
+
+  bool get uploading => uploaded == null && error == null;
 }
 
 /// One reply the server is writing.
@@ -129,8 +162,72 @@ class ChatController extends Notifier<ChatState> {
   void newChat() {
     _view++;
     _run?.finish();
-    state = ChatState(modelId: state.modelId);
+    state = ChatState(modelId: state.modelId, attachments: state.attachments);
   }
+
+  /// Uploads a photo or file for the next message, like the web UI's attach
+  /// button: photos are stored as they are, other files are also read by the
+  /// server so the model can search them.
+  Future<void> attach(List<int> bytes, String name, {String? mimeType}) async {
+    final type = mimeType ?? _mimeFromName(name);
+    final isImage = type != null && _isRaster(type);
+    final key = _uuid.v4();
+    if (bytes.isEmpty) {
+      state = state.copyWith(error: "$name is empty, so it can't be sent.");
+      return;
+    }
+    state = state.copyWith(
+      attachments: [
+        ...state.attachments,
+        PendingAttachment(
+          key: key,
+          name: name,
+          isImage: isImage,
+          bytes: isImage ? bytes : null,
+        ),
+      ],
+    );
+    PendingAttachment done;
+    try {
+      final client = ref.read(clientProvider);
+      final uploaded = await client.uploadFile(
+        bytes,
+        name,
+        contentType: type,
+        process: !isImage,
+      );
+      final warning = isImage
+          ? null
+          : await client.waitForFile(uploaded['id'] as String);
+      done = PendingAttachment(
+        key: key,
+        name: name,
+        isImage: isImage,
+        bytes: isImage ? bytes : null,
+        uploaded: Attachment.uploaded(uploaded, size: bytes.length),
+        warning: warning,
+      );
+    } catch (e) {
+      done = PendingAttachment(
+        key: key,
+        name: name,
+        isImage: isImage,
+        error: '$e',
+      );
+    }
+    // Removed while it uploaded: leave it out.
+    if (!state.attachments.any((a) => a.key == key)) return;
+    state = state.copyWith(
+      attachments: [for (final a in state.attachments) a.key == key ? done : a],
+    );
+  }
+
+  void removeAttachment(String key) => state = state.copyWith(
+    attachments: [
+      for (final a in state.attachments)
+        if (a.key != key) a,
+    ],
+  );
 
   Future<void> open(String id) async {
     final view = ++_view;
@@ -177,18 +274,33 @@ class ChatController extends Notifier<ChatState> {
   /// False while there is nowhere to send: no model yet, a chat still
   /// loading, or a reply still running.
   bool get canSend =>
-      state.modelId != null && !state.loading && !state.streaming;
+      state.modelId != null &&
+      !state.loading &&
+      !state.streaming &&
+      !state.attachments.any((a) => a.uploading);
 
   /// Sends [text] after the visible conversation, or, with [editOf], as an
   /// edited version of that message: a new branch next to it, as on the web.
-  Future<void> send(String text, {ChatMessage? editOf}) async {
+  /// The composer's photos and files go with it; an edit keeps the
+  /// original's. Returns false if nothing was sent.
+  Future<bool> send(String text, {ChatMessage? editOf}) async {
     final modelId = state.modelId;
-    if (!canSend || text.trim().isEmpty || modelId == null) return;
+    final files = editOf != null
+        ? editOf.attachments
+        : [
+            for (final a in state.attachments)
+              if (a.uploaded != null) a.uploaded!,
+          ];
+    if (!canSend || (text.trim().isEmpty && files.isEmpty) || modelId == null) {
+      return false;
+    }
     final chat =
         state.chat ??
         Chat(
           id: '',
-          title: _titleFrom(text.trim()),
+          title: _titleFrom(
+            text.trim().isNotEmpty ? text.trim() : files.first.name,
+          ),
           messages: {},
           models: [modelId],
         );
@@ -199,12 +311,15 @@ class ChatController extends Notifier<ChatState> {
       parentId: editOf != null ? editOf.parentId : chat.currentId,
       extra: {
         'models': [modelId],
+        if (files.isNotEmpty) 'files': [for (final f in files) f.toJson()],
       },
     );
     chat
       ..models = [modelId]
       ..append(user);
+    if (editOf == null) state = state.copyWith(attachments: const []);
     await _reply(chat, user, modelId);
+    return true;
   }
 
   /// A new answer to the same question, next to [reply] (Regenerate).
@@ -299,12 +414,15 @@ class ChatController extends Notifier<ChatState> {
             if (m.id != reply.id) {'role': m.role, 'content': m.content},
         ],
         sessionId: sessionId,
-        options: requestOptions(
-          models.where((m) => m.id == modelId).firstOrNull,
-          await _optional(userSettingsProvider),
-          await _optional(serverConfigProvider),
-          overrides: state.features,
-        ),
+        options: {
+          ...requestOptions(
+            models.where((m) => m.id == modelId).firstOrNull,
+            await _optional(userSettingsProvider),
+            await _optional(serverConfigProvider),
+            overrides: state.features,
+          ),
+          'files': ?_documents(chat),
+        },
       );
       chat.id = started.chatId;
       run.taskIds = started.taskIds;
@@ -389,6 +507,18 @@ class ChatController extends Notifier<ChatState> {
     state = state.copyWith();
   }
 
+  /// Documents in the conversation for the server to search, as the web UI
+  /// sends them; photos aren't included, the model sees those directly.
+  List<Map<String, dynamic>>? _documents(Chat chat) {
+    final seen = <String>{};
+    final docs = [
+      for (final m in chat.thread)
+        for (final f in m.attachments)
+          if (!f.isImage && seen.add(f.id ?? f.url ?? f.name)) f.toJson(),
+    ];
+    return docs.isEmpty ? null : docs;
+  }
+
   /// Settings that only refine a message; a failure to read them must not
   /// stop it from being sent.
   Future<Map<String, dynamic>?> _optional(
@@ -415,6 +545,35 @@ class ChatController extends Notifier<ChatState> {
       }
     }
   }
+}
+
+bool _isRaster(String type) {
+  final base = type.split(';').first.trim().toLowerCase();
+  return base.startsWith('image/') && base != 'image/svg+xml';
+}
+
+/// A best guess from the file name when the picker doesn't say.
+String? _mimeFromName(String name) {
+  final ext = name.contains('.') ? name.split('.').last.toLowerCase() : '';
+  return const {
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'png': 'image/png',
+    'gif': 'image/gif',
+    'webp': 'image/webp',
+    'heic': 'image/heic',
+    'bmp': 'image/bmp',
+    'svg': 'image/svg+xml',
+    'pdf': 'application/pdf',
+    'txt': 'text/plain',
+    'md': 'text/markdown',
+    'csv': 'text/csv',
+    'json': 'application/json',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  }[ext];
 }
 
 String _titleFrom(String text) {

@@ -188,4 +188,38 @@ void main() {
     expect(m.content, 'What is this?');
     expect(m.toJson()['content'], parts);
   });
+
+  test('attachments use the web UI shape and tell photos from files', () {
+    final photo = Attachment.uploaded({
+      'id': 'f1',
+      'filename': 'dot.png',
+      'meta': {'name': 'dot.png', 'content_type': 'image/png'},
+    }, size: 68);
+    expect(photo.toJson(), containsPair('url', 'f1'));
+    expect(photo.toJson(), containsPair('type', 'file'));
+    expect(photo.isImage, isTrue);
+    expect(photo.fileId, 'f1');
+
+    final m = ChatMessage.fromJson({
+      'id': 'u',
+      'role': 'user',
+      'content': 'look',
+      'files': [
+        photo.toJson(),
+        {'type': 'image', 'url': 'data:image/png;base64,AAAA'},
+        {
+          'type': 'file',
+          'id': 'f2',
+          'url': 'f2',
+          'name': 'logo.svg',
+          'content_type': 'image/svg+xml',
+        },
+      ],
+    });
+    final a = m.attachments;
+    expect(a.map((x) => x.isImage), [true, true, false]);
+    expect(a[1].dataUrl, startsWith('data:'));
+    expect(a[1].fileId, isNull);
+    expect(m.toJson()['files'], hasLength(3));
+  });
 }

@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../update/update_screen.dart';
+import 'attachments.dart';
 import 'chat_controller.dart';
 import 'request_options.dart';
 
@@ -143,21 +144,24 @@ class _MessageList extends ConsumerWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                margin: const EdgeInsets.only(top: 6),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
+              if (m.attachments.isNotEmpty)
+                MessageAttachments(attachments: m.attachments),
+              if (m.content.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: SelectableText(m.content),
                 ),
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width * 0.8,
-                ),
-                decoration: BoxDecoration(
-                  color: scheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: SelectableText(m.content),
-              ),
               if (!streaming) _MessageActions(message: m),
             ],
           );
@@ -378,7 +382,8 @@ class _MessageActions extends ConsumerWidget {
       ),
     );
     text.dispose();
-    if (edited != null && edited.trim().isNotEmpty) {
+    if (edited != null &&
+        (edited.trim().isNotEmpty || message.attachments.isNotEmpty)) {
       await ref
           .read(chatControllerProvider.notifier)
           .send(edited, editOf: message);
@@ -406,8 +411,12 @@ class _ComposerState extends ConsumerState<_Composer> {
   void _send() {
     final value = _text.text;
     final controller = ref.read(chatControllerProvider.notifier);
+    final files = ref
+        .read(chatControllerProvider)
+        .attachments
+        .any((a) => a.uploaded != null);
     // Keep the draft when it can't go anywhere yet, rather than losing it.
-    if (value.trim().isEmpty || !controller.canSend) return;
+    if ((value.trim().isEmpty && !files) || !controller.canSend) return;
     _text.clear();
     controller.send(value);
   }
@@ -417,54 +426,64 @@ class _ComposerState extends ConsumerState<_Composer> {
     final controller = ref.read(chatControllerProvider.notifier);
     return SafeArea(
       top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            const _FeaturesButton(),
-            const SizedBox(width: 4),
-            Expanded(
-              child: TextField(
-                controller: _text,
-                minLines: 1,
-                maxLines: 6,
-                textInputAction: TextInputAction.newline,
-                decoration: InputDecoration(
-                  hintText: 'Message',
-                  filled: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const PendingAttachments(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const AttachButton(),
+                const _FeaturesButton(),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: TextField(
+                    controller: _text,
+                    minLines: 1,
+                    maxLines: 6,
+                    textInputAction: TextInputAction.newline,
+                    decoration: InputDecoration(
+                      hintText: 'Message',
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                        borderSide: BorderSide.none,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 12,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                widget.streaming
+                    ? IconButton.filledTonal(
+                        tooltip: 'Stop',
+                        icon: const Icon(Icons.stop),
+                        onPressed: controller.stop,
+                      )
+                    : IconButton.filled(
+                        tooltip: 'Send',
+                        icon: const Icon(Icons.arrow_upward),
+                        onPressed:
+                            ref.watch(
+                              chatControllerProvider.select(
+                                (s) =>
+                                    s.modelId != null &&
+                                    !s.loading &&
+                                    !s.attachments.any((a) => a.uploading),
+                              ),
+                            )
+                            ? _send
+                            : null,
+                      ),
+              ],
             ),
-            const SizedBox(width: 8),
-            widget.streaming
-                ? IconButton.filledTonal(
-                    tooltip: 'Stop',
-                    icon: const Icon(Icons.stop),
-                    onPressed: controller.stop,
-                  )
-                : IconButton.filled(
-                    tooltip: 'Send',
-                    icon: const Icon(Icons.arrow_upward),
-                    onPressed:
-                        ref.watch(
-                          chatControllerProvider.select(
-                            (s) => s.modelId != null && !s.loading,
-                          ),
-                        )
-                        ? _send
-                        : null,
-                  ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
