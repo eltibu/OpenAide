@@ -36,7 +36,33 @@ jobs:
           keyPassword=$KEYSTORE_PASSWORD
           keyAlias=${KEY_ALIAS:-nexus}
           EOF
-      - run: flutter build apk --release
+      # Without the secrets above, sign with one debug key kept in the Actions
+      # cache, so every build has the same signature and installs over the
+      # previous one.
+      - name: Restore shared debug signing key
+        if: ${{ hashFiles('android/key.properties') == '' }}
+        id: debugkey
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: nexus-debug-keystore-v1
+      - name: Create shared debug signing key
+        if: ${{ hashFiles('android/key.properties') == '' && steps.debugkey.outputs.cache-hit != 'true' }}
+        run: |
+          mkdir -p ~/.android
+          keytool -genkeypair -keystore ~/.android/debug.keystore \
+            -storepass android -keypass android -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+      - name: Save shared debug signing key
+        if: ${{ hashFiles('android/key.properties') == '' && steps.debugkey.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: nexus-debug-keystore-v1
+      # The run number makes each build's version code higher than the last,
+      # which the in-app updater uses to spot new builds.
+      - run: flutter build apk --release --build-number=${{ github.run_number }}
       - uses: actions/upload-artifact@v4
         with:
           name: nexus-assistant-apk
