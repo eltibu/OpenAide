@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -88,6 +90,20 @@ class ChatScreen extends ConsumerWidget {
   }
 }
 
+/// The widest a column of chat gets: on a tablet or an unfolded phone the
+/// conversation stays a readable column in the middle, as in the Claude app.
+const maxReadingWidth = 720.0;
+
+/// The width of that column.
+double readingWidth(BuildContext context) =>
+    math.min(MediaQuery.sizeOf(context).width, maxReadingWidth);
+
+/// Side padding that keeps content in that column, at least [min].
+double readingInset(BuildContext context, double min) => math.max(
+  min,
+  (MediaQuery.sizeOf(context).width - maxReadingWidth) / 2 + min,
+);
+
 /// A new chat: the greeting, centered, as in the Claude app.
 class _EmptyState extends ConsumerWidget {
   const _EmptyState();
@@ -147,7 +163,10 @@ class _MessageList extends ConsumerWidget {
     final body = Theme.of(context).textTheme.bodyLarge;
     return ListView.builder(
       reverse: true,
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      padding: EdgeInsets.symmetric(
+        horizontal: readingInset(context, 16),
+        vertical: 8,
+      ),
       itemCount: messages.length,
       itemBuilder: (context, i) {
         final m = messages[messages.length - 1 - i];
@@ -170,7 +189,7 @@ class _MessageList extends ConsumerWidget {
                       vertical: 11,
                     ),
                     constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width * 0.82,
+                      maxWidth: readingWidth(context) * 0.82,
                     ),
                     decoration: BoxDecoration(
                       color: context.nexus.userBubble,
@@ -506,7 +525,12 @@ class _ComposerState extends ConsumerState<_Composer> {
     return SafeArea(
       top: false,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+        margin: EdgeInsets.fromLTRB(
+          readingInset(context, 10),
+          4,
+          readingInset(context, 10),
+          10,
+        ),
         decoration: BoxDecoration(
           color: colors.composer,
           borderRadius: BorderRadius.circular(24),
@@ -542,8 +566,12 @@ class _ComposerState extends ConsumerState<_Composer> {
                   const AttachButton(),
                   const _FeaturesButton(),
                   const SizedBox(width: 4),
-                  const Flexible(child: _ModelChip()),
-                  const Spacer(),
+                  const Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _ModelChip(),
+                    ),
+                  ),
                   action,
                 ],
               ),
