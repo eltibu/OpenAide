@@ -92,6 +92,24 @@ jobs:
       # code, which only goes up; the in-app updater uses it to spot new builds.
       # On failure the build's errors become annotations, readable from the
       # checks API without the raw log.
+      # The built-in token must be able to see this repo's releases, or the
+      # app can never find an update. Never prints the token.
+      - name: Check the update token
+        env:
+          NEXUS_UPDATE_TOKEN: ${{ secrets.NEXUS_UPDATE_TOKEN }}
+        run: |
+          if [ -z "$NEXUS_UPDATE_TOKEN" ]; then
+            echo "::error::NEXUS_UPDATE_TOKEN is not set."; exit 1
+          fi
+          CODE=$(curl -s -o releases.json -w '%{http_code}' \
+            -H "Authorization: Bearer $NEXUS_UPDATE_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases?per_page=3")
+          echo "::notice::Update token check: GitHub answered $CODE, $(grep -c '"tag_name"' releases.json) releases visible"
+          rm -f releases.json
+          if [ "$CODE" != "200" ]; then
+            echo "::error::The update token can't read releases (HTTP $CODE). The app would never see updates."; exit 1
+          fi
       - name: Build APK
         env:
           # Read-only token for the in-app updater (repo secret), so the app

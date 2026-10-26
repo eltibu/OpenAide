@@ -146,11 +146,11 @@ class Updater extends Notifier<UpdateState> {
         ),
         headers: {..._headers(token), 'Accept': 'application/vnd.github+json'},
       );
-      if (res.statusCode == 404) {
-        state = UpToDate(current);
-        return;
-      }
-      if (res.statusCode == 401 || res.statusCode == 403) {
+      // A private repo answers 404 to a token that can't read it, so 404 is a
+      // token problem, never "up to date".
+      if (res.statusCode == 401 ||
+          res.statusCode == 403 ||
+          res.statusCode == 404) {
         throw const HttpException(
           'GitHub refused the token. Check that it can read this repo.',
         );
