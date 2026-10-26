@@ -40,7 +40,11 @@ class MainActivity : FlutterActivity() {
                         val dir = File(cacheDir, "updates").apply { mkdirs() }
                         result.success(File(dir, "update.apk").absolutePath)
                     }
-                    "install" -> result.success(install(File(cacheDir, "updates/update.apk")))
+                    "install" -> try {
+                        result.success(install(File(cacheDir, "updates/update.apk")))
+                    } catch (e: Exception) {
+                        result.success(e.message ?: e.javaClass.simpleName)
+                    }
                     else -> result.notImplemented()
                 }
             }

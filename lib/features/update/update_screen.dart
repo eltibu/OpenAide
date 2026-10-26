@@ -154,19 +154,49 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(updaterProvider);
+    final updater = ref.read(updaterProvider.notifier);
     return switch (state) {
       UpdateFound(:final update) => MaterialBanner(
         leading: const Icon(Icons.system_update),
         content: Text('Build ${update.build} is ready to install.'),
         actions: [
           TextButton(
-            onPressed: () => ref.read(updaterProvider.notifier).install(update),
+            onPressed: () => updater.install(update),
             child: const Text('Install'),
           ),
         ],
       ),
-      UpdateDownloading(:final progress) => LinearProgressIndicator(
-        value: progress,
+      UpdateDownloading(:final progress) => MaterialBanner(
+        leading: const Icon(Icons.downloading),
+        content: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              progress == null
+                  ? 'Downloading the update…'
+                  : 'Downloading the update… ${(progress * 100).round()}%',
+            ),
+            const SizedBox(height: 8),
+            LinearProgressIndicator(value: progress),
+          ],
+        ),
+        actions: const [SizedBox.shrink()],
+      ),
+      // Errors from a tap on Install must be visible here, not only on the
+      // App updates page.
+      UpdateFailed(:final message) => MaterialBanner(
+        leading: Icon(
+          Icons.error_outline,
+          color: Theme.of(context).colorScheme.error,
+        ),
+        content: Text('Update failed: $message'),
+        actions: [
+          TextButton(
+            onPressed: () => updater.check(),
+            child: const Text('Try again'),
+          ),
+        ],
       ),
       _ => const SizedBox.shrink(),
     };

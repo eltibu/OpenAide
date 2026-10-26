@@ -141,7 +141,10 @@ class Updater extends Notifier<UpdateState> {
   /// Downloads [update] and opens Android's installer.
   Future<void> install(AvailableUpdate update) async {
     final token = await this.token();
-    if (token == null) return;
+    if (token == null) {
+      state = const UpdateFailed('Add a GitHub token in App updates first.');
+      return;
+    }
     state = const UpdateDownloading(null);
     final client = http.Client();
     try {
@@ -183,7 +186,9 @@ class Updater extends Notifier<UpdateState> {
               'Allow "Install unknown apps" for Nexus Assistant, then tap '
               'Install again.',
             )
-          : UpdateFound(update);
+          : outcome == 'started'
+          ? UpdateFound(update)
+          : UpdateFailed('Android could not open the installer: $outcome');
     } catch (e) {
       state = UpdateFailed(_message(e));
     } finally {
@@ -191,7 +196,12 @@ class Updater extends Notifier<UpdateState> {
     }
   }
 
-  String _message(Object e) => e is HttpException ? e.message : '$e';
+  String _message(Object e) => switch (e) {
+    HttpException(:final message) => message,
+    PlatformException(:final message, :final code) => message ?? code,
+    SocketException() => 'No connection to GitHub. Check your internet.',
+    _ => '$e',
+  };
 }
 
 final updaterProvider = NotifierProvider<Updater, UpdateState>(Updater.new);
