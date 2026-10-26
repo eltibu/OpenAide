@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../update/update_screen.dart';
+import '../../core/theme.dart';
 import 'chat_controller.dart';
 
 /// The web UI's sidebar: search, pinned chats, folders, then the rest.
@@ -50,8 +51,9 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Chats',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      'Nexus',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontFamily: 'serif'),
                     ),
                   ),
                   IconButton(
@@ -82,12 +84,32 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                         ),
                   isDense: true,
                   filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
                 ),
               ),
+            ),
+            ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+              leading: const CircleAvatar(
+                radius: 14,
+                backgroundColor: NexusColors.accent,
+                child: Icon(Icons.add, size: 18, color: Colors.white),
+              ),
+              title: const Text(
+                'New chat',
+                style: TextStyle(
+                  color: NexusColors.accent,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                ref.read(chatControllerProvider.notifier).newChat();
+              },
             ),
             Expanded(
               child: RefreshIndicator(
@@ -101,23 +123,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
               ),
             ),
             const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.system_update),
-              title: const Text('App updates'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const UpdateScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.logout),
-              title: const Text('Sign out'),
-              subtitle: Text(session?.serverUrl ?? ''),
-              onTap: () => ref.read(sessionProvider.notifier).signOut(),
-            ),
+            _Account(session: session),
           ],
         ),
       ),
@@ -136,7 +142,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
     final pinned = ref.watch(pinnedChatsProvider).value ?? const [];
     if (pinned.isEmpty) return const [];
     return [
-      _Header('Pinned', style: style),
+      _Header('Starred', style: style),
       for (final c in pinned) ChatTile(chat: c, pinned: true),
     ];
   }
@@ -152,7 +158,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
   List<Widget> _chats(TextStyle? style) {
     final pages = ref.watch(chatPagesProvider);
     return [
-      _Header('Chats', style: style),
+      _Header('Recents', style: style),
       ...ref
           .watch(chatListProvider)
           .when(
@@ -304,9 +310,12 @@ class ChatTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(chatControllerProvider.select((s) => s.chat?.id));
+    final scheme = Theme.of(context).colorScheme;
     return ListTile(
-      dense: true,
+      visualDensity: VisualDensity.compact,
       selected: chat.id == current,
+      selectedColor: scheme.onSurface,
+      selectedTileColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       onTap: () {
@@ -343,8 +352,8 @@ class ChatTile extends ConsumerWidget {
               ('rename', Icons.edit_outlined, 'Rename'),
               (
                 'pin',
-                isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                isPinned ? 'Unpin' : 'Pin',
+                isPinned ? Icons.star : Icons.star_outline,
+                isPinned ? 'Unstar' : 'Star',
               ),
               ('move', Icons.drive_file_move_outline, 'Move to folder'),
               ('archive', Icons.archive_outlined, 'Archive'),
@@ -501,3 +510,54 @@ Future<bool> _confirm(BuildContext context, String title, String body) async =>
 
 void _showError(BuildContext context, Object e) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+
+/// You, at the bottom of the menu, with app updates and sign-out.
+class _Account extends ConsumerWidget {
+  const _Account({required this.session});
+  final Session? session;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final name = session?.userName ?? '';
+    final initials = name.trim().isEmpty
+        ? '?'
+        : name
+              .trim()
+              .split(RegExp(r'\s+'))
+              .take(2)
+              .map((w) => w[0].toUpperCase())
+              .join();
+    return ListTile(
+      contentPadding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+      leading: CircleAvatar(
+        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+        child: Text(initials),
+      ),
+      title: Text(name.isEmpty ? 'Account' : name),
+      subtitle: Text(
+        Uri.tryParse(session?.serverUrl ?? '')?.host ?? '',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: PopupMenuButton<String>(
+        tooltip: 'Settings',
+        icon: const Icon(Icons.settings_outlined),
+        onSelected: (choice) {
+          if (choice == 'updates') {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const UpdateScreen()),
+            );
+          } else if (choice == 'signout') {
+            ref.read(sessionProvider.notifier).signOut();
+          }
+        },
+        itemBuilder: (_) => const [
+          PopupMenuItem(value: 'updates', child: Text('App updates')),
+          PopupMenuItem(value: 'signout', child: Text('Sign out')),
+        ],
+      ),
+    );
+  }
+}

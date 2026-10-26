@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/session.dart';
+import 'core/theme.dart';
 import 'features/auth/login_screen.dart';
 import 'features/chat/chat_screen.dart';
 
@@ -14,17 +15,12 @@ class NexusApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const seed = Color(0xFF6750A4);
     final session = ref.watch(sessionProvider);
     return MaterialApp(
       title: 'Nexus Assistant',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
-      darkTheme: ThemeData(
-        colorSchemeSeed: seed,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-      ),
+      theme: nexusTheme(Brightness.light),
+      darkTheme: nexusTheme(Brightness.dark),
       home: switch (session) {
         AsyncData(value: != null) => const ChatScreen(),
         // Spinner only while restoring a saved session; during sign-in the

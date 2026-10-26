@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import '../../core/theme.dart';
 import '../update/update_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
@@ -29,52 +30,26 @@ class ChatScreen extends ConsumerWidget {
             .selectModel(models.value!.first.id),
       );
     }
+    final title = state.chat?.title;
 
     return Scaffold(
       appBar: AppBar(
-        title: models.when(
-          data: (list) => list.isEmpty
-              ? const Text('No models on server')
-              : DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    isExpanded: true,
-                    value: list.any((m) => m.id == state.modelId)
-                        ? state.modelId
-                        : null,
-                    hint: const Text('Choose a model'),
-                    items: [
-                      for (final m in list)
-                        DropdownMenuItem(
-                          value: m.id,
-                          child: Text(m.name, overflow: TextOverflow.ellipsis),
-                        ),
-                    ],
-                    onChanged: (id) {
-                      if (id != null) {
-                        ref
-                            .read(chatControllerProvider.notifier)
-                            .selectModel(id);
-                      }
-                    },
-                  ),
-                ),
-          loading: () => const Text('Loading models…'),
-          error: (e, _) => const Text('Models unavailable'),
+        leading: Builder(
+          builder: (context) => IconButton(
+            tooltip: 'Chats',
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
+        title: Text(
+          title == null || title.isEmpty ? '' : title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         actions: [
           IconButton(
-            tooltip: 'Voice call',
-            icon: const Icon(Icons.graphic_eq),
-            onPressed: state.modelId == null
-                ? null
-                : () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(builder: (_) => const CallScreen()),
-                  ),
-          ),
-          IconButton(
             tooltip: 'New chat',
-            icon: const Icon(Icons.edit_square),
+            icon: const Icon(Icons.add_comment_outlined),
             onPressed: () =>
                 ref.read(chatControllerProvider.notifier).newChat(),
           ),
@@ -113,16 +88,40 @@ class ChatScreen extends ConsumerWidget {
   }
 }
 
+/// A new chat: the greeting, centered, as in the Claude app.
 class _EmptyState extends ConsumerWidget {
   const _EmptyState();
 
+  static String _greeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 5) return 'Hello, night owl';
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    return 'Good evening';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final name = ref.watch(sessionProvider).value?.userName ?? '';
+    final name = ref.watch(sessionProvider).value?.userName.split(' ').first;
+    final style = Theme.of(context).textTheme.headlineMedium
+        ?.copyWith(fontFamily: 'serif', fontWeight: FontWeight.w400);
     return Center(
-      child: Text(
-        name.isEmpty ? 'How can I help?' : 'Hi $name, how can I help?',
-        style: Theme.of(context).textTheme.headlineSmall,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.auto_awesome, color: NexusColors.accent, size: 36),
+            const SizedBox(height: 16),
+            Text(
+              name == null || name.isEmpty
+                  ? _greeting()
+                  : '${_greeting()}, $name',
+              textAlign: TextAlign.center,
+              style: style,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -145,9 +144,10 @@ class _MessageList extends ConsumerWidget {
     final mdConfig = dark
         ? MarkdownConfig.darkConfig
         : MarkdownConfig.defaultConfig;
+    final body = Theme.of(context).textTheme.bodyLarge;
     return ListView.builder(
       reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       itemCount: messages.length,
       itemBuilder: (context, i) {
         final m = messages[messages.length - 1 - i];
@@ -159,27 +159,32 @@ class _MessageList extends ConsumerWidget {
               if (m.attachments.isNotEmpty)
                 MessageAttachments(attachments: m.attachments),
               if (m.content.isNotEmpty)
-                Container(
-                  margin: const EdgeInsets.only(top: 6),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 10,
+                GestureDetector(
+                  onLongPress: streaming
+                      ? null
+                      : () => _userMessageMenu(context, ref, m),
+                  child: Container(
+                    margin: const EdgeInsets.only(top: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 11,
+                    ),
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * 0.82,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.nexus.userBubble,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(m.content, style: body),
                   ),
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.sizeOf(context).width * 0.8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: scheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(18),
-                  ),
-                  child: SelectableText(m.content),
                 ),
-              if (!streaming) _MessageActions(message: m),
+              if (!streaming) _MessageActions(message: m, compact: true),
             ],
           );
         }
         return Padding(
-          padding: const EdgeInsets.only(top: 6),
+          padding: const EdgeInsets.only(top: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -309,8 +314,12 @@ class _Sources extends StatelessWidget {
 
 /// Copy, edit or regenerate, and switching between versions of a message.
 class _MessageActions extends ConsumerWidget {
-  const _MessageActions({required this.message});
+  const _MessageActions({required this.message, this.compact = false});
   final ChatMessage message;
+
+  /// Only the version arrows (user messages: copy and edit are on
+  /// long-press, as in the Claude app).
+  final bool compact;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -320,6 +329,7 @@ class _MessageActions extends ConsumerWidget {
     final index = siblings.indexOf(message.id);
     final isUser = message.role == 'user';
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    if (compact && siblings.length < 2) return const SizedBox.shrink();
 
     Widget action(IconData icon, String tip, VoidCallback? onTap) => IconButton(
       tooltip: tip,
@@ -351,14 +361,14 @@ class _MessageActions extends ConsumerWidget {
                 : null,
           ),
         ],
-        if (message.content.isNotEmpty)
+        if (!compact && message.content.isNotEmpty)
           action(Icons.copy_outlined, 'Copy', () {
             Clipboard.setData(ClipboardData(text: message.content));
             ScaffoldMessenger.of(context)
                 .showSnackBar(const SnackBar(content: Text('Copied')));
           }),
-        if (isUser)
-          action(Icons.edit_outlined, 'Edit', () => _edit(context, ref))
+        if (isUser || compact)
+          const SizedBox.shrink()
         else
           action(
             Icons.refresh,
@@ -369,7 +379,11 @@ class _MessageActions extends ConsumerWidget {
     );
   }
 
-  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+  static Future<void> edit(
+    BuildContext context,
+    WidgetRef ref,
+    ChatMessage message,
+  ) async {
     final text = TextEditingController(text: message.content);
     final edited = await showDialog<String>(
       context: context,
@@ -434,70 +448,223 @@ class _ComposerState extends ConsumerState<_Composer> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _text.addListener(() {
+      final has = _text.text.trim().isNotEmpty;
+      if (has != _hasText) setState(() => _hasText = has);
+    });
+  }
+
+  bool _hasText = false;
+
+  @override
   Widget build(BuildContext context) {
     final controller = ref.read(chatControllerProvider.notifier);
+    final ready = ref.watch(
+      chatControllerProvider.select(
+        (s) =>
+            s.modelId != null &&
+            !s.loading &&
+            !s.attachments.any((a) => a.uploading),
+      ),
+    );
+    final hasFiles = ref.watch(
+      chatControllerProvider.select(
+        (s) => s.attachments.any((a) => a.uploaded != null),
+      ),
+    );
+    final empty = ref.watch(
+      chatControllerProvider.select((s) => s.messages.isEmpty),
+    );
+    final colors = context.nexus;
+    final Widget action;
+    if (widget.streaming) {
+      action = IconButton.filled(
+        tooltip: 'Stop',
+        icon: const Icon(Icons.stop_rounded),
+        onPressed: controller.stop,
+      );
+    } else if (_hasText || hasFiles) {
+      action = IconButton.filled(
+        tooltip: 'Send',
+        icon: const Icon(Icons.arrow_upward),
+        onPressed: ready ? _send : null,
+      );
+    } else {
+      action = IconButton.filled(
+        tooltip: 'Voice call',
+        icon: const Icon(Icons.graphic_eq),
+        onPressed: ready
+            ? () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(builder: (_) => const CallScreen()),
+              )
+            : null,
+      );
+    }
     return SafeArea(
       top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const PendingAttachments(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const AttachButton(),
-                const _FeaturesButton(),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: TextField(
-                    controller: _text,
-                    minLines: 1,
-                    maxLines: 6,
-                    textInputAction: TextInputAction.newline,
-                    decoration: InputDecoration(
-                      hintText: 'Message',
-                      filled: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 18,
-                        vertical: 12,
-                      ),
-                    ),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(10, 4, 10, 10),
+        decoration: BoxDecoration(
+          color: colors.composer,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: colors.composerBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const PendingAttachments(),
+            TextField(
+              controller: _text,
+              minLines: 1,
+              maxLines: 6,
+              textCapitalization: TextCapitalization.sentences,
+              textInputAction: TextInputAction.newline,
+              decoration: InputDecoration(
+                hintText: empty ? 'Chat with Nexus' : 'Reply to Nexus',
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              child: Row(
+                children: [
+                  const AttachButton(),
+                  const _FeaturesButton(),
+                  const SizedBox(width: 4),
+                  const Flexible(child: _ModelChip()),
+                  const Spacer(),
+                  action,
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The model in use, as a chip in the text box; tap to switch.
+class _ModelChip extends ConsumerWidget {
+  const _ModelChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final models = ref.watch(modelsProvider);
+    final selected = ref.watch(chatControllerProvider.select((s) => s.modelId));
+    final list = models.value ?? const [];
+    final name = models.isLoading
+        ? 'Loading…'
+        : list.where((m) => m.id == selected).firstOrNull?.name ??
+              (models.hasError ? 'Models unavailable' : 'Choose a model');
+    return TextButton(
+      style: TextButton.styleFrom(
+        foregroundColor: context.nexus.muted,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        visualDensity: VisualDensity.compact,
+      ),
+      onPressed: models.hasError
+          ? () => ref.invalidate(modelsProvider)
+          : list.isEmpty
+          ? null
+          : () => showModalBottomSheet<void>(
+              context: context,
+              showDragHandle: true,
+              isScrollControlled: true,
+              builder: (context) => SafeArea(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+                  ),
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      for (final m in list)
+                        ListTile(
+                          title: Text(m.name),
+                          subtitle: m.description == null
+                              ? null
+                              : Text(
+                                  m.description!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                          trailing: m.id == selected
+                              ? const Icon(
+                                  Icons.check,
+                                  color: NexusColors.accent,
+                                )
+                              : null,
+                          onTap: () {
+                            ref
+                                .read(chatControllerProvider.notifier)
+                                .selectModel(m.id);
+                            Navigator.pop(context);
+                          },
+                        ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 8),
-                widget.streaming
-                    ? IconButton.filledTonal(
-                        tooltip: 'Stop',
-                        icon: const Icon(Icons.stop),
-                        onPressed: controller.stop,
-                      )
-                    : IconButton.filled(
-                        tooltip: 'Send',
-                        icon: const Icon(Icons.arrow_upward),
-                        onPressed:
-                            ref.watch(
-                              chatControllerProvider.select(
-                                (s) =>
-                                    s.modelId != null &&
-                                    !s.loading &&
-                                    !s.attachments.any((a) => a.uploading),
-                              ),
-                            )
-                            ? _send
-                            : null,
-                      ),
-              ],
+              ),
             ),
-          ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(child: Text(name, overflow: TextOverflow.ellipsis)),
+          const Icon(Icons.expand_more, size: 18),
         ],
       ),
     );
+  }
+}
+
+/// Long-press on your own message: copy or edit it.
+Future<void> _userMessageMenu(
+  BuildContext context,
+  WidgetRef ref,
+  ChatMessage m,
+) async {
+  final choice = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.copy_outlined),
+            title: const Text('Copy'),
+            onTap: () => Navigator.pop(context, 'copy'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Edit'),
+            onTap: () => Navigator.pop(context, 'edit'),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (!context.mounted) return;
+  if (choice == 'copy') {
+    await Clipboard.setData(ClipboardData(text: m.content));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Copied')));
+    }
+  } else if (choice == 'edit') {
+    await _MessageActions.edit(context, ref, m);
   }
 }
 
@@ -521,6 +688,9 @@ class _FeaturesButton extends ConsumerWidget {
     return IconButton(
       tooltip: 'Tools',
       isSelected: anyOn,
+      visualDensity: VisualDensity.compact,
+      color: context.nexus.muted,
+      selectedIcon: const Icon(Icons.tune, color: NexusColors.accent),
       icon: const Icon(Icons.tune),
       onPressed: () => showModalBottomSheet<void>(
         context: context,

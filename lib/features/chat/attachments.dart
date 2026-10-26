@@ -16,9 +16,13 @@ class AttachButton extends ConsumerWidget {
   const AttachButton({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) => IconButton(
-    tooltip: 'Attach',
-    icon: const Icon(Icons.attach_file),
+  Widget build(BuildContext context, WidgetRef ref) => IconButton.outlined(
+    tooltip: 'Add photos and files',
+    visualDensity: VisualDensity.compact,
+    style: IconButton.styleFrom(
+      side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
+    ),
+    icon: const Icon(Icons.add),
     onPressed: () async {
       final choice = await showModalBottomSheet<String>(
         context: context,
