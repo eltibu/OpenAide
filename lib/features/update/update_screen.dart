@@ -58,7 +58,10 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
           Text('GitHub token', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
-            _hasToken
+            builtInToken.isNotEmpty
+                ? 'Built into the app, nothing to set up. You can paste a '
+                      'different token here to override it.'
+                : _hasToken
                 ? 'A token is saved. Paste a new one to replace it.'
                 : 'Needed because the repo is private. Create a fine-grained '
                       'token on GitHub with read-only "Contents" access to '

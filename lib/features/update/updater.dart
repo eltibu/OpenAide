@@ -12,6 +12,11 @@ const updateRepo = 'eltibu/Nexus-assistant';
 const _assetName = 'nexus-assistant.apk';
 const _kToken = 'github_update_token';
 
+/// Read-only token baked in at build time from the repo secret
+/// NEXUS_UPDATE_TOKEN, so updates work without typing anything, even after a
+/// reinstall. A token pasted in App updates takes precedence.
+const builtInToken = String.fromEnvironment('NEXUS_UPDATE_TOKEN');
+
 const _storage = FlutterSecureStorage();
 const _channel = MethodChannel('nexus/updates');
 
@@ -75,7 +80,11 @@ class Updater extends Notifier<UpdateState> {
   @override
   UpdateState build() => const UpdateIdle();
 
-  Future<String?> token() => _storage.read(key: _kToken);
+  Future<String?> token() async {
+    final saved = await _storage.read(key: _kToken);
+    if (saved != null && saved.isNotEmpty) return saved;
+    return builtInToken.isEmpty ? null : builtInToken;
+  }
 
   Future<void> setToken(String value) async {
     final t = value.trim();
