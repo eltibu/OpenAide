@@ -16,9 +16,11 @@ class ChatScreen extends ConsumerWidget {
 
     // Default to the first server model once the list arrives.
     if (state.modelId == null && (models.value?.isNotEmpty ?? false)) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => ref
-          .read(chatControllerProvider.notifier)
-          .selectModel(models.value!.first.id));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => ref
+            .read(chatControllerProvider.notifier)
+            .selectModel(models.value!.first.id),
+      );
     }
 
     return Scaffold(
@@ -36,12 +38,15 @@ class ChatScreen extends ConsumerWidget {
                     items: [
                       for (final m in list)
                         DropdownMenuItem(
-                            value: m.id,
-                            child: Text(m.name, overflow: TextOverflow.ellipsis)),
+                          value: m.id,
+                          child: Text(m.name, overflow: TextOverflow.ellipsis),
+                        ),
                     ],
                     onChanged: (id) {
                       if (id != null) {
-                        ref.read(chatControllerProvider.notifier).selectModel(id);
+                        ref
+                            .read(chatControllerProvider.notifier)
+                            .selectModel(id);
                       }
                     },
                   ),
@@ -53,7 +58,8 @@ class ChatScreen extends ConsumerWidget {
           IconButton(
             tooltip: 'New chat',
             icon: const Icon(Icons.edit_square),
-            onPressed: () => ref.read(chatControllerProvider.notifier).newChat(),
+            onPressed: () =>
+                ref.read(chatControllerProvider.notifier).newChat(),
           ),
         ],
       ),
@@ -74,8 +80,8 @@ class ChatScreen extends ConsumerWidget {
             child: state.loading
                 ? const Center(child: CircularProgressIndicator())
                 : state.messages.isEmpty
-                    ? const _EmptyState()
-                    : _MessageList(messages: state.messages),
+                ? const _EmptyState()
+                : _MessageList(messages: state.messages),
           ),
           _Composer(streaming: state.streaming),
         ],
@@ -107,8 +113,9 @@ class _MessageList extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final mdConfig =
-        dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig;
+    final mdConfig = dark
+        ? MarkdownConfig.darkConfig
+        : MarkdownConfig.defaultConfig;
     return ListView.builder(
       reverse: true,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -123,7 +130,8 @@ class _MessageList extends StatelessWidget {
               margin: const EdgeInsets.symmetric(vertical: 6),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width * 0.8),
+                maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+              ),
               decoration: BoxDecoration(
                 color: scheme.primaryContainer,
                 borderRadius: BorderRadius.circular(18),
@@ -138,8 +146,9 @@ class _MessageList extends StatelessWidget {
               ? const Align(
                   alignment: Alignment.centerLeft,
                   child: SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
                 )
               : MarkdownBlock(data: m.content, config: mdConfig),
         );
@@ -195,8 +204,10 @@ class _ComposerState extends ConsumerState<_Composer> {
                     borderRadius: BorderRadius.circular(24),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
                 ),
               ),
             ),
@@ -238,7 +249,11 @@ class _ChatDrawer extends ConsumerWidget {
             for (final c in list)
               ListTile(
                 selected: c.id == current,
-                title: Text(c.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                title: Text(
+                  c.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 onTap: () {
                   Navigator.pop(context);
                   ref.read(chatControllerProvider.notifier).open(c.id);

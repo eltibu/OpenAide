@@ -7,12 +7,12 @@ class ModelInfo {
   ModelInfo({required this.id, required this.name, required this.raw});
 
   factory ModelInfo.fromJson(Map<String, dynamic> json) => ModelInfo(
-        id: json['id'] as String,
-        name: (json['name'] as String?)?.trim().isNotEmpty == true
-            ? json['name'] as String
-            : json['id'] as String,
-        raw: json,
-      );
+    id: json['id'] as String,
+    name: (json['name'] as String?)?.trim().isNotEmpty == true
+        ? json['name'] as String
+        : json['id'] as String,
+    raw: json,
+  );
 
   final String id;
   final String name;

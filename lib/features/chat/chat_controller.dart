@@ -12,10 +12,12 @@ const _uuid = Uuid();
 /// Models come from the server every time, so anything added in Open WebUI
 /// (new connections, custom models, presets) shows up without an app update.
 final modelsProvider = FutureProvider<List<ModelInfo>>(
-    (ref) => ref.watch(clientProvider).models());
+  (ref) => ref.watch(clientProvider).models(),
+);
 
 final chatListProvider = FutureProvider<List<ChatSummary>>(
-    (ref) => ref.watch(clientProvider).chats());
+  (ref) => ref.watch(clientProvider).chats(),
+);
 
 class ChatState {
   const ChatState({
@@ -46,15 +48,14 @@ class ChatState {
     bool? loading,
     String? error,
     bool clearError = false,
-  }) =>
-      ChatState(
-        chat: clearChat ? null : chat ?? this.chat,
-        modelId: modelId ?? this.modelId,
-        streaming: streaming ?? this.streaming,
-        loading: loading ?? this.loading,
-        error: clearError ? null : error ?? this.error,
-        revision: revision + 1,
-      );
+  }) => ChatState(
+    chat: clearChat ? null : chat ?? this.chat,
+    modelId: modelId ?? this.modelId,
+    streaming: streaming ?? this.streaming,
+    loading: loading ?? this.loading,
+    error: clearError ? null : error ?? this.error,
+    revision: revision + 1,
+  );
 }
 
 class ChatController extends Notifier<ChatState> {
@@ -110,12 +111,18 @@ class ChatController extends Notifier<ChatState> {
         role: 'user',
         content: text.trim(),
         parentId: chat?.currentId,
-        extra: {'models': [modelId]},
+        extra: {
+          'models': [modelId],
+        },
       );
 
       if (chat == null) {
-        final draft = Chat(id: '', title: 'New Chat', messages: {}, models: [modelId])
-          ..append(user);
+        final draft = Chat(
+          id: '',
+          title: 'New Chat',
+          messages: {},
+          models: [modelId],
+        )..append(user);
         // Created on the server first, so the chat exists there even if the
         // app is closed mid-reply.
         chat = await client.createChat(draft);
@@ -144,19 +151,19 @@ class ChatController extends Notifier<ChatState> {
       _sub = client
           .streamCompletion(model: modelId, messages: history)
           .listen(
-        (delta) {
-          assistant.content += delta;
-          state = state.copyWith();
-        },
-        onError: (Object e) {
-          state = state.copyWith(error: '$e');
-          if (!done.isCompleted) done.complete();
-        },
-        onDone: () {
-          if (!done.isCompleted) done.complete();
-        },
-        cancelOnError: true,
-      );
+            (delta) {
+              assistant.content += delta;
+              state = state.copyWith();
+            },
+            onError: (Object e) {
+              state = state.copyWith(error: '$e');
+              if (!done.isCompleted) done.complete();
+            },
+            onDone: () {
+              if (!done.isCompleted) done.complete();
+            },
+            cancelOnError: true,
+          );
       await done.future;
       await _finish();
 
@@ -192,5 +199,6 @@ class ChatController extends Notifier<ChatState> {
   }
 }
 
-final chatControllerProvider =
-    NotifierProvider<ChatController, ChatState>(ChatController.new);
+final chatControllerProvider = NotifierProvider<ChatController, ChatState>(
+  ChatController.new,
+);

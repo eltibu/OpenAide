@@ -25,7 +25,11 @@ class SessionNotifier extends AsyncNotifier<Session?> {
     if (url == null || token == null) return null;
     try {
       final client = OpenWebUiClient(baseUrl: url, token: token);
-      return Session(serverUrl: client.baseUrl, token: token, user: await client.me());
+      return Session(
+        serverUrl: client.baseUrl,
+        token: token,
+        user: await client.me(),
+      );
     } on ApiException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 403) {
         await _storage.delete(key: _kToken);
@@ -45,15 +49,23 @@ class SessionNotifier extends AsyncNotifier<Session?> {
       _signIn(url, (c) async => c.token = apiKey.trim());
 
   Future<void> _signIn(
-      String url, Future<void> Function(OpenWebUiClient) auth) async {
+    String url,
+    Future<void> Function(OpenWebUiClient) auth,
+  ) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      final client = OpenWebUiClient(baseUrl: url);
+      final client = OpenWebUiClient(
+        baseUrl: await OpenWebUiClient.discover(url),
+      );
       await auth(client);
       final user = await client.me();
       await _storage.write(key: _kUrl, value: client.baseUrl);
       await _storage.write(key: _kToken, value: client.token);
-      return Session(serverUrl: client.baseUrl, token: client.token!, user: user);
+      return Session(
+        serverUrl: client.baseUrl,
+        token: client.token!,
+        user: user,
+      );
     });
   }
 
@@ -63,8 +75,9 @@ class SessionNotifier extends AsyncNotifier<Session?> {
   }
 }
 
-final sessionProvider =
-    AsyncNotifierProvider<SessionNotifier, Session?>(SessionNotifier.new);
+final sessionProvider = AsyncNotifierProvider<SessionNotifier, Session?>(
+  SessionNotifier.new,
+);
 
 /// API client for the current session. Throws if signed out.
 final clientProvider = Provider<OpenWebUiClient>((ref) {

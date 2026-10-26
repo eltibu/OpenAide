@@ -21,13 +21,15 @@ class NexusApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
       darkTheme: ThemeData(
-          colorSchemeSeed: seed,
-          brightness: Brightness.dark,
-          useMaterial3: true),
+        colorSchemeSeed: seed,
+        brightness: Brightness.dark,
+        useMaterial3: true,
+      ),
       home: switch (session) {
         AsyncData(value: != null) => const ChatScreen(),
         AsyncLoading() when !session.hasValue => const Scaffold(
-            body: Center(child: CircularProgressIndicator())),
+          body: Center(child: CircularProgressIndicator()),
+        ),
         _ => const LoginScreen(),
       },
     );

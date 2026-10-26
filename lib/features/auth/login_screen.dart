@@ -49,13 +49,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 Icon(Icons.blur_on, size: 64, color: theme.colorScheme.primary),
                 const SizedBox(height: 12),
-                Text('Nexus Assistant',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineSmall),
+                Text(
+                  'Nexus Assistant',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.headlineSmall,
+                ),
                 const SizedBox(height: 4),
-                Text('Connect to your Open WebUI server',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium),
+                Text(
+                  'Connect to your Open WebUI server',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium,
+                ),
                 const SizedBox(height: 32),
                 TextField(
                   controller: _url,
@@ -74,7 +78,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ButtonSegment(value: true, label: Text('API key')),
                   ],
                   selected: {_useApiKey},
-                  onSelectionChanged: (s) => setState(() => _useApiKey = s.first),
+                  onSelectionChanged: (s) =>
+                      setState(() => _useApiKey = s.first),
                 ),
                 const SizedBox(height: 16),
                 if (_useApiKey)
@@ -92,7 +97,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     keyboardType: TextInputType.emailAddress,
                     autocorrect: false,
                     decoration: const InputDecoration(
-                        labelText: 'Email', border: OutlineInputBorder()),
+                      labelText: 'Email',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -100,7 +107,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     obscureText: true,
                     onSubmitted: (_) => _submit(),
                     decoration: const InputDecoration(
-                        labelText: 'Password', border: OutlineInputBorder()),
+                      labelText: 'Password',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                 ],
                 const SizedBox(height: 24),
@@ -109,13 +118,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   child: session.isLoading
                       ? const SizedBox.square(
                           dimension: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2))
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Connect'),
                 ),
                 if (session.hasError) ...[
                   const SizedBox(height: 16),
-                  Text('${session.error}',
-                      style: TextStyle(color: theme.colorScheme.error)),
+                  Text(
+                    '${session.error}',
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
                 ],
               ],
             ),

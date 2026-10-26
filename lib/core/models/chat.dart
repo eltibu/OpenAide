@@ -14,13 +14,19 @@ class ChatMessage {
     this.model,
     int? timestamp,
     Map<String, dynamic>? extra,
-  })  : childrenIds = childrenIds ?? [],
-        timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
-        extra = extra ?? {};
+  }) : childrenIds = childrenIds ?? [],
+       timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+       extra = extra ?? {};
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     const known = {
-      'id', 'role', 'content', 'parentId', 'childrenIds', 'model', 'timestamp'
+      'id',
+      'role',
+      'content',
+      'parentId',
+      'childrenIds',
+      'model',
+      'timestamp',
     };
     return ChatMessage(
       id: json['id'] as String,
@@ -51,15 +57,15 @@ class ChatMessage {
   final Map<String, dynamic> extra;
 
   Map<String, dynamic> toJson() => {
-        ...extra,
-        'id': id,
-        'role': role,
-        'content': content,
-        'parentId': parentId,
-        'childrenIds': childrenIds,
-        'timestamp': timestamp,
-        if (model != null) 'model': model,
-      };
+    ...extra,
+    'id': id,
+    'role': role,
+    'content': content,
+    'parentId': parentId,
+    'childrenIds': childrenIds,
+    'timestamp': timestamp,
+    if (model != null) 'model': model,
+  };
 
   static String _contentText(Object? content) {
     if (content is String) return content;
@@ -83,8 +89,8 @@ class Chat {
     this.currentId,
     List<String>? models,
     Map<String, dynamic>? extra,
-  })  : models = models ?? [],
-        extra = extra ?? {};
+  }) : models = models ?? [],
+       extra = extra ?? {};
 
   /// Builds from a `/api/v1/chats/{id}` response.
   factory Chat.fromServer(Map<String, dynamic> json) {
@@ -140,29 +146,29 @@ class Chat {
 
   /// The `chat` object Open WebUI expects in create/update calls.
   Map<String, dynamic> toServerBody() => {
-        ...extra,
-        'id': id,
-        'title': title,
-        'models': models,
-        'history': {
-          'messages': {for (final e in messages.entries) e.key: e.value.toJson()},
-          'currentId': currentId,
-        },
-        'messages': [for (final m in thread) m.toJson()],
-        'timestamp': DateTime.now().millisecondsSinceEpoch,
-      };
+    ...extra,
+    'id': id,
+    'title': title,
+    'models': models,
+    'history': {
+      'messages': {for (final e in messages.entries) e.key: e.value.toJson()},
+      'currentId': currentId,
+    },
+    'messages': [for (final m in thread) m.toJson()],
+    'timestamp': DateTime.now().millisecondsSinceEpoch,
+  };
 }
 
 class ChatSummary {
   ChatSummary({required this.id, required this.title, required this.updatedAt});
 
   factory ChatSummary.fromJson(Map<String, dynamic> json) => ChatSummary(
-        id: json['id'] as String,
-        title: json['title'] as String? ?? 'New Chat',
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(
-          ((json['updated_at'] as num?)?.toInt() ?? 0) * 1000,
-        ),
-      );
+    id: json['id'] as String,
+    title: json['title'] as String? ?? 'New Chat',
+    updatedAt: DateTime.fromMillisecondsSinceEpoch(
+      ((json['updated_at'] as num?)?.toInt() ?? 0) * 1000,
+    ),
+  );
 
   final String id;
   final String title;

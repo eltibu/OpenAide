@@ -17,17 +17,28 @@ void main() {
           'currentId': 'a2',
           'messages': {
             'u1': {
-              'id': 'u1', 'role': 'user', 'content': 'hi',
-              'parentId': null, 'childrenIds': ['a1', 'a2'],
+              'id': 'u1',
+              'role': 'user',
+              'content': 'hi',
+              'parentId': null,
+              'childrenIds': ['a1', 'a2'],
             },
             'a1': {
-              'id': 'a1', 'role': 'assistant', 'content': 'old reply',
-              'parentId': 'u1', 'childrenIds': [],
+              'id': 'a1',
+              'role': 'assistant',
+              'content': 'old reply',
+              'parentId': 'u1',
+              'childrenIds': [],
             },
             'a2': {
-              'id': 'a2', 'role': 'assistant', 'content': 'regenerated',
-              'parentId': 'u1', 'childrenIds': [],
-              'sources': [{'name': 'doc.pdf'}],
+              'id': 'a2',
+              'role': 'assistant',
+              'content': 'regenerated',
+              'parentId': 'u1',
+              'childrenIds': [],
+              'sources': [
+                {'name': 'doc.pdf'},
+              ],
             },
           },
         },
@@ -44,13 +55,17 @@ void main() {
       final body = Chat.fromServer(serverJson).toServerBody();
       expect(body['params'], {'temperature': 0.2});
       final a2 = (body['history'] as Map)['messages']['a2'] as Map;
-      expect(a2['sources'], [{'name': 'doc.pdf'}]);
+      expect(a2['sources'], [
+        {'name': 'doc.pdf'},
+      ]);
       expect((body['messages'] as List).length, 2);
     });
 
     test('append links parent and moves the tip', () {
       final chat = Chat.fromServer(serverJson);
-      chat.append(ChatMessage(id: 'u2', role: 'user', content: 'more', parentId: 'a2'));
+      chat.append(
+        ChatMessage(id: 'u2', role: 'user', content: 'more', parentId: 'a2'),
+      );
       expect(chat.currentId, 'u2');
       expect(chat.messages['a2']!.childrenIds, ['u2']);
       expect(chat.thread.map((m) => m.id), ['u1', 'a2', 'u2']);
@@ -58,7 +73,8 @@ void main() {
   });
 
   test('parseSse yields deltas and stops at [DONE]', () async {
-    const raw = 'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n'
+    const raw =
+        'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n'
         ': keep-alive\n\n'
         'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'
         'data: [DONE]\n\n'
