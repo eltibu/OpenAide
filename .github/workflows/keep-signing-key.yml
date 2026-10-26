@@ -1,0 +1,19 @@
+name: Keep signing key
+
+# GitHub drops a cache nobody has read for 7 days. The app's signing key lives
+# in the Actions cache, and losing it would force a reinstall on the phone, so
+# this reads it every other day to keep it.
+on:
+  schedule:
+    - cron: '17 5 */2 * *'
+  workflow_dispatch:
+
+jobs:
+  touch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: nexus-debug-keystore-v1
+          fail-on-cache-miss: true
