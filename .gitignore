@@ -33,3 +33,17 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+*.iml
+.idea/
+.vscode/
+*.keystore
+*.jks
+key.properties
