@@ -276,6 +276,83 @@ class OpenWebUiClient {
 
   Future<void> deleteChat(String id) => _send('DELETE', '/api/v1/chats/$id');
 
+  /// Pinned chats; the main list leaves them out, as on the web.
+  Future<List<ChatSummary>> pinnedChats() async =>
+      _summaries(await _send('GET', '/api/v1/chats/pinned'));
+
+  /// Chats whose title or messages match [text] (`tag:x` works too).
+  Future<List<ChatSummary>> searchChats(String text, {int page = 1}) async =>
+      _summaries(
+        await _send(
+          'GET',
+          '/api/v1/chats/search',
+          query: {'text': text, 'page': '$page'},
+        ),
+      );
+
+  /// Chats in a folder, ten per page like the web UI's sidebar.
+  Future<List<ChatSummary>> folderChats(
+    String folderId, {
+    int page = 1,
+  }) async => _summaries(
+    await _send(
+      'GET',
+      '/api/v1/chats/folder/$folderId/list',
+      query: {'page': '$page'},
+    ),
+  );
+
+  List<ChatSummary> _summaries(Object? res) => [
+    for (final c in (res as List? ?? const []).whereType<Map>())
+      ChatSummary.fromJson(c.cast<String, dynamic>()),
+  ];
+
+  /// Changes only the title; the server keeps the rest of the chat.
+  Future<void> renameChat(String id, String title) => _send(
+    'POST',
+    '/api/v1/chats/$id',
+    body: {
+      'chat': {'title': title},
+    },
+  );
+
+  /// Pins or unpins (the server toggles it).
+  Future<void> togglePin(String id) => _send('POST', '/api/v1/chats/$id/pin');
+
+  /// Archives or unarchives (the server toggles it).
+  Future<void> toggleArchive(String id) =>
+      _send('POST', '/api/v1/chats/$id/archive');
+
+  /// Moves a chat into [folderId], or out of any folder with null.
+  Future<void> moveChat(String id, String? folderId) =>
+      _send('POST', '/api/v1/chats/$id/folder', body: {'folder_id': folderId});
+
+  // ---- Folders ----
+
+  Future<List<Folder>> folders() async {
+    final res = await _send('GET', '/api/v1/folders/') as List? ?? const [];
+    return [
+      for (final f in res.whereType<Map>())
+        Folder.fromJson(f.cast<String, dynamic>()),
+    ];
+  }
+
+  Future<void> createFolder(String name, {String? parentId}) => _send(
+    'POST',
+    '/api/v1/folders/',
+    body: {'name': name, 'parent_id': ?parentId},
+  );
+
+  Future<void> renameFolder(String id, String name) =>
+      _send('POST', '/api/v1/folders/$id/update', body: {'name': name});
+
+  /// Deletes the folder; its chats move back to the main list.
+  Future<void> deleteFolder(String id) => _send(
+    'DELETE',
+    '/api/v1/folders/$id',
+    query: {'delete_contents': 'false'},
+  );
+
   // ---- Completions ----
 
   /// Streams assistant text for [messages] through Open WebUI, so the

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:uuid/uuid.dart';
 
 import '../../core/auth/session.dart';
@@ -25,9 +26,71 @@ final serverConfigProvider = FutureProvider<Map<String, dynamic>>(
   (ref) => ref.watch(clientProvider).config(),
 );
 
-final chatListProvider = FutureProvider<List<ChatSummary>>(
-  (ref) => ref.watch(clientProvider).chats(),
+/// How many pages of the main chat list to show (60 chats each).
+class ChatPages extends Notifier<int> {
+  @override
+  int build() {
+    ref.watch(clientProvider);
+    return 1;
+  }
+
+  void more() => state++;
+}
+
+final chatPagesProvider = NotifierProvider<ChatPages, int>(ChatPages.new);
+
+/// The main list: chats that are neither pinned nor in a folder, newest
+/// first, as in the web UI's sidebar.
+final chatListProvider = FutureProvider<List<ChatSummary>>((ref) async {
+  final client = ref.watch(clientProvider);
+  final pages = ref.watch(chatPagesProvider);
+  final all = <ChatSummary>[];
+  for (var page = 1; page <= pages; page++) {
+    final batch = await client.chats(page: page);
+    all.addAll(batch);
+    if (batch.length < chatPageSize) break;
+  }
+  return all;
+});
+
+const chatPageSize = 60;
+
+final pinnedChatsProvider = FutureProvider<List<ChatSummary>>(
+  (ref) => ref.watch(clientProvider).pinnedChats(),
 );
+
+final foldersProvider = FutureProvider<List<Folder>>(
+  (ref) => ref.watch(clientProvider).folders(),
+);
+
+/// A folder's chats: the first `pages` pages of ten.
+final folderChatsProvider =
+    FutureProvider.family<List<ChatSummary>, (String, int)>((ref, arg) async {
+      final client = ref.watch(clientProvider);
+      final (folderId, pages) = arg;
+      final all = <ChatSummary>[];
+      for (var page = 1; page <= pages; page++) {
+        final batch = await client.folderChats(folderId, page: page);
+        all.addAll(batch);
+        if (batch.length < folderPageSize) break;
+      }
+      return all;
+    });
+
+const folderPageSize = 10;
+
+final chatSearchProvider = FutureProvider.family<List<ChatSummary>, String>(
+  (ref, text) => ref.watch(clientProvider).searchChats(text),
+);
+
+/// Reloads every chat list after a chat or folder changed.
+void refreshChatLists(void Function(ProviderOrFamily) invalidate) {
+  invalidate(chatListProvider);
+  invalidate(pinnedChatsProvider);
+  invalidate(foldersProvider);
+  invalidate(folderChatsProvider);
+  invalidate(chatSearchProvider);
+}
 
 class ChatState {
   const ChatState({
@@ -163,6 +226,40 @@ class ChatController extends Notifier<ChatState> {
     _view++;
     _run?.finish();
     state = ChatState(modelId: state.modelId, attachments: state.attachments);
+  }
+
+  /// Renames a chat on the server (and on screen, if it's open).
+  Future<void> renameChat(String id, String title) async {
+    await ref.read(clientProvider).renameChat(id, title);
+    final chat = state.chat;
+    if (chat != null && chat.id == id) {
+      chat.title = title;
+      state = state.copyWith(chat: chat);
+    }
+    refreshChatLists(ref.invalidate);
+  }
+
+  Future<void> togglePin(String id) async {
+    await ref.read(clientProvider).togglePin(id);
+    refreshChatLists(ref.invalidate);
+  }
+
+  Future<void> moveChat(String id, String? folderId) async {
+    await ref.read(clientProvider).moveChat(id, folderId);
+    refreshChatLists(ref.invalidate);
+  }
+
+  /// Archives a chat; it leaves the lists and the screen, as on the web.
+  Future<void> archiveChat(String id) async {
+    await ref.read(clientProvider).toggleArchive(id);
+    if (state.chat?.id == id) newChat();
+    refreshChatLists(ref.invalidate);
+  }
+
+  Future<void> deleteChat(String id) async {
+    await ref.read(clientProvider).deleteChat(id);
+    if (state.chat?.id == id) newChat();
+    refreshChatLists(ref.invalidate);
   }
 
   /// Uploads a photo or file for the next message, like the web UI's attach
@@ -428,7 +525,7 @@ class ChatController extends Notifier<ChatState> {
       run.taskIds = started.taskIds;
       // Stop tapped while the request was on its way: stop it now.
       if (run.stopped) await _stopTasks(run);
-      ref.invalidate(chatListProvider);
+      refreshChatLists(ref.invalidate);
       unawaited(_poll(chat.id, run));
       await run.finished.future;
     } catch (e) {
@@ -446,7 +543,7 @@ class ChatController extends Notifier<ChatState> {
         final saved = await client.chat(chat.id);
         if (view != _view) return;
         state = state.copyWith(chat: saved);
-        ref.invalidate(chatListProvider);
+        refreshChatLists(ref.invalidate);
       } catch (_) {}
     }
     final saved = state.chat?.messages[reply.id] ?? reply;
@@ -495,7 +592,7 @@ class ChatController extends Notifier<ChatState> {
         run.finish();
       case 'chat:title' when data is String:
         chat.title = data;
-        ref.invalidate(chatListProvider);
+        refreshChatLists(ref.invalidate);
       case 'status' when data is Map:
         state = data['done'] == true
             ? state.copyWith(clearStatus: true)

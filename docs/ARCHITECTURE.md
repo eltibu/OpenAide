@@ -48,7 +48,10 @@ The app sends a reply the same way the web UI does (Open WebUI 0.12+), so the se
 | Sign in | `POST /api/v1/auths/signin` |
 | Current user (validates token or API key) | `GET /api/v1/auths/` |
 | Models | `GET /api/models` |
-| Chat list | `GET /api/v1/chats/?page=N` |
+| Chat list (not pinned, not in a folder) | `GET /api/v1/chats/?page=N` |
+| Pinned chats / search | `GET /api/v1/chats/pinned`, `GET /api/v1/chats/search?text=` |
+| Rename, pin, archive, move a chat | `POST /api/v1/chats/{id}` (title only), `/{id}/pin`, `/{id}/archive`, `/{id}/folder` |
+| Folders | `GET`, `POST /api/v1/folders/`, `POST /{id}/update`, `DELETE /{id}?delete_contents=false`, chats via `GET /api/v1/chats/folder/{id}/list` |
 | Read / create / update / delete chat | `GET`, `POST /api/v1/chats/new`, `POST`, `DELETE /api/v1/chats/{id}` |
 | Start a reply (server-run task) | `POST /api/chat/completions` |
 | Live reply progress | Socket.IO `/ws/socket.io`, `events` |

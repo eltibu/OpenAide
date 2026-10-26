@@ -289,6 +289,21 @@ class ChatSummary {
   final DateTime updatedAt;
 }
 
+/// A chat folder; folders nest through [parentId].
+class Folder {
+  const Folder({required this.id, required this.name, this.parentId});
+
+  factory Folder.fromJson(Map<String, dynamic> json) => Folder(
+    id: json['id'] as String,
+    name: json['name'] as String? ?? '',
+    parentId: json['parent_id'] as String?,
+  );
+
+  final String id;
+  final String name;
+  final String? parentId;
+}
+
 class ToolCall {
   const ToolCall({required this.name, required this.arguments, this.result});
   final String name;

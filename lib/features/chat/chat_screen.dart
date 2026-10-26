@@ -9,6 +9,7 @@ import '../../core/models/chat.dart';
 import '../update/update_screen.dart';
 import 'attachments.dart';
 import 'chat_controller.dart';
+import 'chat_drawer.dart';
 import 'request_options.dart';
 
 class ChatScreen extends ConsumerWidget {
@@ -68,7 +69,7 @@ class ChatScreen extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: const _ChatDrawer(),
+      drawer: const ChatDrawer(),
       body: Column(
         children: [
           const UpdateBanner(),
@@ -537,74 +538,6 @@ class _FeaturesButton extends ConsumerWidget {
           },
         ),
       ),
-    );
-  }
-}
-
-class _ChatDrawer extends ConsumerWidget {
-  const _ChatDrawer();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final chats = ref.watch(chatListProvider);
-    final session = ref.watch(sessionProvider).value;
-    final current = ref.watch(chatControllerProvider).chat?.id;
-    return NavigationDrawer(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(28, 16, 16, 8),
-          child: Text('Chats', style: Theme.of(context).textTheme.titleMedium),
-        ),
-        ...chats.when(
-          data: (list) => [
-            for (final c in list)
-              ListTile(
-                selected: c.id == current,
-                title: Text(
-                  c.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  ref.read(chatControllerProvider.notifier).open(c.id);
-                },
-              ),
-          ],
-          loading: () => [
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          ],
-          error: (e, _) => [
-            ListTile(
-              title: const Text('Could not load chats'),
-              subtitle: Text('$e'),
-              trailing: const Icon(Icons.refresh),
-              onTap: () => ref.invalidate(chatListProvider),
-            ),
-          ],
-        ),
-        const Divider(),
-        ListTile(
-          leading: const Icon(Icons.system_update),
-          title: const Text('App updates'),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const UpdateScreen()),
-            );
-          },
-        ),
-        ListTile(
-          leading: const Icon(Icons.logout),
-          title: const Text('Sign out'),
-          subtitle: Text(session?.serverUrl ?? ''),
-          onTap: () => ref.read(sessionProvider.notifier).signOut(),
-        ),
-      ],
     );
   }
 }
