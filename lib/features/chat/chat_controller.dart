@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
+import 'request_options.dart';
 
 const _uuid = Uuid();
 
@@ -13,6 +14,15 @@ const _uuid = Uuid();
 /// (new connections, custom models, presets) shows up without an app update.
 final modelsProvider = FutureProvider<List<ModelInfo>>(
   (ref) => ref.watch(clientProvider).models(),
+);
+
+/// The person's settings and the server's config, read once per sign-in for
+/// what each message carries (memory, default features, params).
+final userSettingsProvider = FutureProvider<Map<String, dynamic>>(
+  (ref) => ref.watch(clientProvider).userSettings(),
+);
+final serverConfigProvider = FutureProvider<Map<String, dynamic>>(
+  (ref) => ref.watch(clientProvider).config(),
 );
 
 final chatListProvider = FutureProvider<List<ChatSummary>>(
@@ -210,6 +220,7 @@ class ChatController extends Notifier<ChatState> {
         .listen((e) => _onEvent(chat, run, e));
     try {
       final sessionId = await socket.ready() ?? 'nexus-app-${_uuid.v4()}';
+      final models = await ref.read(modelsProvider.future);
       final started = await client.startTurn(
         model: modelId,
         chatId: chat.id.isEmpty ? null : chat.id,
@@ -220,6 +231,11 @@ class ChatController extends Notifier<ChatState> {
             if (m.id != reply.id) {'role': m.role, 'content': m.content},
         ],
         sessionId: sessionId,
+        options: requestOptions(
+          models.where((m) => m.id == modelId).firstOrNull,
+          await _optional(userSettingsProvider),
+          await _optional(serverConfigProvider),
+        ),
       );
       chat.id = started.chatId;
       run.taskIds = started.taskIds;
@@ -291,6 +307,18 @@ class ChatController extends Notifier<ChatState> {
         return;
     }
     state = state.copyWith();
+  }
+
+  /// Settings that only refine a message; a failure to read them must not
+  /// stop it from being sent.
+  Future<Map<String, dynamic>?> _optional(
+    FutureProvider<Map<String, dynamic>> provider,
+  ) async {
+    try {
+      return await ref.read(provider.future);
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Backup for a lost socket: checks the saved chat until the reply is done.

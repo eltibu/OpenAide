@@ -227,6 +227,11 @@ class OpenWebUiClient {
   }
 
   /// The signed-in user; also validates a stored token or API key.
+  /// The person's settings, merged with the server's interface defaults.
+  Future<Map<String, dynamic>> userSettings() async =>
+      ((await _send('GET', '/api/v1/users/user/settings') as Map?) ?? {})
+          .cast<String, dynamic>();
+
   Future<Map<String, dynamic>> me() async =>
       (await _send('GET', '/api/v1/auths/') as Map).cast<String, dynamic>();
 
@@ -318,7 +323,9 @@ class OpenWebUiClient {
   /// a background task with the chat's tools, memory and filters, saves the
   /// answer on the server, and pushes progress to socket [sessionId].
   ///
-  /// [chatId] null starts a new chat. Returns the chat id and the task ids.
+  /// [chatId] null starts a new chat. [options] carries what the web UI adds
+  /// (tool_ids, filter_ids, terminal_id, features, params). Returns the chat
+  /// id and the task ids.
   Future<({String chatId, List<String> taskIds})> startTurn({
     required String model,
     required String? chatId,
@@ -326,6 +333,7 @@ class OpenWebUiClient {
     required String replyId,
     required List<Map<String, dynamic>> messages,
     required String sessionId,
+    Map<String, dynamic> options = const {},
   }) async {
     final res = await _send(
       'POST',
@@ -342,6 +350,7 @@ class OpenWebUiClient {
           'models': [model],
         },
         'session_id': sessionId,
+        ...options,
         'background_tasks': {'title_generation': true, 'tags_generation': true},
       },
     );
