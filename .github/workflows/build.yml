@@ -77,6 +77,17 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: nexus-debug-keystore-v1
+      # Point Gradle at the shared key explicitly. Left to itself it made a
+      # fresh debug key on every runner, so each build had a new signature.
+      - name: Sign with the shared debug key
+        if: ${{ hashFiles('android/key.properties') == '' }}
+        run: |
+          cat > android/key.properties <<EOF
+          storeFile=$HOME/.android/debug.keystore
+          storePassword=android
+          keyPassword=android
+          keyAlias=androiddebugkey
+          EOF
       # Versions read 0.1.<run number>. The run number is also the version
       # code, which only goes up; the in-app updater uses it to spot new builds.
       # On failure the build's errors become annotations, readable from the
@@ -96,6 +107,19 @@ jobs:
               | head -40 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1
           }
+      # The last line of defence: the APK must carry the signature pinned in
+      # android/signing-sha256.txt, or Android refuses it as an update.
+      - name: Check the APK's signature
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          ACTUAL=$("$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk \
+            | grep -m1 'SHA-256 digest' | awk '{print $NF}')
+          echo "::notice::APK signing certificate SHA-256: $ACTUAL"
+          EXPECTED=$(tr -d '[:space:]' < android/signing-sha256.txt 2>/dev/null || true)
+          if [ -n "$EXPECTED" ] && [ "$ACTUAL" != "$EXPECTED" ]; then
+            echo "::error::APK is signed with $ACTUAL, expected $EXPECTED. Not publishing: it would not install over the app."
+            exit 1
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: nexus-assistant-apk
