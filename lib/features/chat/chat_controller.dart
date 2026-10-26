@@ -172,11 +172,13 @@ class ChatController extends Notifier<ChatState> {
           ...history,
           {'role': 'assistant', 'content': assistant.content},
         ]);
-        if (title != null && title.isNotEmpty) {
-          chat.title = title;
-          await client.saveChat(chat);
-          state = state.copyWith();
-        }
+        // Servers can turn title generation off; then, like the web UI,
+        // name the chat after the first message.
+        chat.title = (title != null && title.isNotEmpty)
+            ? title
+            : _titleFrom(user.content);
+        await client.saveChat(chat);
+        state = state.copyWith();
       }
       ref.invalidate(chatListProvider);
     } catch (e) {
@@ -197,6 +199,11 @@ class ChatController extends Notifier<ChatState> {
       state = state.copyWith(error: 'Reply not saved to server: $e');
     }
   }
+}
+
+String _titleFrom(String text) {
+  final line = text.trim().split('\n').first;
+  return line.length <= 50 ? line : '${line.substring(0, 50).trimRight()}…';
 }
 
 final chatControllerProvider = NotifierProvider<ChatController, ChatState>(

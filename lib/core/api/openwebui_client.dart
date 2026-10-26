@@ -27,13 +27,21 @@ class OpenWebUiClient {
   OpenWebUiClient({
     required String baseUrl,
     this.token,
+    this.cookie,
     http.Client? httpClient,
   }) : baseUrl = _normalize(baseUrl),
        _http = httpClient ?? http.Client();
 
   final String baseUrl;
   String? token;
+
+  /// Cookies from an in-app browser sign-in, sent with every request so they
+  /// pass a login gate (reverse-proxy portal) in front of Open WebUI.
+  final String? cookie;
   final http.Client _http;
+
+  /// Normalizes a typed address the same way the client does.
+  static String normalizeUrl(String url) => _normalize(url);
 
   static String _normalize(String url) {
     var u = url.trim();
@@ -48,6 +56,7 @@ class OpenWebUiClient {
     'Content-Type': 'application/json',
     'Accept': 'application/json',
     if (token != null) 'Authorization': 'Bearer $token',
+    if (cookie != null && cookie!.isNotEmpty) 'Cookie': cookie!,
   };
 
   Uri _uri(String path, [Map<String, String>? query]) =>

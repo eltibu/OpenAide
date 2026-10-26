@@ -27,9 +27,10 @@ class NexusApp extends ConsumerWidget {
       ),
       home: switch (session) {
         AsyncData(value: != null) => const ChatScreen(),
-        AsyncLoading() when !session.hasValue => const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        ),
+        // Spinner only while restoring a saved session; during sign-in the
+        // login screen stays up so what was typed isn't lost.
+        AsyncLoading() when !ref.read(sessionProvider.notifier).booted =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
         _ => const LoginScreen(),
       },
     );

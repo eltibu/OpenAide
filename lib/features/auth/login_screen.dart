@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
+import 'sso_login_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -32,6 +34,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } else {
       notifier.signInWithPassword(_url.text, _email.text, _password.text);
     }
+  }
+
+  Future<void> _signInWithBrowser() async {
+    if (_url.text.trim().isEmpty) return;
+    final base = OpenWebUiClient.normalizeUrl(_url.text);
+    final result = await Navigator.push<SsoResult>(
+      context,
+      MaterialPageRoute(builder: (_) => SsoLoginScreen(baseUrl: base)),
+    );
+    if (result == null) return;
+    await ref
+        .read(sessionProvider.notifier)
+        .signInWithBrowser(base, result.token, result.cookie);
   }
 
   @override
@@ -121,6 +136,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Text('Connect'),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: session.isLoading ? null : _signInWithBrowser,
+                  icon: const Icon(Icons.open_in_browser),
+                  label: const Text('Sign in with browser (SSO)'),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Use this for SSO, or when a login page sits in front of '
+                  'Open WebUI.',
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
                 ),
                 if (session.hasError) ...[
                   const SizedBox(height: 16),
