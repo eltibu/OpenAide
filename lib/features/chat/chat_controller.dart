@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
+import '../voice/realtime_call.dart' show BridgeSubmission;
 import 'request_options.dart';
 
 const _uuid = Uuid();
@@ -475,7 +476,12 @@ class ChatController extends Notifier<ChatState> {
   /// Has the server answer [user]: it saves both messages in the chat on the
   /// server, runs the model with the chat's tools and memory, and saves the
   /// reply. Live text comes over the socket; polling the chat is the backup.
-  Future<void> _reply(Chat chat, ChatMessage user, String modelId) async {
+  Future<void> _reply(
+    Chat chat,
+    ChatMessage user,
+    String modelId, {
+    Completer<({String replyId, List<String> taskIds})>? started,
+  }) async {
     final client = ref.read(clientProvider);
     final socket = ref.read(chatSocketProvider);
     final reply = ChatMessage(
@@ -501,7 +507,7 @@ class ChatController extends Notifier<ChatState> {
     try {
       final sessionId = await socket.ready() ?? 'nexus-app-${_uuid.v4()}';
       final models = await ref.read(modelsProvider.future);
-      final started = await client.startTurn(
+      final turn = await client.startTurn(
         model: modelId,
         chatId: chat.id.isEmpty ? null : chat.id,
         userMessage: user,
@@ -512,23 +518,27 @@ class ChatController extends Notifier<ChatState> {
         ],
         sessionId: sessionId,
         options: {
-          ...requestOptions(
-            models.where((m) => m.id == modelId).firstOrNull,
-            await _optional(userSettingsProvider),
-            await _optional(serverConfigProvider),
-            overrides: state.features,
+          ..._withVoice(
+            requestOptions(
+              models.where((m) => m.id == modelId).firstOrNull,
+              await _optional(userSettingsProvider),
+              await _optional(serverConfigProvider),
+              overrides: state.features,
+            ),
           ),
           'files': ?_documents(chat),
         },
       );
-      chat.id = started.chatId;
-      run.taskIds = started.taskIds;
+      chat.id = turn.chatId;
+      run.taskIds = turn.taskIds;
+      started?.complete((replyId: reply.id, taskIds: turn.taskIds));
       // Stop tapped while the request was on its way: stop it now.
       if (run.stopped) await _stopTasks(run);
       refreshChatLists(ref.invalidate);
       unawaited(_poll(chat.id, run));
       await run.finished.future;
     } catch (e) {
+      if (started != null && !started.isCompleted) started.completeError(e);
       if (view == _view) state = state.copyWith(error: '$e');
     } finally {
       await sub.cancel();
@@ -602,6 +612,166 @@ class ChatController extends Notifier<ChatState> {
         return;
     }
     state = state.copyWith();
+  }
+
+  /// True during a voice call: replies are asked for in a spoken style
+  /// (the web UI's `voice` feature).
+  bool voiceCall = false;
+
+  Map<String, dynamic> _withVoice(Map<String, dynamic> options) {
+    if (!voiceCall) return options;
+    return {
+      ...options,
+      'features': {...(options['features'] as Map? ?? const {}), 'voice': true},
+    };
+  }
+
+  // ---- Voice calls (the web UI's Chat.svelte call callbacks) ----
+
+  /// Adds a spoken message to the visible conversation and saves it: the
+  /// whole chat when it's new, else just this message.
+  Future<String> addVoiceMessage(
+    String role,
+    String content,
+    Map<String, dynamic> voice, [
+    String? parentId,
+  ]) async {
+    final modelId = state.modelId;
+    var chat =
+        state.chat ??
+        Chat(
+          id: '',
+          title: _titleFrom(content),
+          messages: {},
+          models: [?modelId],
+        );
+    parentId ??= chat.currentId;
+    final branch = chat.thread;
+    var parentIndex = branch.indexWhere((m) => m.id == parentId);
+    // A chat answer may have been added while this spoken reply was made:
+    // keep the reply on that branch, before the next user turn.
+    if (role == 'assistant' && parentIndex >= 0) {
+      while (parentIndex + 1 < branch.length &&
+          branch[parentIndex + 1].role == 'assistant') {
+        parentIndex++;
+      }
+      parentId = branch[parentIndex].id;
+    }
+    final next = parentIndex >= 0 && parentIndex + 1 < branch.length
+        ? branch[parentIndex + 1]
+        : null;
+    final message = ChatMessage(
+      id: _uuid.v4(),
+      role: role,
+      content: content,
+      parentId: parentId,
+      model: role == 'assistant' ? voice['model'] as String? : null,
+      extra: {
+        'done': true,
+        'meta': {'voice': voice},
+        if (role == 'assistant') ...{
+          'modelName': voice['model'],
+          'modelIdx': 0,
+        } else
+          'models': [?modelId],
+      },
+    );
+    final changed = <String, ChatMessage>{message.id: message};
+    chat.messages[message.id] = message;
+    final parent = parentId == null ? null : chat.messages[parentId];
+    if (parent != null) {
+      parent.childrenIds.add(message.id);
+      // A second transcript can come before the first spoken reply is done:
+      // put the reply before the next user message, on the same branch.
+      if (role == 'assistant' && next?.role == 'user') {
+        next!.parentId = message.id;
+        message.childrenIds.add(next.id);
+        parent.childrenIds.remove(next.id);
+        changed[next.id] = next;
+      }
+    }
+    if (chat.currentId == parentId) chat.currentId = message.id;
+    state = state.copyWith(chat: chat);
+
+    final client = ref.read(clientProvider);
+    if (chat.id.isEmpty) {
+      final created = await client.createChat(chat);
+      chat.id = created.id;
+      refreshChatLists(ref.invalidate);
+    } else {
+      // Only the new message, so a running reply keeps its output.
+      await client.patchChat(chat.id, {
+        'history': {
+          'currentId': chat.currentId,
+          'messages': {
+            for (final e in changed.entries) e.key: e.value.toJson(),
+          },
+        },
+      });
+    }
+    state = state.copyWith(chat: chat);
+    return message.id;
+  }
+
+  /// Merges a call's voice details into message [id] and saves them.
+  Future<void> saveVoice(String id, Map<String, dynamic> voice) async {
+    final chat = state.chat;
+    final message = chat?.messages[id];
+    if (chat == null || message == null) return;
+    final meta = (message.extra['meta'] as Map?)?.cast<String, dynamic>() ?? {};
+    final previous = (meta['voice'] as Map?)?.cast<String, dynamic>() ?? {};
+    final speech = <String, dynamic>{
+      for (final s
+          in (previous['speech'] as List? ?? const []).whereType<Map>())
+        '${s['item_id']}': s,
+      for (final s in (voice['speech'] as List? ?? const []).whereType<Map>())
+        '${s['item_id']}': s,
+    };
+    final merged = {...previous, ...voice, 'speech': speech.values.toList()};
+    message.extra['meta'] = {...meta, 'voice': merged};
+    state = state.copyWith(chat: chat);
+    if (chat.id.isNotEmpty) {
+      await ref.read(clientProvider).saveMessageVoice(chat.id, id, merged);
+    }
+  }
+
+  /// Has the chat model answer a spoken message already in the chat.
+  /// Deferred while another reply is still running.
+  Future<BridgeSubmission> submitVoice({
+    required String userMessageId,
+    required String modelId,
+  }) async {
+    final chat = state.chat;
+    final user = chat?.messages[userMessageId];
+    if (chat == null || user == null || state.streaming) {
+      return const BridgeSubmission('deferred');
+    }
+    chat.currentId = user.id;
+    final started = Completer<({String replyId, List<String> taskIds})>();
+    unawaited(_reply(chat, user, modelId, started: started));
+    try {
+      final s = await started.future;
+      return BridgeSubmission(
+        'submitted',
+        assistantMessageId: s.replyId,
+        taskIds: s.taskIds,
+      );
+    } catch (_) {
+      return const BridgeSubmission('rejected');
+    }
+  }
+
+  /// Stops reply [messageId] and waits until the server confirms it.
+  Future<void> stopReply(String messageId) async {
+    final run = _run;
+    if (run == null || run.reply.id != messageId) return;
+    run.reply.extra['bridgeStopping'] = true;
+    run.stopped = true;
+    await _stopTasks(run);
+    await run.finished.future.timeout(const Duration(seconds: 15));
+    run.reply.extra
+      ..remove('bridgeStopping')
+      ..['bridgeCancelled'] = true;
   }
 
   /// Documents in the conversation for the server to search, as the web UI

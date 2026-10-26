@@ -52,7 +52,7 @@ class ChatMessage {
   final String id;
   final String role;
   String content;
-  final String? parentId;
+  String? parentId;
   final List<String> childrenIds;
   final String? model;
   final int timestamp;

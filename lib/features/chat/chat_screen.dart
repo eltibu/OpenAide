@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../update/update_screen.dart';
+import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'chat_controller.dart';
 import 'chat_drawer.dart';
@@ -61,6 +62,16 @@ class ChatScreen extends ConsumerWidget {
           error: (e, _) => const Text('Models unavailable'),
         ),
         actions: [
+          IconButton(
+            tooltip: 'Voice call',
+            icon: const Icon(Icons.graphic_eq),
+            onPressed: state.modelId == null
+                ? null
+                : () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(builder: (_) => const CallScreen()),
+                  ),
+          ),
           IconButton(
             tooltip: 'New chat',
             icon: const Icon(Icons.edit_square),

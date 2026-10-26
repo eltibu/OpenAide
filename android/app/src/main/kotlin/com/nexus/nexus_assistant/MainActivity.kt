@@ -9,13 +9,21 @@ import android.webkit.WebStorage
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
 class MainActivity : FlutterActivity() {
+    private var voice: VoiceAudio? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
+
+        // Voice calls: microphone and speaker, see VoiceAudio.
+        val audio = VoiceAudio(this).also { voice = it }
+        MethodChannel(messenger, "nexus/voice").setMethodCallHandler(audio)
+        EventChannel(messenger, "nexus/voice/events").setStreamHandler(audio)
 
         // Lets Dart read the WebView's cookies, including HttpOnly ones such as
         // a reverse proxy's session cookie, after an in-app SSO sign-in.
@@ -54,6 +62,25 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == VoiceAudio.PERMISSION_REQUEST) {
+            voice?.onPermission(
+                grantResults.isNotEmpty() &&
+                    grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED,
+            )
+        }
+    }
+
+    override fun onDestroy() {
+        voice?.stop()
+        super.onDestroy()
     }
 
     /** Returns "started", or "permission" after sending the user to allow installs. */

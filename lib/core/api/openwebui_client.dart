@@ -276,6 +276,22 @@ class OpenWebUiClient {
 
   Future<void> deleteChat(String id) => _send('DELETE', '/api/v1/chats/$id');
 
+  /// Changes only the given top-level parts of a chat; `history` is merged
+  /// on the server, so messages saved meanwhile stay.
+  Future<void> patchChat(String id, Map<String, dynamic> chat) =>
+      _send('POST', '/api/v1/chats/$id', body: {'chat': chat});
+
+  /// Saves a message's voice-call details (`meta.voice`).
+  Future<void> saveMessageVoice(
+    String chatId,
+    String messageId,
+    Map<String, dynamic> voice,
+  ) => _send(
+    'POST',
+    '/api/v1/chats/$chatId/messages/$messageId',
+    body: {'voice': voice},
+  );
+
   /// Pinned chats; the main list leaves them out, as on the web.
   Future<List<ChatSummary>> pinnedChats() async =>
       _summaries(await _send('GET', '/api/v1/chats/pinned'));
