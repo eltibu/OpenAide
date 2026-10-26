@@ -21,7 +21,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
   void initState() {
     super.initState();
     PackageInfo.fromPlatform().then(
-      (i) => setState(() => _version = '${i.version} (build ${i.buildNumber})'),
+      (i) => setState(() => _version = i.version),
     );
     ref
         .read(updaterProvider.notifier)
@@ -93,7 +93,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Build ${update.build} is available.',
+                  'Version ${versionName(update.build)} is available.',
                   style: theme.textTheme.titleMedium,
                 ),
                 if (update.notes.isNotEmpty) ...[
@@ -158,7 +158,9 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
     return switch (state) {
       UpdateFound(:final update) => MaterialBanner(
         leading: const Icon(Icons.system_update),
-        content: Text('Build ${update.build} is ready to install.'),
+        content: Text(
+          'Version ${versionName(update.build)} is ready to install.',
+        ),
         actions: [
           TextButton(
             onPressed: () => updater.install(update),

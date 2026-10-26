@@ -60,9 +60,16 @@ class UpdateFailed extends UpdateState {
   final String message;
 }
 
-/// Parses `build-123` (the tag CI gives each release) into 123.
-int? buildFromTag(String? tag) =>
-    tag == null ? null : int.tryParse(tag.replaceFirst('build-', ''));
+/// The build number in a release tag: `v0.1.123` (current) or `build-123`
+/// (older builds) give 123. Version codes only ever go up, so this is what
+/// decides whether a release is newer.
+int? buildFromTag(String? tag) {
+  final m = RegExp(r'^(?:v0\.1\.|build-)(\d+)$').firstMatch(tag ?? '');
+  return m == null ? null : int.parse(m.group(1)!);
+}
+
+/// How a build is shown to people: `0.1.<build>`.
+String versionName(int build) => '0.1.$build';
 
 class Updater extends Notifier<UpdateState> {
   @override

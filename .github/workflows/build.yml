@@ -62,14 +62,25 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: nexus-debug-keystore-v1
-      # The run number makes each build's version code higher than the last,
-      # which the in-app updater uses to spot new builds.
-      - run: flutter build apk --release --build-number=${{ github.run_number }}
+      # Versions read 0.1.<run number>. The run number is also the version
+      # code, which only goes up; the in-app updater uses it to spot new builds.
+      # On failure the build's errors become annotations, readable from the
+      # checks API without the raw log.
+      - name: Build APK
+        run: |
+          set -o pipefail
+          flutter build apk --release \
+            --build-name=0.1.${{ github.run_number }} \
+            --build-number=${{ github.run_number }} 2>&1 | tee build.log || {
+            grep -E "^e: |error:|What went wrong|Exception|FAILURE" -A4 build.log \
+              | head -40 | while IFS= read -r line; do echo "::error::$line"; done
+            exit 1
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: nexus-assistant-apk
           path: build/app/outputs/flutter-apk/app-release.apk
-      # Each build becomes a GitHub Release tagged build-<run number>; the
+      # Each build becomes a GitHub Release tagged v0.1.<run number>; the
       # app's updater installs the newest one.
       - name: Publish build for in-app updates
         if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
@@ -78,8 +89,8 @@ jobs:
           NOTES: ${{ github.event.head_commit.message || github.event.pull_request.title }}
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk nexus-assistant.apk
-          gh release create "build-${{ github.run_number }}" nexus-assistant.apk \
-            --title "Build ${{ github.run_number }}" \
+          gh release create "v0.1.${{ github.run_number }}" nexus-assistant.apk \
+            --title "Nexus Assistant 0.1.${{ github.run_number }}" \
             --notes "$NOTES" \
             --target "${{ github.event.pull_request.head.sha || github.sha }}" \
             --latest
