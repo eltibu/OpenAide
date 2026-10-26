@@ -66,4 +66,37 @@ void main() {
     }, null);
     expect(o['params'], {'function_calling': 'native'});
   });
+
+  test(
+    'switches in the chat override the defaults, within what is allowed',
+    () {
+      final m = model({
+        'defaultFeatureIds': ['web_search'],
+        'capabilities': {'web_search': true, 'image_generation': false},
+      });
+      final config = {
+        'features': {
+          'enable_web_search': true,
+          'enable_image_generation': true,
+          'enable_code_interpreter': true,
+        },
+      };
+      expect(availableFeatures(m, config), ['web_search', 'code_interpreter']);
+      final features =
+          requestOptions(
+                m,
+                null,
+                config,
+                overrides: {
+                  'web_search': false,
+                  'image_generation': true,
+                  'code_interpreter': true,
+                },
+              )['features']
+              as Map;
+      expect(features.containsKey('web_search'), isFalse);
+      expect(features.containsKey('image_generation'), isFalse);
+      expect(features['code_interpreter'], isTrue);
+    },
+  );
 }

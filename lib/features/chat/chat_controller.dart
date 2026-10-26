@@ -37,6 +37,7 @@ class ChatState {
     this.loading = false,
     this.error,
     this.status,
+    this.features = const {},
     this.revision = 0,
   });
 
@@ -48,6 +49,9 @@ class ChatState {
 
   /// What the server says the reply is doing ("Searching the web", a tool).
   final String? status;
+
+  /// Features the person switched on or off in this chat (web search...).
+  final Map<String, bool> features;
 
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
@@ -64,6 +68,7 @@ class ChatState {
     bool clearError = false,
     String? status,
     bool clearStatus = false,
+    Map<String, bool>? features,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -71,6 +76,7 @@ class ChatState {
     loading: loading ?? this.loading,
     error: clearError ? null : error ?? this.error,
     status: clearStatus ? null : status ?? this.status,
+    features: features ?? this.features,
     revision: revision + 1,
   );
 }
@@ -103,6 +109,9 @@ class ChatController extends Notifier<ChatState> {
   }
 
   void selectModel(String id) => state = state.copyWith(modelId: id);
+
+  void setFeature(String id, bool on) =>
+      state = state.copyWith(features: {...state.features, id: on});
 
   void newChat() {
     _run?.finish();
@@ -266,6 +275,7 @@ class ChatController extends Notifier<ChatState> {
           models.where((m) => m.id == modelId).firstOrNull,
           await _optional(userSettingsProvider),
           await _optional(serverConfigProvider),
+          overrides: state.features,
         ),
       );
       chat.id = started.chatId;

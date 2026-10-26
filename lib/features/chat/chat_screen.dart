@@ -7,6 +7,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../update/update_screen.dart';
 import 'chat_controller.dart';
+import 'request_options.dart';
 
 class ChatScreen extends ConsumerWidget {
   const ChatScreen({super.key});
@@ -328,6 +329,8 @@ class _ComposerState extends ConsumerState<_Composer> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
+            const _FeaturesButton(),
+            const SizedBox(width: 4),
             Expanded(
               child: TextField(
                 controller: _text,
@@ -361,6 +364,58 @@ class _ComposerState extends ConsumerState<_Composer> {
                     onPressed: _send,
                   ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The web UI's "+" menu: web search, image generation, code interpreter,
+/// shown only when the server and the chosen model allow them.
+class _FeaturesButton extends ConsumerWidget {
+  const _FeaturesButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(chatControllerProvider);
+    final model = ref
+        .watch(modelsProvider)
+        .value
+        ?.where((m) => m.id == state.modelId)
+        .firstOrNull;
+    final config = ref.watch(serverConfigProvider).value;
+    final available = availableFeatures(model, config);
+    if (available.isEmpty) return const SizedBox.shrink();
+    final anyOn = available.any((id) => state.features[id] == true);
+    return IconButton(
+      tooltip: 'Tools',
+      isSelected: anyOn,
+      icon: const Icon(Icons.tune),
+      onPressed: () => showModalBottomSheet<void>(
+        context: context,
+        showDragHandle: true,
+        builder: (context) => Consumer(
+          builder: (context, ref, _) {
+            final on = ref.watch(chatControllerProvider).features;
+            return SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final id in available)
+                    SwitchListTile(
+                      title: Text(featureLabels[id] ?? id),
+                      value:
+                          on[id] ??
+                          model?.defaultFeatureIds.contains(id) ??
+                          false,
+                      onChanged: (v) => ref
+                          .read(chatControllerProvider.notifier)
+                          .setFeature(id, v),
+                    ),
+                ],
+              ),
+            );
+          },
         ),
       ),
     );
