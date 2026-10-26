@@ -114,4 +114,25 @@ void main() {
     });
     expect(m.error, 'Model not found');
   });
+
+  test('siblings and the newest branch tip', () {
+    final chat = Chat(id: 'c', title: 't', messages: {})
+      ..append(ChatMessage(id: 'u1', role: 'user', content: 'q'))
+      ..append(
+        ChatMessage(id: 'a1', role: 'assistant', content: '1', parentId: 'u1'),
+      );
+    chat
+      ..currentId = 'u1'
+      ..append(
+        ChatMessage(id: 'a2', role: 'assistant', content: '2', parentId: 'u1'),
+      )
+      ..append(
+        ChatMessage(id: 'u2', role: 'user', content: 'more', parentId: 'a2'),
+      );
+    expect(chat.siblingsOf(chat.messages['a1']!), ['a1', 'a2']);
+    expect(chat.siblingsOf(chat.messages['u1']!), ['u1']);
+    expect(chat.latestUnder('a2'), 'u2');
+    expect(chat.latestUnder('u1'), 'u2');
+    expect(chat.latestUnder('a1'), 'a1');
+  });
 }

@@ -161,6 +161,30 @@ class Chat {
     return out.reversed.toList();
   }
 
+  /// Ids of [message] and its alternatives (edits, regenerations), oldest
+  /// first.
+  List<String> siblingsOf(ChatMessage message) {
+    final parent = messages[message.parentId];
+    if (parent != null) return parent.childrenIds;
+    return [
+      for (final m in messages.values)
+        if (m.parentId == null) m.id,
+    ]..sort((a, b) => messages[a]!.timestamp.compareTo(messages[b]!.timestamp));
+  }
+
+  /// The tip reached from [id] by always taking the newest child, which is
+  /// what the web UI shows after switching to a branch.
+  String latestUnder(String id) {
+    var cursor = id;
+    final seen = <String>{};
+    while (seen.add(cursor)) {
+      final children = messages[cursor]?.childrenIds ?? const [];
+      if (children.isEmpty) break;
+      cursor = children.last;
+    }
+    return cursor;
+  }
+
   /// Appends [message] under the current tip and makes it the new tip.
   void append(ChatMessage message) {
     final parent = message.parentId == null ? null : messages[message.parentId];

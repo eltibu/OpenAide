@@ -143,7 +143,9 @@ class ChatController extends Notifier<ChatState> {
     run.finish();
   }
 
-  Future<void> send(String text) async {
+  /// Sends [text] after the visible conversation, or, with [editOf], as an
+  /// edited version of that message: a new branch next to it, as on the web.
+  Future<void> send(String text, {ChatMessage? editOf}) async {
     final modelId = state.modelId;
     if (text.trim().isEmpty || modelId == null || state.streaming) return;
     final chat =
@@ -158,7 +160,7 @@ class ChatController extends Notifier<ChatState> {
       id: _uuid.v4(),
       role: 'user',
       content: text.trim(),
-      parentId: chat.currentId,
+      parentId: editOf != null ? editOf.parentId : chat.currentId,
       extra: {
         'models': [modelId],
       },
@@ -167,6 +169,35 @@ class ChatController extends Notifier<ChatState> {
       ..models = [modelId]
       ..append(user);
     await _reply(chat, user, modelId);
+  }
+
+  /// A new answer to the same question, next to [reply] (Regenerate).
+  Future<void> regenerate(ChatMessage reply) async {
+    final chat = state.chat;
+    final modelId = state.modelId;
+    final user = chat?.messages[reply.parentId];
+    if (state.streaming || chat == null || modelId == null || user == null) {
+      return;
+    }
+    chat.currentId = user.id;
+    await _reply(chat, user, modelId);
+  }
+
+  /// Shows the previous ([step] -1) or next (+1) version of [message], and
+  /// the latest conversation under it. The choice is saved on the server.
+  Future<void> switchBranch(ChatMessage message, int step) async {
+    final chat = state.chat;
+    if (chat == null || state.streaming) return;
+    final siblings = chat.siblingsOf(message);
+    final i = siblings.indexOf(message.id) + step;
+    if (i < 0 || i >= siblings.length) return;
+    chat.currentId = chat.latestUnder(siblings[i]);
+    state = state.copyWith(chat: chat);
+    try {
+      await ref.read(clientProvider).saveChat(chat);
+    } catch (_) {
+      // Only the remembered branch is lost; the messages are all saved.
+    }
   }
 
   /// Asks again for a reply that failed or never arrived (a new answer next

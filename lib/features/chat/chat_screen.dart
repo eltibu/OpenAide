@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
@@ -112,7 +113,7 @@ class _EmptyState extends ConsumerWidget {
   }
 }
 
-class _MessageList extends StatelessWidget {
+class _MessageList extends ConsumerWidget {
   const _MessageList({
     required this.messages,
     required this.streaming,
@@ -123,7 +124,7 @@ class _MessageList extends StatelessWidget {
   final String? status;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final mdConfig = dark
@@ -135,30 +136,39 @@ class _MessageList extends StatelessWidget {
       itemCount: messages.length,
       itemBuilder: (context, i) {
         final m = messages[messages.length - 1 - i];
-        final isUser = m.role == 'user';
-        if (isUser) {
-          return Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              margin: const EdgeInsets.symmetric(vertical: 6),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+        final live = streaming && i == 0;
+        if (m.role == 'user') {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 10,
+                ),
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width * 0.8,
+                ),
+                decoration: BoxDecoration(
+                  color: scheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: SelectableText(m.content),
               ),
-              decoration: BoxDecoration(
-                color: scheme.primaryContainer,
-                borderRadius: BorderRadius.circular(18),
-              ),
-              child: SelectableText(m.content),
-            ),
+              if (!streaming) _MessageActions(message: m),
+            ],
           );
         }
         return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: m.content.isNotEmpty
-              ? MarkdownBlock(data: m.content, config: mdConfig)
-              : streaming && i == 0
-              ? Row(
+          padding: const EdgeInsets.only(top: 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (m.content.isNotEmpty)
+                MarkdownBlock(data: m.content, config: mdConfig)
+              else if (live)
+                Row(
                   children: [
                     const SizedBox.square(
                       dimension: 18,
@@ -175,13 +185,112 @@ class _MessageList extends StatelessWidget {
                     ],
                   ],
                 )
-              : Text(
+              else
+                Text(
                   m.error ?? 'No reply. Tap Retry above to ask again.',
                   style: TextStyle(color: scheme.error),
                 ),
+              if (!live && !streaming) _MessageActions(message: m),
+            ],
+          ),
         );
       },
     );
+  }
+}
+
+/// Copy, edit or regenerate, and switching between versions of a message.
+class _MessageActions extends ConsumerWidget {
+  const _MessageActions({required this.message});
+  final ChatMessage message;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(chatControllerProvider.notifier);
+    final chat = ref.watch(chatControllerProvider).chat;
+    final siblings = chat?.siblingsOf(message) ?? const <String>[];
+    final index = siblings.indexOf(message.id);
+    final isUser = message.role == 'user';
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+
+    Widget action(IconData icon, String tip, VoidCallback? onTap) => IconButton(
+      tooltip: tip,
+      visualDensity: VisualDensity.compact,
+      iconSize: 18,
+      color: muted,
+      onPressed: onTap,
+      icon: Icon(icon),
+    );
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (siblings.length > 1) ...[
+          action(
+            Icons.chevron_left,
+            'Previous version',
+            index > 0 ? () => controller.switchBranch(message, -1) : null,
+          ),
+          Text(
+            '${index + 1}/${siblings.length}',
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+          action(
+            Icons.chevron_right,
+            'Next version',
+            index < siblings.length - 1
+                ? () => controller.switchBranch(message, 1)
+                : null,
+          ),
+        ],
+        if (message.content.isNotEmpty)
+          action(Icons.copy_outlined, 'Copy', () {
+            Clipboard.setData(ClipboardData(text: message.content));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Copied')));
+          }),
+        if (isUser)
+          action(Icons.edit_outlined, 'Edit', () => _edit(context, ref))
+        else
+          action(
+            Icons.refresh,
+            'Regenerate',
+            () => controller.regenerate(message),
+          ),
+      ],
+    );
+  }
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final text = TextEditingController(text: message.content);
+    final edited = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit message'),
+        content: TextField(
+          controller: text,
+          autofocus: true,
+          minLines: 1,
+          maxLines: 8,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, text.text),
+            child: const Text('Send'),
+          ),
+        ],
+      ),
+    );
+    text.dispose();
+    if (edited != null && edited.trim().isNotEmpty) {
+      await ref
+          .read(chatControllerProvider.notifier)
+          .send(edited, editOf: message);
+    }
   }
 }
 
