@@ -5,6 +5,11 @@ on:
     branches: [Main-Repository]
   pull_request:
   workflow_dispatch:
+    inputs:
+      new_signing_key:
+        description: Make a NEW signing key (every phone must uninstall once). Only if the old one is lost.
+        type: boolean
+        default: false
 
 jobs:
   android:
@@ -48,8 +53,16 @@ jobs:
         with:
           path: ~/.android/debug.keystore
           key: nexus-debug-keystore-v1
+      # A missing key is an error, never a quiet new key: an APK with a new
+      # signature can't install over the app, so publishing one would force a
+      # reinstall. A new key is made only when asked for by hand.
+      - name: Stop if the shared signing key is missing
+        if: ${{ hashFiles('android/key.properties') == '' && steps.debugkey.outputs.cache-hit != 'true' && !inputs.new_signing_key }}
+        run: |
+          echo "::error::The shared signing key is missing from the Actions cache. Not building, so no APK with a different signature is published."
+          exit 1
       - name: Create shared debug signing key
-        if: ${{ hashFiles('android/key.properties') == '' && steps.debugkey.outputs.cache-hit != 'true' }}
+        if: ${{ hashFiles('android/key.properties') == '' && steps.debugkey.outputs.cache-hit != 'true' && inputs.new_signing_key }}
         run: |
           mkdir -p ~/.android
           keytool -genkeypair -keystore ~/.android/debug.keystore \
@@ -57,7 +70,7 @@ jobs:
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
       - name: Save shared debug signing key
-        if: ${{ hashFiles('android/key.properties') == '' && steps.debugkey.outputs.cache-hit != 'true' }}
+        if: ${{ hashFiles('android/key.properties') == '' && steps.debugkey.outputs.cache-hit != 'true' && inputs.new_signing_key }}
         uses: actions/cache/save@v4
         with:
           path: ~/.android/debug.keystore
