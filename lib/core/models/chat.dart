@@ -68,6 +68,55 @@ class ChatMessage {
     return e?.toString();
   }
 
+  /// Tools the model called for this reply, with what each returned.
+  List<ToolCall> get toolCalls {
+    final output = extra['output'];
+    if (output is! List) return const [];
+    final results = <String, String>{
+      for (final item in output.whereType<Map>())
+        if (item['type'] == 'function_call_output')
+          '${item['call_id']}': [
+            for (final p
+                in (item['output'] is List
+                    ? item['output'] as List
+                    : [item['output']]))
+              if (p is Map && p['text'] is String)
+                p['text'] as String
+              else if (p is String)
+                p,
+          ].join('\n'),
+    };
+    return [
+      for (final item in output.whereType<Map>())
+        if (item['type'] == 'function_call')
+          ToolCall(
+            name: '${item['name']}',
+            arguments: '${item['arguments'] ?? ''}',
+            result: results['${item['call_id']}'],
+          ),
+    ];
+  }
+
+  /// Web pages, files and knowledge the reply drew on.
+  List<Source> get sources {
+    final raw = extra['sources'];
+    if (raw is! List) return const [];
+    final out = <Source>[];
+    final seen = <String>{};
+    for (final s in raw.whereType<Map>()) {
+      final src = (s['source'] as Map?) ?? const {};
+      final metas = (s['metadata'] as List?)?.whereType<Map>() ?? const [];
+      final entries = metas.isEmpty ? [src] : metas;
+      for (final m in entries) {
+        final url = '${m['source'] ?? src['url'] ?? ''}';
+        final name = '${m['name'] ?? m['title'] ?? src['name'] ?? url}';
+        if (name.isEmpty || !seen.add('$name|$url')) continue;
+        out.add(Source(name: name, url: url.startsWith('http') ? url : null));
+      }
+    }
+    return out;
+  }
+
   /// Text from an Open WebUI `output` list (Responses-style items), which
   /// newer servers fill alongside or instead of `content`.
   static String outputText(Object? output) {
@@ -222,4 +271,17 @@ class ChatSummary {
   final String id;
   final String title;
   final DateTime updatedAt;
+}
+
+class ToolCall {
+  const ToolCall({required this.name, required this.arguments, this.result});
+  final String name;
+  final String arguments;
+  final String? result;
+}
+
+class Source {
+  const Source({required this.name, this.url});
+  final String name;
+  final String? url;
 }

@@ -324,6 +324,13 @@ class ChatController extends Notifier<ChatState> {
             data['delta'] is String) {
           reply.content += data['delta'] as String;
         }
+        final item = data['item'];
+        if (data['type'] == 'response.output_item.added' &&
+            item is Map &&
+            item['type'] == 'function_call') {
+          state = state.copyWith(status: 'Using ${item['name']}…');
+          return;
+        }
       case 'chat:completion' when data is Map:
         final text = data['content'] is String
             ? data['content'] as String

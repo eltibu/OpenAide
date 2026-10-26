@@ -135,4 +135,40 @@ void main() {
     expect(chat.latestUnder('u1'), 'u2');
     expect(chat.latestUnder('a1'), 'a1');
   });
+
+  test('tool calls and sources come from the saved reply', () {
+    final m = ChatMessage.fromJson({
+      'id': 'a1',
+      'role': 'assistant',
+      'content': 'Done.',
+      'output': [
+        {
+          'type': 'function_call',
+          'call_id': 'c1',
+          'name': 'get_time',
+          'arguments': '{}',
+        },
+        {
+          'type': 'function_call_output',
+          'call_id': 'c1',
+          'output': [
+            {'type': 'input_text', 'text': '12:00'},
+          ],
+        },
+      ],
+      'sources': [
+        {
+          'source': {'name': 'web'},
+          'metadata': [
+            {'source': 'https://example.com', 'title': 'Example'},
+            {'source': 'https://example.com', 'title': 'Example'},
+          ],
+        },
+      ],
+    });
+    expect(m.toolCalls.single.name, 'get_time');
+    expect(m.toolCalls.single.result, '12:00');
+    expect(m.sources.single.name, 'Example');
+    expect(m.sources.single.url, 'https://example.com');
+  });
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_widget/markdown_widget.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
@@ -166,6 +167,7 @@ class _MessageList extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (m.toolCalls.isNotEmpty) _ToolCalls(calls: m.toolCalls),
               if (m.content.isNotEmpty)
                 MarkdownBlock(data: m.content, config: mdConfig)
               else if (live)
@@ -191,6 +193,15 @@ class _MessageList extends ConsumerWidget {
                   m.error ?? 'No reply. Tap Retry above to ask again.',
                   style: TextStyle(color: scheme.error),
                 ),
+              if (live && m.content.isNotEmpty && (status ?? '').isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    status!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              if (m.sources.isNotEmpty) _Sources(sources: m.sources),
               if (!live && !streaming) _MessageActions(message: m),
             ],
           ),
@@ -198,6 +209,86 @@ class _MessageList extends ConsumerWidget {
       },
     );
   }
+}
+
+/// The tools a reply used, folded away like the web UI's tool blocks.
+class _ToolCalls extends StatelessWidget {
+  const _ToolCalls({required this.calls});
+  final List<ToolCall> calls;
+
+  @override
+  Widget build(BuildContext context) {
+    final small = Theme.of(context).textTheme.bodySmall;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        dense: true,
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        leading: const Icon(Icons.build_outlined, size: 18),
+        title: Text(
+          calls.length == 1
+              ? 'Used ${calls.first.name}'
+              : 'Used ${calls.length} tools',
+          style: small,
+        ),
+        children: [
+          for (final c in calls)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: SelectableText(
+                  [
+                    '${c.name}(${c.arguments})',
+                    if (c.result != null)
+                      c.result!.length > 600
+                          ? '${c.result!.substring(0, 600)}…'
+                          : c.result!,
+                  ].join('\n'),
+                  style: small?.copyWith(fontFamily: 'monospace'),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Where a reply's information came from; web links open in the browser.
+class _Sources extends StatelessWidget {
+  const _Sources({required this.sources});
+  final List<Source> sources;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(top: 6),
+    child: Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final s in sources)
+          ActionChip(
+            visualDensity: VisualDensity.compact,
+            avatar: Icon(
+              s.url != null ? Icons.link : Icons.description_outlined,
+              size: 16,
+            ),
+            label: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 200),
+              child: Text(s.name, overflow: TextOverflow.ellipsis),
+            ),
+            onPressed: s.url == null
+                ? null
+                : () => launchUrl(
+                    Uri.parse(s.url!),
+                    mode: LaunchMode.externalApplication,
+                  ),
+          ),
+      ],
+    ),
+  );
 }
 
 /// Copy, edit or regenerate, and switching between versions of a message.
