@@ -4,6 +4,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import '../update/update_screen.dart';
 import 'chat_controller.dart';
 
 class ChatScreen extends ConsumerWidget {
@@ -66,6 +67,7 @@ class ChatScreen extends ConsumerWidget {
       drawer: const _ChatDrawer(),
       body: Column(
         children: [
+          const UpdateBanner(),
           if (state.error != null)
             MaterialBanner(
               content: Text(state.error!),
@@ -286,6 +288,17 @@ class _ChatDrawer extends ConsumerWidget {
           ],
         ),
         const Divider(),
+        ListTile(
+          leading: const Icon(Icons.system_update),
+          title: const Text('App updates'),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const UpdateScreen()),
+            );
+          },
+        ),
         ListTile(
           leading: const Icon(Icons.logout),
           title: const Text('Sign out'),

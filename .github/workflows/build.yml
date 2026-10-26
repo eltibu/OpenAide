@@ -9,6 +9,8 @@ on:
 jobs:
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -67,3 +69,17 @@ jobs:
         with:
           name: nexus-assistant-apk
           path: build/app/outputs/flutter-apk/app-release.apk
+      # Each build becomes a GitHub Release tagged build-<run number>; the
+      # app's updater installs the newest one.
+      - name: Publish build for in-app updates
+        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: ${{ github.event.head_commit.message || github.event.pull_request.title }}
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk nexus-assistant.apk
+          gh release create "build-${{ github.run_number }}" nexus-assistant.apk \
+            --title "Build ${{ github.run_number }}" \
+            --notes "$NOTES" \
+            --target "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --latest

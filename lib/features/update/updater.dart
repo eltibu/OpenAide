@@ -1,0 +1,197 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+
+/// Where CI publishes builds (a GitHub Release per build on the main branch).
+const updateRepo = 'eltibu/Nexus-assistant';
+const _assetName = 'nexus-assistant.apk';
+const _kToken = 'github_update_token';
+
+const _storage = FlutterSecureStorage();
+const _channel = MethodChannel('nexus/updates');
+
+class AvailableUpdate {
+  const AvailableUpdate({
+    required this.build,
+    required this.assetApiUrl,
+    required this.notes,
+  });
+  final int build;
+  final String assetApiUrl;
+  final String notes;
+}
+
+sealed class UpdateState {
+  const UpdateState();
+}
+
+class UpdateIdle extends UpdateState {
+  const UpdateIdle();
+}
+
+class UpdateChecking extends UpdateState {
+  const UpdateChecking();
+}
+
+class UpToDate extends UpdateState {
+  const UpToDate(this.build);
+  final int build;
+}
+
+class UpdateFound extends UpdateState {
+  const UpdateFound(this.update);
+  final AvailableUpdate update;
+}
+
+class UpdateDownloading extends UpdateState {
+  const UpdateDownloading(this.progress);
+
+  /// 0..1, or null when the size is unknown.
+  final double? progress;
+}
+
+class UpdateFailed extends UpdateState {
+  const UpdateFailed(this.message);
+  final String message;
+}
+
+/// Parses `build-123` (the tag CI gives each release) into 123.
+int? buildFromTag(String? tag) =>
+    tag == null ? null : int.tryParse(tag.replaceFirst('build-', ''));
+
+class Updater extends Notifier<UpdateState> {
+  @override
+  UpdateState build() => const UpdateIdle();
+
+  Future<String?> token() => _storage.read(key: _kToken);
+
+  Future<void> setToken(String value) async {
+    final t = value.trim();
+    if (t.isEmpty) {
+      await _storage.delete(key: _kToken);
+    } else {
+      await _storage.write(key: _kToken, value: t);
+    }
+  }
+
+  Map<String, String> _headers(String token) => {
+    'Authorization': 'Bearer $token',
+    'X-GitHub-Api-Version': '2022-11-28',
+  };
+
+  /// Looks for a newer build. Quiet when no token is set and [quiet] is true,
+  /// as on app start.
+  Future<void> check({bool quiet = false}) async {
+    final token = await this.token();
+    if (token == null) {
+      if (!quiet) {
+        state = const UpdateFailed(
+          'Add a GitHub token in App updates to check for new builds.',
+        );
+      }
+      return;
+    }
+    state = const UpdateChecking();
+    try {
+      final info = await PackageInfo.fromPlatform();
+      final current = int.tryParse(info.buildNumber) ?? 0;
+      final res = await http.get(
+        Uri.parse('https://api.github.com/repos/$updateRepo/releases/latest'),
+        headers: {..._headers(token), 'Accept': 'application/vnd.github+json'},
+      );
+      if (res.statusCode == 404) {
+        state = UpToDate(current);
+        return;
+      }
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw const HttpException(
+          'GitHub refused the token. Check that it can read this repo.',
+        );
+      }
+      if (res.statusCode != 200) {
+        throw HttpException('GitHub answered ${res.statusCode}.');
+      }
+      final release = jsonDecode(res.body) as Map<String, dynamic>;
+      final latest = buildFromTag(release['tag_name'] as String?) ?? 0;
+      final asset = (release['assets'] as List? ?? [])
+          .whereType<Map>()
+          .where((a) => a['name'] == _assetName)
+          .firstOrNull;
+      if (latest <= current || asset == null) {
+        state = UpToDate(current);
+        return;
+      }
+      state = UpdateFound(
+        AvailableUpdate(
+          build: latest,
+          assetApiUrl: asset['url'] as String,
+          notes: (release['body'] as String? ?? '').trim(),
+        ),
+      );
+    } catch (e) {
+      state = quiet ? const UpdateIdle() : UpdateFailed(_message(e));
+    }
+  }
+
+  /// Downloads [update] and opens Android's installer.
+  Future<void> install(AvailableUpdate update) async {
+    final token = await this.token();
+    if (token == null) return;
+    state = const UpdateDownloading(null);
+    final client = http.Client();
+    try {
+      // The asset API answers with a redirect to a short-lived download link
+      // that must be fetched without the token.
+      final req = http.Request('GET', Uri.parse(update.assetApiUrl))
+        ..headers.addAll({
+          ..._headers(token),
+          'Accept': 'application/octet-stream',
+        })
+        ..followRedirects = false;
+      var res = await client.send(req);
+      final location = res.headers['location'];
+      if (res.isRedirect && location != null) {
+        await res.stream.drain<void>();
+        res = await client.send(http.Request('GET', Uri.parse(location)));
+      }
+      if (res.statusCode != 200) {
+        throw HttpException('Download failed (${res.statusCode}).');
+      }
+
+      final path = await _channel.invokeMethod<String>('apkPath');
+      final file = File(path!);
+      final sink = file.openWrite();
+      final total = res.contentLength;
+      var received = 0;
+      await for (final chunk in res.stream) {
+        sink.add(chunk);
+        received += chunk.length;
+        if (total != null && total > 0) {
+          state = UpdateDownloading(received / total);
+        }
+      }
+      await sink.close();
+
+      final outcome = await _channel.invokeMethod<String>('install');
+      state = outcome == 'permission'
+          ? const UpdateFailed(
+              'Allow "Install unknown apps" for Nexus Assistant, then tap '
+              'Install again.',
+            )
+          : UpdateFound(update);
+    } catch (e) {
+      state = UpdateFailed(_message(e));
+    } finally {
+      client.close();
+    }
+  }
+
+  String _message(Object e) => e is HttpException ? e.message : '$e';
+}
+
+final updaterProvider = NotifierProvider<Updater, UpdateState>(Updater.new);
