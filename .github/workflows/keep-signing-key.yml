@@ -11,8 +11,14 @@ on:
 jobs:
   touch:
     runs-on: ubuntu-latest
+    # Job-level, so the step's `if` can see it (a step's own env can't).
+    env:
+      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
+      # With a fixed key in secrets the build never uses this cache, so
+      # there is nothing to keep.
       - uses: actions/cache/restore@v4
+        if: ${{ env.KEYSTORE_BASE64 == '' }}
         with:
           path: ~/.android/debug.keystore
           key: nexus-debug-keystore-v1
