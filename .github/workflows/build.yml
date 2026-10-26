@@ -106,6 +106,20 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases?per_page=3")
           echo "::notice::Update token check: GitHub answered $CODE, $(grep -c '"tag_name"' releases.json) releases visible"
+          if [ "$CODE" != "200" ]; then
+            # Why: who the token belongs to, when it expires and what it can
+            # see. Status codes and names only, never the token.
+            T=$(printf %s "$NEXUS_UPDATE_TOKEN" | tr -d '[:space:]')
+            [ "$T" != "$NEXUS_UPDATE_TOKEN" ] && echo "::warning::The secret has spaces or a line break around the token."
+            echo "::notice::Token starts with ${T:0:11}, length ${#T}"
+            U=$(curl -s -D user.h -o user.json -w '%{http_code}' -H "Authorization: Bearer $T" https://api.github.com/user)
+            echo "::notice::/user answered $U as $(grep -m1 '"login"' user.json | tr -d ' ,'); expires: $(grep -i 'github-authentication-token-expiration' user.h | tr -d '\r')"
+            R=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $T" "https://api.github.com/repos/${{ github.repository }}")
+            echo "::notice::Repo lookup answered $R"
+            N=$(curl -s -H "Authorization: Bearer $T" "https://api.github.com/user/repos?per_page=100" | grep '"full_name"' | tr -d ' ,' | tr '\n' ' ')
+            echo "::notice::Repos the token can see: ${N:-none}"
+            rm -f user.h user.json
+          fi
           rm -f releases.json
           if [ "$CODE" != "200" ]; then
             echo "::error::The update token can't read releases (HTTP $CODE). The app would never see updates."; exit 1
