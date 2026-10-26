@@ -1,8 +1,21 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// A fixed key (from android/key.properties, written by CI from repo secrets)
+// signs every build the same way, so a new APK installs over the previous
+// one. Without it, builds fall back to the per-machine debug key.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+}
+val hasKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.nexus.nexus_assistant"
@@ -29,29 +42,22 @@ android {
         versionName = flutter.versionName
     }
 
-    // A fixed key (from android/key.properties, written by CI from repo
-    // secrets) signs every build the same way, so a new APK installs over the
-    // previous one. Without it, builds fall back to the per-machine debug key.
-    val keyProps = java.util.Properties().apply {
-        val f = rootProject.file("key.properties")
-        if (f.exists()) f.inputStream().use { load(it) }
-    }
-    val hasKey = keyProps.getProperty("storeFile") != null
-
     signingConfigs {
         if (hasKey) {
             create("fixed") {
-                storeFile = file(keyProps.getProperty("storeFile"))
-                storePassword = keyProps.getProperty("storePassword")
-                keyAlias = keyProps.getProperty("keyAlias")
-                keyPassword = keyProps.getProperty("keyPassword")
+                storeFile = file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig = signingConfigs.getByName(if (hasKey) "fixed" else "debug")
+            signingConfig =
+                if (hasKey) signingConfigs.getByName("fixed")
+                else signingConfigs.getByName("debug")
         }
     }
 }
