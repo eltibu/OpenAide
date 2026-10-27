@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/api/chat_socket.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
+import 'package:nexus_assistant/core/models/chat.dart' show Attachment;
 import 'package:nexus_assistant/features/channels/channels_api.dart';
 
 void main() {
@@ -138,6 +139,24 @@ void main() {
       expect(c.name, 'renamed');
       expect(c.description, 'about');
       expect(c.isGroup, isTrue);
+
+      // A file goes with a message and comes back with it.
+      final uploaded = await client.uploadFile(
+        'hello file'.codeUnits,
+        'note.txt',
+        contentType: 'text/plain',
+      );
+      final withFile = await api.post(
+        c.id,
+        'see attached',
+        files: [Attachment.uploaded(uploaded, size: 10)],
+      );
+      final listed = (await api.messages(c.id))
+          .firstWhere((x) => x.id == withFile.id);
+      expect(listed.hasFiles, isTrue);
+      final files = await api.files(c.id, withFile.id);
+      expect(files.single.name, 'note.txt');
+      expect(files.single.id, uploaded['id']);
 
       final hook = await api.createWebhook(c.id, 'CI');
       expect(

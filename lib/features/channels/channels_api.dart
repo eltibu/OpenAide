@@ -1,6 +1,7 @@
 import 'package:uuid/uuid.dart';
 
 import '../../core/api/openwebui_client.dart';
+import '../../core/models/chat.dart' show Attachment;
 import '../notes/notes_api.dart' show fromServerTime;
 
 class Channel {
@@ -110,10 +111,13 @@ class ChannelMessage {
     this.edited = false,
     this.tempId,
     this.pinned = false,
+    this.files = const [],
+    this.hasFiles = false,
   });
 
   factory ChannelMessage.fromJson(Map j) {
     final meta = (j['meta'] as Map?) ?? const {};
+    final files = messageFiles(j['data']);
     final user = j['user'] as Map?;
     return ChannelMessage(
       id: '${j['id']}',
@@ -135,6 +139,9 @@ class ChannelMessage {
       edited: j['updated_at'] != null && j['updated_at'] != j['created_at'],
       tempId: j['temp_id'] as String?,
       pinned: j['is_pinned'] == true,
+      files: files,
+      // Lists only say a message has data; it is read on its own.
+      hasFiles: files.isNotEmpty || j['data'] == true,
     );
   }
 
@@ -154,6 +161,12 @@ class ChannelMessage {
   final String? tempId;
   final bool pinned;
 
+  /// Photos and files sent with it.
+  final List<Attachment> files;
+
+  /// It carries files, though [files] may not be loaded yet.
+  final bool hasFiles;
+
   String get author => modelName ?? userName ?? 'Someone';
 
   ChannelMessage copyWith({
@@ -162,6 +175,7 @@ class ChannelMessage {
     List<Reaction>? reactions,
     bool? done,
     bool? pinned,
+    List<Attachment>? files,
   }) => ChannelMessage(
     id: id,
     content: content ?? this.content,
@@ -176,8 +190,17 @@ class ChannelMessage {
     edited: edited,
     tempId: tempId,
     pinned: pinned ?? this.pinned,
+    files: files ?? this.files,
+    hasFiles: hasFiles || (files?.isNotEmpty ?? false),
   );
 }
+
+/// The files in a message's data, as the web stores them.
+List<Attachment> messageFiles(Object? data) => [
+  if (data is Map)
+    for (final f in (data['files'] as List? ?? const []).whereType<Map>())
+      Attachment.fromJson(f.cast<String, dynamic>()),
+];
 
 /// Someone in a channel.
 class ChannelMember {
@@ -285,6 +308,7 @@ class ChannelsApi {
     String id,
     String content, {
     String? parentId,
+    List<Attachment> files = const [],
   }) async => ChannelMessage.fromJson(
     await client.send(
       'POST',
@@ -293,10 +317,21 @@ class ChannelsApi {
         'temp_id': const Uuid().v4(),
         'content': content,
         'parent_id': ?parentId,
-        'data': <String, dynamic>{},
+        'data': <String, dynamic>{
+          if (files.isNotEmpty) 'files': [for (final f in files) f.raw],
+        },
       },
     ) as Map,
   );
+
+  /// The files sent with a message.
+  Future<List<Attachment>> files(String id, String messageId) async =>
+      messageFiles(
+        await client.send(
+          'GET',
+          '${_c(id)}/messages/${Uri.encodeComponent(messageId)}/data',
+        ),
+      );
 
   Future<void> edit(String id, String messageId, String content) => client.send(
     'POST',

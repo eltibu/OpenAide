@@ -1,11 +1,15 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/models/chat.dart' show Attachment;
+import '../chat/attachments.dart' show MessageAttachments;
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import 'channel_manage.dart';
@@ -217,6 +221,10 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
   bool _more = true;
   bool _sending = false;
 
+  /// Uploaded and waiting to go with the next message.
+  final _pending = <Attachment>[];
+  int _uploading = 0;
+
   bool get _isThread => widget.parent != null;
   String get _id => widget.channel.id;
 
@@ -253,6 +261,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
       }
       _more = !_isThread && _messages.length >= 50;
       _error = null;
+      _loadFiles(_messages);
       // Opening a channel joins it; listen to it live from now on.
       try {
         ref.read(chatSocketProvider).joinChannels();
@@ -270,8 +279,110 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
       final older = await _api.messages(_id, skip: _messages.length);
       _more = older.length >= 50;
       setState(() => _messages = [..._messages, ...older]);
+      _loadFiles(older);
     } catch (_) {}
     _loading = false;
+  }
+
+  /// Lists only say a message has files; read each one's on its own.
+  Future<void> _loadFiles(List<ChannelMessage> list) async {
+    for (final m in [?_parent, ...list]) {
+      if (!m.hasFiles || m.files.isNotEmpty) continue;
+      try {
+        final files = await _api.files(_id, m.id);
+        if (!mounted || files.isEmpty) continue;
+        setState(() {
+          if (_parent?.id == m.id) _parent = _parent!.copyWith(files: files);
+          _messages = [
+            for (final x in _messages)
+              x.id == m.id ? x.copyWith(files: files) : x,
+          ];
+        });
+      } catch (_) {
+        // Shown without its files.
+      }
+    }
+  }
+
+  Future<void> _attach() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('Photos'),
+              onTap: () => Navigator.pop(sheet, 'gallery'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_camera_outlined),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(sheet, 'camera'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file_outlined),
+              title: const Text('Files'),
+              onTap: () => Navigator.pop(sheet, 'files'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null) return;
+    final picker = ImagePicker();
+    final picked = <(List<int>, String, String?)>[];
+    try {
+      if (choice == 'files') {
+        for (final f in await FilePicker.pickFiles()) {
+          picked.add((await f.readAsBytes(), f.name, null));
+        }
+      } else {
+        final photos = choice == 'camera'
+            ? [
+                ?await picker.pickImage(
+                  source: ImageSource.camera,
+                  maxWidth: 2048,
+                  maxHeight: 2048,
+                  imageQuality: 85,
+                ),
+              ]
+            : await picker.pickMultiImage(
+                maxWidth: 2048,
+                maxHeight: 2048,
+                imageQuality: 85,
+              );
+        for (final p in photos) {
+          picked.add((
+            await p.readAsBytes(),
+            p.name,
+            p.mimeType ?? 'image/jpeg',
+          ));
+        }
+      }
+    } catch (e) {
+      _say('$e');
+      return;
+    }
+    final client = ref.read(clientProvider);
+    for (final (bytes, name, type) in picked) {
+      setState(() => _uploading++);
+      try {
+        final uploaded = await client.uploadFile(
+          bytes,
+          name,
+          contentType: type,
+          // Photos are looked at, not read.
+          process: type?.startsWith('image/') != true,
+        );
+        _pending.add(Attachment.uploaded(uploaded, size: bytes.length));
+      } catch (e) {
+        _say('$name not added: $e');
+      }
+      if (mounted) setState(() => _uploading--);
+    }
   }
 
   void _onEvent(Map<String, dynamic> e) {
@@ -340,11 +451,19 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
 
   Future<void> _send() async {
     final text = _input.text.trim();
-    if (text.isEmpty || _sending) return;
+    if ((text.isEmpty && _pending.isEmpty) || _sending || _uploading > 0) {
+      return;
+    }
     setState(() => _sending = true);
     try {
-      final sent = await _api.post(_id, text, parentId: widget.parent?.id);
+      final sent = await _api.post(
+        _id,
+        text,
+        parentId: widget.parent?.id,
+        files: [..._pending],
+      );
       _input.clear();
+      _pending.clear();
       if (!_messages.any((x) => x.id == sent.id)) {
         setState(() => _messages = [sent, ..._messages]);
       }
@@ -782,6 +901,36 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                       ),
                     ),
             ),
+            if (_pending.isNotEmpty || _uploading > 0)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final f in _pending)
+                      InputChip(
+                        avatar: Icon(
+                          f.isImage
+                              ? Icons.image_outlined
+                              : Icons.insert_drive_file_outlined,
+                          size: 18,
+                        ),
+                        label: Text(f.name, overflow: TextOverflow.ellipsis),
+                        deleteButtonTooltipMessage: 'Remove file',
+                        onDeleted: () => setState(() => _pending.remove(f)),
+                      ),
+                    if (_uploading > 0)
+                      const Chip(
+                        avatar: SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                        label: Text('Uploading…'),
+                      ),
+                  ],
+                ),
+              ),
             Container(
               margin: const EdgeInsets.fromLTRB(12, 4, 12, 10),
               decoration: BoxDecoration(
@@ -791,6 +940,11 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
+                  IconButton(
+                    tooltip: 'Upload Files',
+                    onPressed: _attach,
+                    icon: const Icon(Icons.add),
+                  ),
                   IconButton(
                     tooltip: 'Ask a model',
                     onPressed: _mention,
@@ -917,6 +1071,8 @@ class _MessageTile extends StatelessWidget {
                           ? MarkdownConfig.darkConfig
                           : MarkdownConfig.defaultConfig,
                     ),
+                  if (m.files.isNotEmpty)
+                    MessageAttachments(attachments: m.files, alignEnd: false),
                   if (m.reactions.isNotEmpty)
                     Wrap(
                       spacing: 6,
