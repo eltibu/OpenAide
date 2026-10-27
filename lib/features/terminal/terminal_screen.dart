@@ -10,6 +10,7 @@ import 'package:xterm/xterm.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import 'file_tools.dart';
 import 'terminal_api.dart';
 
 /// The terminal servers this user may use; empty when none is set up.
@@ -377,6 +378,14 @@ class _FileBrowserState extends State<FileBrowser>
   /// The file a reply pointed at, marked in its folder.
   String? _marked;
 
+  // How the list is shown; kept while the app runs.
+  static FileSort _sortBy = FileSort.name;
+  static bool _descending = false;
+  static bool _showHidden = false;
+
+  /// Picked rows (paths); while any are, taps pick instead of open.
+  final _picked = <String>{};
+
   @override
   bool get wantKeepAlive => true;
 
@@ -418,6 +427,7 @@ class _FileBrowserState extends State<FileBrowser>
       final listing = await widget.api.list(dir);
       if (!mounted) return;
       setState(() {
+        if (listing.dir != _dir) _picked.clear();
         _listing = listing;
         _dir = listing.dir;
         _error = null;
@@ -504,39 +514,53 @@ class _FileBrowserState extends State<FileBrowser>
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              title: Text(
-                e.name,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(e.path),
-            ),
-            if (e.isDir && widget.onOpenInTerminal != null)
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
               ListTile(
-                leading: const Icon(Icons.terminal),
-                title: const Text('Open in terminal'),
-                onTap: () => Navigator.pop(context, 'terminal'),
+                title: Text(
+                  e.name,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(e.path),
               ),
-            ListTile(
-              leading: const Icon(Icons.copy),
-              title: const Text('Copy path'),
-              onTap: () => Navigator.pop(context, 'copy'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.drive_file_rename_outline),
-              title: const Text('Rename'),
-              onTap: () => Navigator.pop(context, 'rename'),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline),
-              title: const Text('Delete'),
-              onTap: () => Navigator.pop(context, 'delete'),
-            ),
-          ],
+              if (e.isDir && widget.onOpenInTerminal != null)
+                ListTile(
+                  leading: const Icon(Icons.terminal),
+                  title: const Text('Open in terminal'),
+                  onTap: () => Navigator.pop(context, 'terminal'),
+                ),
+              if (!e.isDir)
+                ListTile(
+                  leading: const Icon(Icons.download_outlined),
+                  title: const Text('Download to phone'),
+                  onTap: () => Navigator.pop(context, 'download'),
+                ),
+              ListTile(
+                leading: const Icon(Icons.checklist),
+                title: const Text('Select'),
+                onTap: () => Navigator.pop(context, 'select'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('Copy path'),
+                onTap: () => Navigator.pop(context, 'copy'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.drive_file_rename_outline),
+                title: const Text('Rename'),
+                onTap: () => Navigator.pop(context, 'rename'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete'),
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -544,6 +568,10 @@ class _FileBrowserState extends State<FileBrowser>
     switch (choice) {
       case 'terminal':
         widget.onOpenInTerminal!(e.path);
+      case 'download':
+        await _download(e);
+      case 'select':
+        _toggle(e);
       case 'copy':
         await Clipboard.setData(ClipboardData(text: e.path));
         _toast('Path copied');
@@ -581,6 +609,187 @@ class _FileBrowserState extends State<FileBrowser>
         }
     }
   }
+
+  List<TerminalEntry> get _shown => visibleEntries(
+    sortEntries(
+      _listing?.entries ?? const [],
+      _sortBy,
+      descending: _descending,
+    ),
+    showHidden: _showHidden,
+  );
+
+  List<TerminalEntry> get _pickedEntries => [
+    for (final e in _listing?.entries ?? const <TerminalEntry>[])
+      if (_picked.contains(e.path)) e,
+  ];
+
+  void _toggle(TerminalEntry e) => setState(
+    () =>
+        _picked.contains(e.path) ? _picked.remove(e.path) : _picked.add(e.path),
+  );
+
+  /// Saves a file from the server to the phone, where the person picks.
+  Future<void> _download(TerminalEntry e) async {
+    try {
+      final bytes = await widget.api.read(e.path);
+      final saved = await FilePicker.saveFile(
+        fileName: e.name,
+        bytes: Uint8List.fromList(bytes),
+      );
+      if (saved != null && mounted) _toast('Saved ${e.name}');
+    } catch (err) {
+      if (mounted) _toast("Couldn't download ${e.name}: $err");
+    }
+  }
+
+  Future<void> _deletePicked() async {
+    final list = _pickedEntries;
+    if (list.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete ${list.length} item${list.length == 1 ? '' : 's'}?',
+        ),
+        content: const Text(
+          'They will be deleted from the server, folders with everything in them.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(_picked.clear);
+    await _run(() async {
+      for (final e in list) {
+        await widget.api.delete(e.path);
+      }
+    }, 'Deleted ${list.length}');
+  }
+
+  Future<void> _movePicked() async {
+    final list = _pickedEntries;
+    if (list.isEmpty || _dir == null) return;
+    final to = await _ask('Move to folder', initial: _dir!);
+    if (to == null || to.isEmpty || to == _dir) return;
+    setState(_picked.clear);
+    await _run(() async {
+      for (final e in list) {
+        await widget.api.move(e.path, joinPath(to, e.name));
+      }
+    }, 'Moved ${list.length} to $to');
+  }
+
+  Future<void> _downloadPicked() async {
+    for (final e in _pickedEntries.where((e) => !e.isDir)) {
+      await _download(e);
+    }
+  }
+
+  Future<void> _compare() async {
+    final files = _pickedEntries.where((e) => !e.isDir).toList();
+    if (files.length != 2) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            CompareScreen(api: widget.api, first: files[0], second: files[1]),
+      ),
+    );
+  }
+
+  Widget _selectionBar() {
+    final files = _pickedEntries.where((e) => !e.isDir).length;
+    return Row(
+      children: [
+        IconButton(
+          tooltip: 'Done',
+          icon: const Icon(Icons.close),
+          onPressed: () => setState(_picked.clear),
+        ),
+        Expanded(child: Text('${_picked.length} selected')),
+        IconButton(
+          tooltip: 'Select all',
+          icon: const Icon(Icons.select_all),
+          onPressed: () =>
+              setState(() => _picked.addAll(_shown.map((e) => e.path))),
+        ),
+        if (files == 2 && _picked.length == 2)
+          IconButton(
+            tooltip: 'Compare',
+            icon: const Icon(Icons.difference_outlined),
+            onPressed: _compare,
+          ),
+        if (files > 0)
+          IconButton(
+            tooltip: 'Download',
+            icon: const Icon(Icons.download_outlined),
+            onPressed: _downloadPicked,
+          ),
+        IconButton(
+          tooltip: 'Move',
+          icon: const Icon(Icons.drive_file_move_outlined),
+          onPressed: _movePicked,
+        ),
+        IconButton(
+          tooltip: 'Delete',
+          icon: const Icon(Icons.delete_outline),
+          onPressed: _deletePicked,
+        ),
+      ],
+    );
+  }
+
+  Widget _viewMenu() => PopupMenuButton<String>(
+    tooltip: 'Sort and show',
+    icon: const Icon(Icons.sort),
+    onSelected: (v) => setState(() {
+      switch (v) {
+        case 'hidden':
+          _showHidden = !_showHidden;
+        case 'desc':
+          _descending = !_descending;
+        case 'select':
+          final first = _shown.firstOrNull;
+          if (first != null) _picked.add(first.path);
+        default:
+          _sortBy = FileSort.values.byName(v);
+      }
+    }),
+    itemBuilder: (_) => [
+      for (final (by, label) in const [
+        (FileSort.name, 'Name'),
+        (FileSort.size, 'Size'),
+        (FileSort.modified, 'Date modified'),
+      ])
+        CheckedPopupMenuItem(
+          value: by.name,
+          checked: _sortBy == by,
+          child: Text('Sort by $label'),
+        ),
+      CheckedPopupMenuItem(
+        value: 'desc',
+        checked: _descending,
+        child: const Text('Reverse order'),
+      ),
+      const PopupMenuDivider(),
+      CheckedPopupMenuItem(
+        value: 'hidden',
+        checked: _showHidden,
+        child: const Text('Show hidden files'),
+      ),
+      const PopupMenuItem(value: 'select', child: Text('Select…')),
+    ],
+  );
 
   Future<void> _openFile(String path, String name) async {
     await Navigator.push(
@@ -663,26 +872,41 @@ class _FileBrowserState extends State<FileBrowser>
       body: Column(
         children: [
           if (_busy) const LinearProgressIndicator(minHeight: 2),
-          if (dir != null)
+          if (dir != null && _picked.isNotEmpty)
+            SizedBox(height: 48, child: _selectionBar())
+          else if (dir != null)
             SizedBox(
               height: 44,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                reverse: true,
+              child: Row(
                 children: [
-                  for (final (label, path) in _crumbs(dir).reversed)
-                    Row(
+                  Expanded(
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      reverse: true,
                       children: [
-                        TextButton(
-                          onPressed: path == dir ? null : () => _open(path),
-                          child: Text(label),
-                        ),
-                        if (path != dir)
-                          Icon(Icons.chevron_right, size: 16, color: muted),
-                      ],
+                        for (final (label, path) in _crumbs(dir).reversed)
+                          Row(
+                            children: [
+                              TextButton(
+                                onPressed: path == dir
+                                    ? null
+                                    : () => _open(path),
+                                child: Text(label),
+                              ),
+                              if (path != dir)
+                                Icon(
+                                  Icons.chevron_right,
+                                  size: 16,
+                                  color: muted,
+                                ),
+                            ],
+                          ),
+                      ].reversed.toList(),
                     ),
-                ].reversed.toList(),
+                  ),
+                  _viewMenu(),
+                ],
               ),
             ),
           Expanded(
@@ -716,7 +940,7 @@ class _FileBrowserState extends State<FileBrowser>
                             title: const Text('..'),
                             onTap: () => _open(parentPath(dir!)),
                           ),
-                        if (listing.entries.isEmpty)
+                        if (_shown.isEmpty)
                           Padding(
                             padding: const EdgeInsets.all(32),
                             child: Center(
@@ -726,13 +950,20 @@ class _FileBrowserState extends State<FileBrowser>
                               ),
                             ),
                           ),
-                        for (final e in listing.entries)
+                        for (final e in _shown)
                           ListTile(
-                            selected: e.path == _marked,
-                            leading: Icon(
-                              e.isDir ? Icons.folder : _iconFor(e.name),
-                              color: e.isDir ? NexusColors.accent : muted,
-                            ),
+                            selected:
+                                e.path == _marked || _picked.contains(e.path),
+                            leading: _picked.isNotEmpty
+                                ? Icon(
+                                    _picked.contains(e.path)
+                                        ? Icons.check_circle
+                                        : Icons.radio_button_unchecked,
+                                  )
+                                : Icon(
+                                    e.isDir ? Icons.folder : _iconFor(e.name),
+                                    color: e.isDir ? NexusColors.accent : muted,
+                                  ),
                             title: Text(e.name),
                             subtitle: Text(
                               [
@@ -741,14 +972,19 @@ class _FileBrowserState extends State<FileBrowser>
                               ].join(' · '),
                               style: TextStyle(color: muted, fontSize: 12),
                             ),
-                            onTap: () => e.isDir
+                            onTap: () => _picked.isNotEmpty
+                                ? _toggle(e)
+                                : e.isDir
                                 ? _open(e.path)
                                 : _openFile(e.path, e.name),
-                            onLongPress: () => _entryMenu(e),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.more_vert),
-                              onPressed: () => _entryMenu(e),
-                            ),
+                            onLongPress: () =>
+                                _picked.isNotEmpty ? _toggle(e) : _entryMenu(e),
+                            trailing: _picked.isNotEmpty
+                                ? null
+                                : IconButton(
+                                    icon: const Icon(Icons.more_vert),
+                                    onPressed: () => _entryMenu(e),
+                                  ),
                           ),
                       ],
                     ),
@@ -826,6 +1062,33 @@ class _FileViewerState extends State<FileViewer> {
   bool _saving = false;
 
   bool get _image => _imageTypes.contains(_ext(widget.name));
+  bool get _notebook => _ext(widget.name) == 'ipynb';
+
+  /// Notebooks show as cells; this switches to their raw text to edit.
+  bool _raw = false;
+  final _zoom = TransformationController();
+
+  void _zoomBy(double factor) {
+    final scale = (_zoom.value.getMaxScaleOnAxis() * factor).clamp(1.0, 8.0);
+    _zoom.value = Matrix4.diagonal3Values(scale, scale, 1);
+  }
+
+  Future<void> _download() async {
+    final bytes = _bytes;
+    if (bytes == null) return;
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final saved = await FilePicker.saveFile(
+        fileName: widget.name,
+        bytes: Uint8List.fromList(bytes),
+      );
+      if (saved != null) {
+        messenger.showSnackBar(SnackBar(content: Text('Saved ${widget.name}')));
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't save: $e")));
+    }
+  }
 
   @override
   void initState() {
@@ -875,6 +1138,7 @@ class _FileViewerState extends State<FileViewer> {
 
   @override
   void dispose() {
+    _zoom.dispose();
     _edit.dispose();
     super.dispose();
   }
@@ -921,6 +1185,30 @@ class _FileViewerState extends State<FileViewer> {
                 );
               },
             ),
+            if (_image) ...[
+              IconButton(
+                tooltip: 'Zoom out',
+                icon: const Icon(Icons.zoom_out),
+                onPressed: () => _zoomBy(1 / 1.5),
+              ),
+              IconButton(
+                tooltip: 'Zoom in',
+                icon: const Icon(Icons.zoom_in),
+                onPressed: () => _zoomBy(1.5),
+              ),
+            ],
+            if (_notebook && _text != null)
+              IconButton(
+                tooltip: _raw ? 'Show cells' : 'Edit as text',
+                icon: Icon(_raw ? Icons.view_agenda_outlined : Icons.edit_note),
+                onPressed: () => setState(() => _raw = !_raw),
+              ),
+            if (_bytes != null)
+              IconButton(
+                tooltip: 'Download to phone',
+                icon: const Icon(Icons.download_outlined),
+                onPressed: _download,
+              ),
             if (_text != null)
               IconButton(
                 tooltip: 'Copy all',
@@ -947,6 +1235,7 @@ class _FileViewerState extends State<FileViewer> {
             ? const Center(child: CircularProgressIndicator())
             : _image
             ? InteractiveViewer(
+                transformationController: _zoom,
                 maxScale: 8,
                 child: Center(child: Image.memory(Uint8List.fromList(bytes))),
               )
@@ -960,6 +1249,8 @@ class _FileViewerState extends State<FileViewer> {
                   ),
                 ),
               )
+            : _notebook && !_raw
+            ? NotebookView(source: _edit.text)
             : TextField(
                 controller: _edit,
                 maxLines: null,
