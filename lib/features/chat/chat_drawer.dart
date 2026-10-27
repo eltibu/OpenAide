@@ -20,6 +20,7 @@ import '../workspace/models_screen.dart';
 import '../workspace/prompts_screen.dart';
 import '../workspace/tools_skills.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/nexus_logo.dart';
 import '../settings/settings_screen.dart';
 import 'chat_controller.dart';
 import 'chat_extras.dart';
@@ -71,6 +72,8 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
               padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
               child: Row(
                 children: [
+                  const NexusLogo(size: 32),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Nexus',

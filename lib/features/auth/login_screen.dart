@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
+import '../../core/widgets/nexus_logo.dart';
 import 'sso_login_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -62,7 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               padding: const EdgeInsets.all(24),
               shrinkWrap: true,
               children: [
-                Icon(Icons.blur_on, size: 64, color: theme.colorScheme.primary),
+                const Center(child: NexusLogo(size: 96)),
                 const SizedBox(height: 12),
                 Text(
                   'Nexus Assistant',
