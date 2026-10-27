@@ -1,6 +1,8 @@
 package com.nexus.nexus_assistant
 
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -15,6 +17,8 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private var voice: VoiceAudio? = null
+    private var speech: MediaPlayer? = null
+    private var speechDone: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -40,6 +44,23 @@ class MainActivity : FlutterActivity() {
                     "clear" -> CookieManager.getInstance().removeAllCookies {
                         WebStorage.getInstance().deleteAllData()
                         result.success(it)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
+        // Read aloud: Dart saves each spoken piece (from the server's text to
+        // speech) to [dir]; [play] answers once it has been heard.
+        MethodChannel(messenger, "nexus/speech")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "dir" -> result.success(
+                        File(cacheDir, "speech").apply { mkdirs() }.absolutePath,
+                    )
+                    "play" -> play(call.argument<String>("path")!!, result)
+                    "stop" -> {
+                        stopSpeech()
+                        result.success(null)
                     }
                     else -> result.notImplemented()
                 }
@@ -78,7 +99,54 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    private fun play(path: String, result: MethodChannel.Result) {
+        stopSpeech()
+        val player = MediaPlayer()
+        speech = player
+        speechDone = result
+        fun finish(answer: String) {
+            if (speech === player) {
+                speech = null
+                speechDone = null
+                result.success(answer)
+            }
+            player.release()
+        }
+        try {
+            player.setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build(),
+            )
+            player.setDataSource(path)
+            player.setOnCompletionListener { finish("done") }
+            player.setOnErrorListener { _, what, _ ->
+                finish("error $what")
+                true
+            }
+            player.setOnPreparedListener { it.start() }
+            player.prepareAsync()
+        } catch (e: Exception) {
+            finish(e.message ?: "error")
+        }
+    }
+
+    private fun stopSpeech() {
+        val player = speech ?: return
+        val done = speechDone
+        speech = null
+        speechDone = null
+        try {
+            player.stop()
+        } catch (_: IllegalStateException) {
+        }
+        player.release()
+        done?.success("stopped")
+    }
+
     override fun onDestroy() {
+        stopSpeech()
         voice?.stop()
         super.onDestroy()
     }

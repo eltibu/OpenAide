@@ -222,4 +222,62 @@ void main() {
     expect(a[1].fileId, isNull);
     expect(m.toJson()['files'], hasLength(3));
   });
+
+  test('pictures tools showed: tool files and terminal display_file', () {
+    final m = ChatMessage.fromJson({
+      'id': 'r',
+      'role': 'assistant',
+      'content': 'Here it is',
+      'output': [
+        {
+          'type': 'function_call',
+          'call_id': 'c1',
+          'name': 'display_file',
+          'arguments': '{"path":"chart.png","inline":true}',
+        },
+        {
+          'type': 'function_call_output',
+          'call_id': 'c1',
+          'output': [
+            {
+              'type': 'input_text',
+              'text': jsonEncode({
+                'type': 'file',
+                'source': 'open_terminal',
+                'terminal_id': 'term 1',
+                'path': 'chart.png',
+                'full_path': '/home/user/chart.png',
+                'name': 'chart.png',
+                'content_type': 'image/png',
+              }),
+            },
+          ],
+        },
+        {
+          'type': 'function_call',
+          'call_id': 'c2',
+          'name': 'share_file',
+          'arguments': '{}',
+        },
+        {
+          'type': 'function_call_output',
+          'call_id': 'c2',
+          'output': [
+            {'type': 'input_text', 'text': 'shared'},
+          ],
+          'files': [
+            {'type': 'image', 'url': '/api/v1/files/abc/content'},
+          ],
+        },
+      ],
+    });
+    final a = m.attachments;
+    expect(a, hasLength(2));
+    expect(a[0].isImage, isTrue);
+    expect(
+      a[0].serverPath,
+      '/api/v1/terminals/term%201/files/view?path=%2Fhome%2Fuser%2Fchart.png',
+    );
+    expect(a[1].fileId, 'abc');
+  });
 }

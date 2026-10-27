@@ -572,6 +572,22 @@ class OpenWebUiClient {
     return res.bodyBytes;
   }
 
+  /// Posts JSON and returns the raw bytes served back (spoken audio).
+  Future<List<int>> postForBytes(String path, Object body) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () => http.Request('POST', _uri(path))
+          ..headers.addAll(authHeaders)
+          ..headers['Content-Type'] = 'application/json'
+          ..body = jsonEncode(body),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    return res.bodyBytes;
+  }
+
   /// Posts one file as multipart form data to [path].
   Future<dynamic> sendFile(
     String path,

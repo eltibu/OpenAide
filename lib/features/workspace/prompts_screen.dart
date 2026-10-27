@@ -156,14 +156,27 @@ class _VariablesDialogState extends State<_VariablesDialog> {
 }
 
 /// Prompts that match what follows "/" in the text box.
+/// One of the app's own "/" commands.
+class SlashCommand {
+  const SlashCommand(this.command, this.label, this.icon, this.run);
+  final String command;
+  final String label;
+  final IconData icon;
+  final VoidCallback run;
+}
+
 class PromptSuggestions extends ConsumerWidget {
   const PromptSuggestions({
     super.key,
     required this.query,
     required this.onPick,
+    this.commands = const [],
   });
   final String query;
   final ValueChanged<Prompt> onPick;
+
+  /// Built-in commands, shown before the saved prompts.
+  final List<SlashCommand> commands;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -175,13 +188,29 @@ class PromptSuggestions extends ConsumerWidget {
                 p.name.toLowerCase().contains(q)))
           p,
     ];
-    if (list.isEmpty) return const SizedBox.shrink();
+    final builtIn = [
+      for (final c in commands)
+        if (c.command.contains(q) || c.label.toLowerCase().contains(q)) c,
+    ];
+    if (list.isEmpty && builtIn.isEmpty) return const SizedBox.shrink();
     return ConstrainedBox(
       constraints: const BoxConstraints(maxHeight: 220),
       child: ListView(
         shrinkWrap: true,
         padding: const EdgeInsets.only(top: 6),
         children: [
+          for (final c in builtIn)
+            ListTile(
+              dense: true,
+              leading: Icon(c.icon, color: NexusColors.accent),
+              title: Text('/${c.command}'),
+              subtitle: Text(
+                c.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: c.run,
+            ),
           for (final p in list)
             ListTile(
               dense: true,

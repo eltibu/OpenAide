@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
@@ -9,6 +10,8 @@ import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
 import '../voice/realtime_call.dart' show BridgeSubmission;
 import '../workspace/prompts_api.dart' show fillSystemVariables;
+import 'read_aloud.dart';
+import 'reply_parts.dart';
 import 'request_options.dart';
 
 const _uuid = Uuid();
@@ -262,6 +265,9 @@ class _Run {
   /// Stop was tapped, possibly before the server returned task ids.
   bool stopped = false;
 
+  /// How much of the reply has been handed to read aloud.
+  int spoken = 0;
+
   void finish() {
     if (!finished.isCompleted) finished.complete();
   }
@@ -321,6 +327,7 @@ class ChatController extends Notifier<ChatState> {
   void newChat() {
     _view++;
     _run?.finish();
+    unawaited(ref.read(readAloudProvider).stop());
     state = ChatState(modelId: state.modelId, attachments: state.attachments);
   }
 
@@ -427,6 +434,7 @@ class ChatController extends Notifier<ChatState> {
   Future<void> open(String id) async {
     final view = ++_view;
     _run?.finish();
+    unawaited(ref.read(readAloudProvider).stop());
     state = state.copyWith(
       loading: true,
       streaming: false,
@@ -453,6 +461,7 @@ class ChatController extends Notifier<ChatState> {
     final run = _run;
     if (run == null) return;
     run.stopped = true;
+    unawaited(ref.read(readAloudProvider).stop());
     await _stopTasks(run);
     run.finish();
   }
@@ -515,6 +524,59 @@ class ChatController extends Notifier<ChatState> {
     if (editOf == null) state = state.copyWith(attachments: const []);
     await _reply(chat, user, modelId);
     return true;
+  }
+
+  /// Steers a running reply: stops it where it is (what it wrote stays in
+  /// the chat) and sends [text] right away, so the next answer follows it.
+  Future<bool> steer(String text) async {
+    if (state.streaming) {
+      await stop();
+      final until = DateTime.now().add(const Duration(seconds: 15));
+      while (state.streaming && DateTime.now().isBefore(until)) {
+        await Future<void>.delayed(const Duration(milliseconds: 150));
+      }
+      state = state.copyWith(clearError: true);
+    }
+    return send(text);
+  }
+
+  /// Starts a new chat with this chat's conversation up to [at]; the
+  /// original stays as it is. Opens the new one.
+  Future<void> fork(ChatMessage at) async {
+    final chat = state.chat;
+    if (chat == null || state.streaming) return;
+    final path = chat.thread;
+    final end = path.indexWhere((m) => m.id == at.id);
+    if (end < 0) return;
+    final kept = path.sublist(0, end + 1);
+    final copy = Chat(
+      id: '',
+      title: '${chat.title} (fork)',
+      messages: {},
+      models: [...chat.models],
+      extra: {
+        for (final e in chat.extra.entries)
+          if (e.key == 'params' || e.key == 'system' || e.key == 'files')
+            e.key: e.value,
+      },
+    );
+    for (var i = 0; i < kept.length; i++) {
+      final m = ChatMessage.fromJson(
+        jsonDecode(jsonEncode(kept[i].toJson())) as Map<String, dynamic>,
+      );
+      m.childrenIds
+        ..clear()
+        ..addAll([if (i + 1 < kept.length) kept[i + 1].id]);
+      copy.messages[m.id] = m;
+    }
+    copy.currentId = at.id;
+    try {
+      final made = await ref.read(clientProvider).createChat(copy);
+      refreshChatLists(ref.invalidate);
+      await open(made.id);
+    } catch (e) {
+      state = state.copyWith(error: "Couldn't fork the chat: $e");
+    }
   }
 
   /// A new answer to the same question, next to [reply] (Regenerate).
@@ -589,6 +651,7 @@ class ChatController extends Notifier<ChatState> {
       model: modelId,
     );
     chat.append(reply);
+    unawaited(ref.read(readAloudProvider).stop());
     final run = _run = _Run(reply);
     final view = _view;
     state = state.copyWith(
@@ -606,6 +669,10 @@ class ChatController extends Notifier<ChatState> {
       final models = await ref.read(modelsProvider.future);
       final settings = await _optional(userSettingsProvider);
       final system = '${(settings?['ui'] as Map?)?['system'] ?? ''}'.trim();
+      ref.read(readAloudProvider).voice = speechVoice(
+        settings,
+        await _optional(serverConfigProvider),
+      );
       final me = ref.read(sessionProvider).value?.user;
       final turn = await client.startTurn(
         model: modelId,
@@ -671,6 +738,15 @@ class ChatController extends Notifier<ChatState> {
       } catch (_) {}
     }
     final saved = state.chat?.messages[reply.id] ?? reply;
+    if (!run.stopped) {
+      _speak(
+        run,
+        run.spoken == 0 || saved.content.startsWith(reply.content)
+            ? saved.content
+            : reply.content,
+        done: true,
+      );
+    }
     state = state.copyWith(
       streaming: false,
       clearStatus: true,
@@ -695,6 +771,8 @@ class ChatController extends Notifier<ChatState> {
             data['delta'] is String) {
           reply.content += data['delta'] as String;
         }
+        // Thinking, tool calls and text, in order, as they happen.
+        reply.extra['output'] = applyOutputEvent(_liveOutput(reply), data);
         final item = data['item'];
         if (data['type'] == 'response.output_item.added' &&
             item is Map &&
@@ -707,6 +785,12 @@ class ChatController extends Notifier<ChatState> {
             ? data['content'] as String
             : ChatMessage.outputText(data['output']);
         if (text.isNotEmpty) reply.content = text;
+        if (data['output'] is List) {
+          reply.extra['output'] = [
+            for (final item in (data['output'] as List).whereType<Map>())
+              item.cast<String, dynamic>(),
+          ];
+        }
         if (data['error'] != null) reply.extra['error'] = data['error'];
         if (data['done'] == true || data['error'] != null) run.finish();
       case 'chat:message:error' when data is Map:
@@ -733,6 +817,20 @@ class ChatController extends Notifier<ChatState> {
         chat.title = data;
         refreshChatLists(ref.invalidate);
       case 'status' when data is Map:
+        // Kept on the reply as the web does, shown as its task steps.
+        if (data['hidden'] != true && data['description'] != null) {
+          final history = (reply.extra['statusHistory'] as List? ?? const [])
+              .toList();
+          final last = history.lastOrNull;
+          if (last is Map &&
+              last['description'] == data['description'] &&
+              last['done'] != true) {
+            history.last = data;
+          } else {
+            history.add(data);
+          }
+          reply.extra['statusHistory'] = history;
+        }
         state = data['done'] == true
             ? state.copyWith(clearStatus: true)
             : state.copyWith(status: data['description'] as String?);
@@ -740,8 +838,25 @@ class ChatController extends Notifier<ChatState> {
       default:
         return;
     }
+    _speak(run, reply.content);
     state = state.copyWith();
   }
+
+  /// Hands read aloud what is newly ready to say, when it is on.
+  void _speak(_Run run, String text, {bool done = false}) {
+    if (voiceCall || !ref.read(readAloudOnProvider)) return;
+    if (run.spoken > text.length) run.spoken = text.length;
+    final end = done ? text.length : readyUpTo(text, run.spoken);
+    if (end <= run.spoken || (!done && end - run.spoken < 40)) return;
+    ref.read(readAloudProvider).say(text.substring(run.spoken, end));
+    run.spoken = end;
+  }
+
+  List<Map<String, dynamic>> _liveOutput(ChatMessage reply) => [
+    for (final item
+        in (reply.extra['output'] as List? ?? const []).whereType<Map>())
+      item.cast<String, dynamic>(),
+  ];
 
   /// True during a voice call: replies are asked for in a spoken style
   /// (the web UI's `voice` feature).
@@ -896,6 +1011,7 @@ class ChatController extends Notifier<ChatState> {
     if (run == null || run.reply.id != messageId) return;
     run.reply.extra['bridgeStopping'] = true;
     run.stopped = true;
+    unawaited(ref.read(readAloudProvider).stop());
     await _stopTasks(run);
     await run.finished.future.timeout(const Duration(seconds: 15));
     run.reply.extra

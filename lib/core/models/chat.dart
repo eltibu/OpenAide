@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Chat data in the exact shape Open WebUI stores it, so chats created in the
 /// app open normally in the web UI and vice versa.
 ///
@@ -126,11 +128,88 @@ class ChatMessage {
     return out;
   }
 
-  /// Photos and files sent with this message.
-  List<Attachment> get attachments => [
-    for (final f in (extra['files'] as List? ?? const []).whereType<Map>())
-      Attachment.fromJson(f.cast<String, dynamic>()),
-  ];
+  /// Photos and files sent with this message, and those its tools showed:
+  /// pictures a tool returned, and files Nexus displayed from its terminal
+  /// (`display_file`).
+  List<Attachment> get attachments {
+    final out = <Attachment>[];
+    final seen = <String>{};
+    void add(Map f) {
+      final a = Attachment.fromJson(f.cast<String, dynamic>());
+      final key = a.url ?? a.id ?? '';
+      if (key.isNotEmpty && !seen.add(key)) return;
+      out.add(a);
+    }
+
+    for (final f in (extra['files'] as List? ?? const []).whereType<Map>()) {
+      add(f);
+    }
+    final output = extra['output'];
+    if (output is List) {
+      final calls = <String, String>{
+        for (final item in output.whereType<Map>())
+          if (item['type'] == 'function_call')
+            '${item['call_id']}': '${item['name']}',
+      };
+      for (final item in output.whereType<Map>()) {
+        if (item['type'] != 'function_call_output') continue;
+        for (final f in (item['files'] as List? ?? const []).whereType<Map>()) {
+          if (f['source'] == 'open_terminal') {
+            final shown = terminalFile(f);
+            if (shown != null) add(shown);
+          } else if (f['url'] != null || f['id'] != null) {
+            add(f);
+          }
+        }
+        if (calls['${item['call_id']}'] != 'display_file') continue;
+        for (final p
+            in (item['output'] is List
+                ? item['output'] as List
+                : [item['output']])) {
+          final text = p is Map ? p['text'] : p;
+          if (text is! String || !text.trimLeft().startsWith('{')) continue;
+          try {
+            final j = jsonDecode(text);
+            final shown = j is Map ? terminalFile(j) : null;
+            if (shown != null) add(shown);
+          } on FormatException {
+            // Not the file's details.
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /// A file Nexus displayed from its terminal, as an attachment fetched
+  /// through the server (`/api/v1/terminals/<id>/files/view`).
+  static Map<String, dynamic>? terminalFile(Map f) {
+    if (f['type'] != 'file' ||
+        f['source'] != 'open_terminal' ||
+        f['exists'] == false) {
+      return null;
+    }
+    final terminal = f['terminal_id'] ?? f['terminal_selector'];
+    final path = f['full_path'] ?? f['path'];
+    if (terminal is! String ||
+        terminal.isEmpty ||
+        terminal.startsWith('http') ||
+        path is! String ||
+        path.isEmpty) {
+      return null;
+    }
+    final type = '${f['content_type'] ?? f['mime_type'] ?? ''}';
+    return {
+      'type': type.startsWith('image/') && !type.contains('svg')
+          ? 'image'
+          : 'file',
+      'name': '${f['name'] ?? path.split('/').last}',
+      'url':
+          '/api/v1/terminals/${Uri.encodeComponent(terminal)}/files/view'
+          '?path=${Uri.encodeQueryComponent(path)}',
+      if (type.isNotEmpty) 'content_type': type,
+    };
+  }
 
   /// Web pages, files and knowledge the reply drew on.
   List<Source> get sources {

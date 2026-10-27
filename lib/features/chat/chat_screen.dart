@@ -17,6 +17,9 @@ import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'embeds_view.dart';
+import 'read_aloud.dart';
+import 'reply_parts.dart';
+import 'reply_steps.dart';
 import 'chat_controller.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
@@ -54,6 +57,7 @@ class ChatScreen extends ConsumerWidget {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          const ReadAloudButton(),
           IconButton(
             tooltip: 'New chat',
             icon: const Icon(Icons.add_comment_outlined),
@@ -214,25 +218,43 @@ class _MessageList extends ConsumerWidget {
             ],
           );
         }
+        final groups = groupParts(replyParts(m, live: live));
+        final firstText = groups.indexWhere((g) => g is TextPart);
+        final working =
+            live &&
+            groups.any((g) => g is List<StepPart> && g.any((s) => !s.done));
+        final embeds = [
+          for (final e in m.embeds) EmbedView(key: ValueKey(e), embed: e),
+        ];
         return Padding(
           padding: const EdgeInsets.only(top: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (m.toolCalls.isNotEmpty) _ToolCalls(calls: m.toolCalls),
               if (m.attachments.isNotEmpty)
                 MessageAttachments(attachments: m.attachments, alignEnd: false),
-              for (final e in m.embeds) EmbedView(key: ValueKey(e), embed: e),
-              if (m.content.isNotEmpty)
-                MarkdownBlock(data: m.content, config: mdConfig)
-              else if (live)
+              for (var g = 0; g < groups.length; g++) ...[
+                if (g == firstText) ...embeds,
+                switch (groups[g]) {
+                  final TextPart t => MarkdownBlock(
+                    data: t.text,
+                    config: mdConfig,
+                  ),
+                  final steps => ReplySteps(
+                    steps: steps as List<StepPart>,
+                    live: live,
+                  ),
+                },
+              ],
+              if (firstText < 0) ...embeds,
+              if (firstText < 0 && live && !working)
                 Row(
                   children: [
                     const SizedBox.square(
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
-                    if (status != null && status!.isNotEmpty) ...[
+                    if (groups.isEmpty && (status ?? '').isNotEmpty) ...[
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -243,18 +265,10 @@ class _MessageList extends ConsumerWidget {
                     ],
                   ],
                 )
-              else
+              else if (firstText < 0 && !live)
                 Text(
                   m.error ?? 'No reply. Tap Retry above to ask again.',
                   style: TextStyle(color: scheme.error),
-                ),
-              if (live && m.content.isNotEmpty && (status ?? '').isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    status!,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
                 ),
               if (!live) ArtifactCard(all: artifacts, messageId: m.id),
               if (m.sources.isNotEmpty) _Sources(sources: m.sources),
@@ -263,51 +277,6 @@ class _MessageList extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-}
-
-/// The tools a reply used, folded away like the web UI's tool blocks.
-class _ToolCalls extends StatelessWidget {
-  const _ToolCalls({required this.calls});
-  final List<ToolCall> calls;
-
-  @override
-  Widget build(BuildContext context) {
-    final small = Theme.of(context).textTheme.bodySmall;
-    return Theme(
-      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-      child: ExpansionTile(
-        dense: true,
-        tilePadding: EdgeInsets.zero,
-        childrenPadding: const EdgeInsets.only(bottom: 8),
-        leading: const Icon(Icons.build_outlined, size: 18),
-        title: Text(
-          calls.length == 1
-              ? 'Used ${calls.first.name}'
-              : 'Used ${calls.length} tools',
-          style: small,
-        ),
-        children: [
-          for (final c in calls)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: SelectableText(
-                  [
-                    '${c.name}(${c.arguments})',
-                    if (c.result != null)
-                      c.result!.length > 600
-                          ? '${c.result!.substring(0, 600)}…'
-                          : c.result!,
-                  ].join('\n'),
-                  style: small?.copyWith(fontFamily: 'monospace'),
-                ),
-              ),
-            ),
-        ],
-      ),
     );
   }
 }
@@ -410,6 +379,12 @@ class _MessageActions extends ConsumerWidget {
             'Regenerate',
             () => controller.regenerate(message),
           ),
+        if (!isUser && !compact)
+          action(
+            Icons.call_split,
+            'Fork from here',
+            () => controller.fork(message),
+          ),
       ],
     );
   }
@@ -482,6 +457,13 @@ class _ComposerState extends ConsumerState<_Composer> {
     controller.send(value);
   }
 
+  void _steer() {
+    final value = _text.text;
+    if (value.trim().isEmpty) return;
+    _text.clear();
+    ref.read(chatControllerProvider.notifier).steer(value);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -496,6 +478,70 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   bool _hasText = false;
   String? _slash;
+
+  /// The app's own "/" commands, listed above your saved prompts.
+  List<SlashCommand> _commands() {
+    final controller = ref.read(chatControllerProvider.notifier);
+    final state = ref.read(chatControllerProvider);
+    final readAloud = ref.read(readAloudOnProvider);
+    final lastReply = state.messages.lastWhere(
+      (m) => m.role == 'assistant',
+      orElse: () => ChatMessage(id: '', role: '', content: ''),
+    );
+    void run(VoidCallback action) {
+      _text.clear();
+      action();
+    }
+
+    return [
+      if (state.streaming)
+        SlashCommand('stop', 'Stop the reply', Icons.stop_rounded, () {
+          run(controller.stop);
+        }),
+      if (lastReply.id.isNotEmpty && !state.streaming)
+        SlashCommand(
+          'fork',
+          'Fork: a new chat with this conversation so far',
+          Icons.call_split,
+          () => run(() => controller.fork(lastReply)),
+        ),
+      SlashCommand(
+        'read',
+        readAloud
+            ? 'Read aloud is on: turn it off'
+            : 'Read aloud: Nexus speaks every reply',
+        readAloud ? Icons.volume_off_outlined : Icons.volume_up_outlined,
+        () => run(() => ref.read(readAloudOnProvider.notifier).set(!readAloud)),
+      ),
+      if (lastReply.id.isNotEmpty && !state.streaming)
+        SlashCommand(
+          'retry',
+          'Ask again for the last reply',
+          Icons.refresh,
+          () => run(() => controller.regenerate(lastReply)),
+        ),
+      if (lastReply.content.isNotEmpty)
+        SlashCommand('copy', 'Copy the last reply', Icons.copy_outlined, () {
+          run(() {
+            Clipboard.setData(ClipboardData(text: lastReply.content));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Copied')));
+          });
+        }),
+      SlashCommand('new', 'Start a new chat', Icons.add_comment_outlined, () {
+        run(controller.newChat);
+      }),
+      if (!state.streaming)
+        SlashCommand('call', 'Start a voice call', Icons.graphic_eq, () {
+          run(
+            () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(builder: (_) => const CallScreen()),
+            ),
+          );
+        }),
+    ];
+  }
 
   Future<void> _usePrompt(Prompt p) async {
     setState(() => _slash = null);
@@ -528,7 +574,24 @@ class _ComposerState extends ConsumerState<_Composer> {
     );
     final colors = context.nexus;
     final Widget action;
-    if (widget.streaming) {
+    if (widget.streaming && _hasText) {
+      // Steer: stop the reply where it is and send this instead.
+      action = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Stop',
+            icon: const Icon(Icons.stop_rounded),
+            onPressed: controller.stop,
+          ),
+          IconButton.filled(
+            tooltip: 'Steer: stop the reply and send this now',
+            icon: const Icon(Icons.turn_right),
+            onPressed: _steer,
+          ),
+        ],
+      );
+    } else if (widget.streaming) {
       action = IconButton.filled(
         tooltip: 'Stop',
         icon: const Icon(Icons.stop_rounded),
@@ -578,7 +641,11 @@ class _ComposerState extends ConsumerState<_Composer> {
           children: [
             const PendingAttachments(),
             if (_slash != null)
-              PromptSuggestions(query: _slash!, onPick: _usePrompt),
+              PromptSuggestions(
+                query: _slash!,
+                onPick: _usePrompt,
+                commands: _commands(),
+              ),
             TextField(
               controller: _text,
               minLines: 1,
@@ -760,6 +827,12 @@ Future<void> _userMessageMenu(
             title: const Text('Edit'),
             onTap: () => Navigator.pop(context, 'edit'),
           ),
+          ListTile(
+            leading: const Icon(Icons.call_split),
+            title: const Text('Fork from here'),
+            subtitle: const Text('A new chat with the conversation so far'),
+            onTap: () => Navigator.pop(context, 'fork'),
+          ),
         ],
       ),
     ),
@@ -773,6 +846,8 @@ Future<void> _userMessageMenu(
     }
   } else if (choice == 'edit') {
     await _MessageActions.edit(context, ref, m);
+  } else if (choice == 'fork') {
+    await ref.read(chatControllerProvider.notifier).fork(m);
   }
 }
 
