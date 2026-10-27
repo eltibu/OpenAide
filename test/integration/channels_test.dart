@@ -1,6 +1,5 @@
 // Runs against a real Open WebUI server with channels on; see
 // server_sync_test.dart.
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
