@@ -5,18 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import '../admin/admin_screen.dart';
 import '../automations/automations_screen.dart';
 import '../calendar/calendar_screen.dart';
 import '../channels/channels_screen.dart';
 import '../notes/notes_screen.dart';
-import '../server/server_page.dart';
+import '../playground/playground_screen.dart';
 import '../terminal/terminal_screen.dart';
 import '../workspace/knowledge_screen.dart';
 import '../workspace/models_screen.dart';
 import '../workspace/prompts_screen.dart';
 import '../workspace/tools_skills.dart';
-import '../update/update_screen.dart';
 import '../../core/theme.dart';
+import '../settings/settings_screen.dart';
 import 'chat_controller.dart';
 
 /// The web UI's sidebar: search, pinned chats, folders, then the rest.
@@ -557,10 +558,6 @@ class _Places extends ConsumerWidget {
         (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
         const {};
     final admin = ref.watch(sessionProvider).value?.user?['role'] == 'admin';
-    final sections = <(IconData, String, String)>[
-      if (admin) (Icons.code, 'Playground', '/playground'),
-      if (admin) (Icons.admin_panel_settings_outlined, 'Admin Panel', '/admin'),
-    ];
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -640,25 +637,20 @@ class _Places extends ConsumerWidget {
             'Automations',
             () => const AutomationsScreen(),
           ),
-        Theme(
-          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-          child: ExpansionTile(
-            dense: true,
-            tilePadding: const EdgeInsets.symmetric(horizontal: 24),
-            leading: const Icon(Icons.apps, size: 22),
-            title: const Text('More', style: TextStyle(fontSize: 15)),
-            children: [
-              for (final (icon, label, path) in sections)
-                _tile(
-                  context,
-                  icon,
-                  label,
-                  () => ServerPage(title: label, path: path),
-                  indent: true,
-                ),
-            ],
+        if (admin) ...[
+          _tile(
+            context,
+            Icons.code,
+            'Playground',
+            () => const PlaygroundScreen(),
           ),
-        ),
+          _tile(
+            context,
+            Icons.admin_panel_settings_outlined,
+            'Admin Panel',
+            () => const AdminScreen(),
+          ),
+        ],
       ],
     );
   }
@@ -687,45 +679,30 @@ class _Account extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final name = session?.userName ?? '';
-    final initials = name.trim().isEmpty
-        ? '?'
-        : name
-              .trim()
-              .split(RegExp(r'\s+'))
-              .take(2)
-              .map((w) => w[0].toUpperCase())
-              .join();
+    final me = ref.watch(meProvider).value ?? session?.user;
+    final name = '${me?['name'] ?? session?.userName ?? ''}';
+    void settings() {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+      );
+    }
+
     return ListTile(
       contentPadding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-      leading: CircleAvatar(
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        child: Text(initials),
-      ),
+      leading: Avatar(user: me),
       title: Text(name.isEmpty ? 'Account' : name),
       subtitle: Text(
         Uri.tryParse(session?.serverUrl ?? '')?.host ?? '',
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: PopupMenuButton<String>(
+      onTap: settings,
+      trailing: IconButton(
         tooltip: 'Settings',
         icon: const Icon(Icons.settings_outlined),
-        onSelected: (choice) {
-          if (choice == 'updates') {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const UpdateScreen()),
-            );
-          } else if (choice == 'signout') {
-            ref.read(sessionProvider.notifier).signOut();
-          }
-        },
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'updates', child: Text('App updates')),
-          PopupMenuItem(value: 'signout', child: Text('Sign out')),
-        ],
+        onPressed: settings,
       ),
     );
   }

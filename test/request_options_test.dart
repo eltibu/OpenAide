@@ -129,4 +129,46 @@ void main() {
     expect(o.containsKey('tool_ids'), isFalse);
     expect(o['terminal_id'], 'other');
   });
+
+  test('chat settings: always web search, naming and tagging', () {
+    final m = model({});
+    final config = {
+      'features': {'enable_web_search': true},
+    };
+    final o = requestOptions(m, {
+      'ui': {
+        'webSearch': 'always',
+        'autoTags': false,
+        'title': {'auto': false},
+      },
+    }, config);
+    expect(o['features']['web_search'], isTrue);
+    expect(o['background_tasks'], {
+      'title_generation': false,
+      'tags_generation': false,
+    });
+    // Switched off in the chat wins over "always".
+    expect(
+      requestOptions(
+        m,
+        {
+          'ui': {'webSearch': 'always'},
+        },
+        config,
+        overrides: {'web_search': false},
+      )['features']['web_search'],
+      isNull,
+    );
+    // Not allowed by the site: not sent.
+    expect(
+      requestOptions(m, {
+        'ui': {'webSearch': 'always'},
+      }, null)['features']['web_search'],
+      isNull,
+    );
+    expect(requestOptions(m, null, null)['background_tasks'], {
+      'title_generation': true,
+      'tags_generation': true,
+    });
+  });
 }

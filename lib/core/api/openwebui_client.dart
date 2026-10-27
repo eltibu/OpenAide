@@ -445,8 +445,8 @@ class OpenWebUiClient {
           'models': [model],
         },
         'session_id': sessionId,
-        ...options,
         'background_tasks': {'title_generation': true, 'tags_generation': true},
+        ...options,
       },
     );
     if (res is! Map || res['chat_id'] is! String) {

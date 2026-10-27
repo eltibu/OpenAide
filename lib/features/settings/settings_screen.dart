@@ -1,0 +1,797 @@
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../core/auth/session.dart';
+import '../../core/theme.dart';
+import '../chat/chat_controller.dart';
+import '../update/update_screen.dart';
+import 'settings_api.dart';
+
+final settingsApiProvider = Provider<SettingsApi>(
+  (ref) => SettingsApi(ref.watch(clientProvider)),
+);
+
+/// The signed-in person as the server has them now (name, picture, bio).
+final meProvider = FutureProvider<Map<String, dynamic>>(
+  (ref) => ref.watch(settingsApiProvider).me(),
+);
+
+/// The person's own `ui` settings, raw.
+final uiSettingsProvider = FutureProvider<Map<String, dynamic>>(
+  (ref) => ref.watch(settingsApiProvider).ui(),
+);
+
+final memoriesProvider = FutureProvider<List<Memory>>(
+  (ref) => ref.watch(settingsApiProvider).memories(),
+);
+
+void _say(BuildContext context, String text) =>
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+Future<bool> _confirm(
+  BuildContext context,
+  String title,
+  String body,
+  String action,
+) async =>
+    await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    ) ==
+    true;
+
+/// The person's picture: the server's profile image, signed in.
+class Avatar extends ConsumerWidget {
+  const Avatar({super.key, required this.user, this.radius = 20});
+  final Map<String, dynamic>? user;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final client = ref.watch(clientProvider);
+    final name = '${user?['name'] ?? ''}'.trim();
+    final initials = name.isEmpty
+        ? '?'
+        : name
+              .split(RegExp(r'\s+'))
+              .take(2)
+              .map((w) => w[0].toUpperCase())
+              .join();
+    final url = '${user?['profile_image_url'] ?? ''}';
+    ImageProvider? image;
+    if (url.startsWith('data:image/')) {
+      final comma = url.indexOf(',');
+      try {
+        image = MemoryImage(base64Decode(url.substring(comma + 1)));
+      } catch (_) {}
+    } else if (url.startsWith('http')) {
+      image = NetworkImage(url);
+    } else if (url.startsWith('/') && url != '/user.png') {
+      image = NetworkImage(
+        client.serverUri(url).toString(),
+        headers: client.authHeaders,
+      );
+    }
+    return CircleAvatar(
+      radius: radius,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+      foregroundImage: image,
+      onForegroundImageError: image == null ? null : (_, _) {},
+      child: Text(initials, style: TextStyle(fontSize: radius * 0.8)),
+    );
+  }
+}
+
+/// Settings, like the web's Settings window: account, chats, memory, and
+/// the app's own updates.
+class SettingsScreen extends ConsumerWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(meProvider).value;
+    final muted = context.nexus.muted;
+    void open(Widget page) =>
+        Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
+    return Scaffold(
+      appBar: AppBar(title: const Text('Settings')),
+      body: ListView(
+        children: [
+          ListTile(
+            contentPadding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+            leading: Avatar(user: me, radius: 26),
+            title: Text('${me?['name'] ?? 'Account'}'),
+            subtitle: Text(
+              '${me?['email'] ?? ''}',
+              style: TextStyle(color: muted),
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => open(const AccountSettings()),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.tune),
+            title: const Text('General'),
+            subtitle: const Text('Your system prompt and model settings'),
+            onTap: () => open(const GeneralSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.chat_bubble_outline),
+            title: const Text('Chats'),
+            subtitle: const Text('Titles, tags, web search, archive'),
+            onTap: () => open(const ChatSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.psychology_alt_outlined),
+            title: const Text('Memory'),
+            subtitle: const Text('What models remember about you'),
+            onTap: () => open(const MemoriesScreen()),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.system_update_outlined),
+            title: const Text('App updates'),
+            onTap: () => open(const UpdateScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Sign out'),
+            onTap: () async {
+              if (!await _confirm(
+                context,
+                'Sign out?',
+                'You will need to sign in again to use the app.',
+                'Sign out',
+              )) {
+                return;
+              }
+              if (context.mounted) Navigator.pop(context);
+              await ref.read(sessionProvider.notifier).signOut();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ---- Account ----
+
+class AccountSettings extends ConsumerStatefulWidget {
+  const AccountSettings({super.key});
+
+  @override
+  ConsumerState<AccountSettings> createState() => _AccountSettingsState();
+}
+
+class _AccountSettingsState extends ConsumerState<AccountSettings> {
+  final _name = TextEditingController();
+  final _bio = TextEditingController();
+  String _image = '';
+  bool _loaded = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(meProvider.future).then((me) {
+      if (!mounted) return;
+      setState(() {
+        _name.text = '${me['name'] ?? ''}';
+        _bio.text = '${me['bio'] ?? ''}';
+        _image = '${me['profile_image_url'] ?? ''}';
+        _loaded = true;
+      });
+    }, onError: (Object e) => setState(() => _loaded = true));
+  }
+
+  Future<void> _pickImage() async {
+    // Small and square-ish, as the web crops profile pictures.
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 256,
+      maxHeight: 256,
+      imageQuality: 85,
+    );
+    if (photo == null) return;
+    final bytes = await photo.readAsBytes();
+    final type = (photo.mimeType ?? 'image/jpeg').contains('png')
+        ? 'image/png'
+        : 'image/jpeg';
+    setState(() => _image = 'data:$type;base64,${base64Encode(bytes)}');
+  }
+
+  Future<void> _save() async {
+    final name = _name.text.trim();
+    if (name.isEmpty) {
+      _say(context, 'Your name can\'t be empty');
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(settingsApiProvider)
+          .updateProfile(name: name, imageUrl: _image, bio: _bio.text.trim());
+      ref.invalidate(meProvider);
+      if (mounted) {
+        _say(context, 'Saved');
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final me = ref.watch(meProvider).value;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Account'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton(
+              onPressed: _busy || !_loaded ? null : _save,
+              child: const Text('Save'),
+            ),
+          ),
+        ],
+      ),
+      body: !_loaded
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.all(20),
+              children: [
+                Center(
+                  child: Stack(
+                    children: [
+                      Avatar(
+                        user: {'name': _name.text, 'profile_image_url': _image},
+                        radius: 44,
+                      ),
+                      Positioned(
+                        right: -4,
+                        bottom: -4,
+                        child: IconButton.filledTonal(
+                          tooltip: 'Change picture',
+                          onPressed: _pickImage,
+                          icon: const Icon(Icons.photo_camera_outlined),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_image.startsWith('data:'))
+                  Center(
+                    child: TextButton(
+                      onPressed: () => setState(() => _image = '/user.png'),
+                      child: const Text('Remove picture'),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _name,
+                  onChanged: (_) => setState(() {}),
+                  decoration: const InputDecoration(labelText: 'Name'),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _bio,
+                  maxLines: null,
+                  decoration: const InputDecoration(labelText: 'About you'),
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Email'),
+                  subtitle: Text('${me?['email'] ?? ''}'),
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Role'),
+                  subtitle: Text('${me?['role'] ?? ''}'),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+// ---- General ----
+
+class GeneralSettings extends ConsumerStatefulWidget {
+  const GeneralSettings({super.key});
+
+  @override
+  ConsumerState<GeneralSettings> createState() => _GeneralSettingsState();
+}
+
+class _GeneralSettingsState extends ConsumerState<GeneralSettings> {
+  final _system = TextEditingController();
+  final _params = {
+    for (final (key, _, _) in chatParams) key: TextEditingController(),
+  };
+  Map<String, dynamic> _kept = {};
+  bool _loaded = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    ref.read(uiSettingsProvider.future).then((ui) {
+      if (!mounted) return;
+      final params = (ui['params'] as Map?)?.cast<String, dynamic>() ?? {};
+      setState(() {
+        _system.text = '${ui['system'] ?? ''}';
+        _kept = params;
+        for (final e in _params.entries) {
+          final v = params[e.key];
+          e.value.text = v == null ? '' : '$v';
+        }
+        _loaded = true;
+      });
+    }, onError: (Object e) => setState(() => _loaded = true));
+  }
+
+  Future<void> _save() async {
+    // Settings the app doesn't show (stop words, penalties...) stay as set.
+    final params = {..._kept};
+    for (final e in _params.entries) {
+      final v = paramValue(e.key, e.value.text);
+      if (v == null) {
+        params.remove(e.key);
+      } else {
+        params[e.key] = v;
+      }
+    }
+    final system = _system.text.trim();
+    setState(() => _busy = true);
+    try {
+      await ref.read(settingsApiProvider).patchUi({
+        'system': system.isEmpty ? null : system,
+        'params': params,
+      });
+      ref.invalidate(uiSettingsProvider);
+      ref.invalidate(userSettingsProvider);
+      if (mounted) {
+        _say(context, 'Saved');
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.nexus.muted;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('General'),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: FilledButton(
+              onPressed: _busy || !_loaded ? null : _save,
+              child: const Text('Save'),
+            ),
+          ),
+        ],
+      ),
+      body: !_loaded
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+              children: [
+                TextField(
+                  controller: _system,
+                  minLines: 4,
+                  maxLines: null,
+                  decoration: const InputDecoration(
+                    labelText: 'System prompt',
+                    helperText: 'Instructions every chat starts with',
+                    alignLabelWithHint: true,
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Text('Model settings', style: TextStyle(color: muted)),
+                Text(
+                  'Leave a box empty to use the model\'s own setting.',
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: muted),
+                ),
+                for (final (key, label, hint) in chatParams)
+                  TextField(
+                    controller: _params[key],
+                    keyboardType: key == 'reasoning_effort'
+                        ? TextInputType.text
+                        : const TextInputType.numberWithOptions(
+                            decimal: true,
+                            signed: true,
+                          ),
+                    decoration: InputDecoration(
+                      labelText: label,
+                      helperText: hint,
+                      hintText: 'Default',
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+// ---- Chats ----
+
+class ChatSettings extends ConsumerWidget {
+  const ChatSettings({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ui = ref.watch(uiSettingsProvider);
+    final muted = context.nexus.muted;
+    Future<void> set(Map<String, dynamic> fields) async {
+      try {
+        await ref.read(settingsApiProvider).patchUi(fields);
+      } catch (e) {
+        if (context.mounted) _say(context, '$e');
+      }
+      ref.invalidate(uiSettingsProvider);
+      ref.invalidate(userSettingsProvider);
+    }
+
+    Future<void> act(
+      String title,
+      String body,
+      String action,
+      Future<void> Function() run,
+      String done,
+    ) async {
+      if (!await _confirm(context, title, body, action)) return;
+      try {
+        await run();
+        refreshChatLists(ref.invalidate);
+        if (context.mounted) _say(context, done);
+      } catch (e) {
+        if (context.mounted) _say(context, '$e');
+      }
+    }
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Chats')),
+      body: ui.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text('Couldn\'t load your settings.\n$e'),
+        ),
+        data: (ui) {
+          final title = (ui['title'] as Map?) ?? const {};
+          return ListView(
+            children: [
+              SwitchListTile(
+                title: const Text('Name new chats'),
+                subtitle: const Text('Give each chat a title from its start'),
+                value: title['auto'] != false,
+                onChanged: (on) => set({
+                  'title': {...title, 'auto': on},
+                }),
+              ),
+              SwitchListTile(
+                title: const Text('Tag chats'),
+                subtitle: const Text('Add topic tags to chats'),
+                value: ui['autoTags'] != false,
+                onChanged: (on) => set({'autoTags': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Always search the web'),
+                subtitle: const Text(
+                  'Start every chat with web search on, where it\'s allowed',
+                ),
+                value: ui['webSearch'] == 'always',
+                onChanged: (on) => set({'webSearch': on ? 'always' : null}),
+              ),
+              SwitchListTile(
+                title: const Text('Use memory'),
+                subtitle: const Text('Let models use what they remember'),
+                value: ui['memory'] != false,
+                onChanged: (on) => set({'memory': on}),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.archive_outlined),
+                title: const Text('Archived chats'),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ArchivedChatsScreen(),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: const Text('Archive all chats'),
+                onTap: () => act(
+                  'Archive all chats?',
+                  'They move to Archived chats, where you can bring them back.',
+                  'Archive all',
+                  ref.read(settingsApiProvider).archiveAll,
+                  'All chats archived',
+                ),
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.delete_forever_outlined,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  'Delete all chats',
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
+                subtitle: Text(
+                  'Removes every chat from the server',
+                  style: TextStyle(color: muted),
+                ),
+                onTap: () => act(
+                  'Delete all chats?',
+                  'Every chat is deleted from the server. This can\'t be '
+                      'undone.',
+                  'Delete all',
+                  ref.read(settingsApiProvider).deleteAllChats,
+                  'All chats deleted',
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+final archivedChatsProvider = FutureProvider(
+  (ref) => ref.watch(settingsApiProvider).archived(),
+);
+
+class ArchivedChatsScreen extends ConsumerWidget {
+  const ArchivedChatsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final list = ref.watch(archivedChatsProvider);
+    final muted = context.nexus.muted;
+    Future<void> restore(String id) async {
+      try {
+        await ref.read(clientProvider).toggleArchive(id);
+      } catch (e) {
+        if (context.mounted) _say(context, '$e');
+      }
+      ref.invalidate(archivedChatsProvider);
+      refreshChatLists(ref.invalidate);
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Archived chats'),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              try {
+                await ref.read(settingsApiProvider).unarchiveAll();
+              } catch (e) {
+                if (context.mounted) _say(context, '$e');
+              }
+              ref.invalidate(archivedChatsProvider);
+              refreshChatLists(ref.invalidate);
+            },
+            child: const Text('Restore all'),
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(archivedChatsProvider.future),
+        child: list.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => ListView(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Couldn\'t load archived chats.\n$e'),
+              ),
+            ],
+          ),
+          data: (chats) => ListView(
+            children: [
+              if (chats.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'No archived chats.',
+                    style: TextStyle(color: muted),
+                  ),
+                ),
+              for (final c in chats)
+                ListTile(
+                  title: Text(c.title),
+                  subtitle: Text(
+                    MaterialLocalizations.of(context)
+                        .formatMediumDate(c.updatedAt),
+                    style: TextStyle(color: muted),
+                  ),
+                  onTap: () {
+                    ref.read(chatControllerProvider.notifier).open(c.id);
+                    Navigator.of(context).popUntil((r) => r.isFirst);
+                  },
+                  trailing: IconButton(
+                    tooltip: 'Restore',
+                    onPressed: () => restore(c.id),
+                    icon: const Icon(Icons.unarchive_outlined),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---- Memory ----
+
+class MemoriesScreen extends ConsumerWidget {
+  const MemoriesScreen({super.key});
+
+  Future<void> _edit(BuildContext context, WidgetRef ref, [Memory? m]) async {
+    final text = TextEditingController(text: m?.content ?? '');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(m == null ? 'Add memory' : 'Edit memory'),
+        content: TextField(
+          controller: text,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            hintText: 'Something models should remember about you',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    final content = text.text.trim();
+    if (ok != true || content.isEmpty) return;
+    final api = ref.read(settingsApiProvider);
+    try {
+      if (m == null) {
+        await api.addMemory(content);
+      } else {
+        await api.updateMemory(m.id, content);
+      }
+    } catch (e) {
+      if (context.mounted) _say(context, '$e');
+    }
+    ref.invalidate(memoriesProvider);
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final list = ref.watch(memoriesProvider);
+    final muted = context.nexus.muted;
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Memory'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (_) async {
+              if (!await _confirm(
+                context,
+                'Clear all memories?',
+                'Models forget everything they remember about you.',
+                'Clear',
+              )) {
+                return;
+              }
+              try {
+                await ref.read(settingsApiProvider).clearMemories();
+              } catch (e) {
+                if (context.mounted) _say(context, '$e');
+              }
+              ref.invalidate(memoriesProvider);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'clear', child: Text('Clear all')),
+            ],
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'Add memory',
+        onPressed: () => _edit(context, ref),
+        child: const Icon(Icons.add),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(memoriesProvider.future),
+        child: list.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => ListView(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Couldn\'t load memories.\n$e'),
+              ),
+            ],
+          ),
+          data: (items) => ListView(
+            padding: const EdgeInsets.only(bottom: 88),
+            children: [
+              if (items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Nothing remembered yet. Models add memories as you '
+                    'chat, or tap + to add one.',
+                    style: TextStyle(color: muted),
+                  ),
+                ),
+              for (final m in items)
+                ListTile(
+                  title: Text(m.content),
+                  subtitle: Text(
+                    [
+                      if (m.path != null && m.path!.isNotEmpty) m.path!,
+                      MaterialLocalizations.of(context)
+                          .formatMediumDate(m.updated),
+                    ].join(' · '),
+                    style: TextStyle(color: muted),
+                  ),
+                  onTap: () => _edit(context, ref, m),
+                  trailing: IconButton(
+                    tooltip: 'Delete',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () async {
+                      try {
+                        await ref.read(settingsApiProvider).deleteMemory(m.id);
+                      } catch (e) {
+                        if (context.mounted) _say(context, '$e');
+                      }
+                      ref.invalidate(memoriesProvider);
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

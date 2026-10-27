@@ -8,6 +8,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
 import '../voice/realtime_call.dart' show BridgeSubmission;
+import '../workspace/prompts_api.dart' show fillSystemVariables;
 import 'request_options.dart';
 
 const _uuid = Uuid();
@@ -561,12 +562,26 @@ class ChatController extends Notifier<ChatState> {
     try {
       final sessionId = await socket.ready() ?? 'nexus-app-${_uuid.v4()}';
       final models = await ref.read(modelsProvider.future);
+      final settings = await _optional(userSettingsProvider);
+      final system = '${(settings?['ui'] as Map?)?['system'] ?? ''}'.trim();
+      final me = ref.read(sessionProvider).value?.user;
       final turn = await client.startTurn(
         model: modelId,
         chatId: chat.id.isEmpty ? null : chat.id,
         userMessage: user,
         replyId: reply.id,
         messages: [
+          // The person's own system prompt (Settings > General), filled in
+          // as the web does.
+          if (system.isNotEmpty)
+            {
+              'role': 'system',
+              'content': fillSystemVariables(
+                system,
+                userName: me?['name'] as String?,
+                userEmail: me?['email'] as String?,
+              ),
+            },
           for (final m in chat.thread)
             if (m.id != reply.id) {'role': m.role, 'content': m.content},
         ],
@@ -575,7 +590,7 @@ class ChatController extends Notifier<ChatState> {
           ..._withVoice(
             requestOptions(
               models.where((m) => m.id == modelId).firstOrNull,
-              await _optional(userSettingsProvider),
+              settings,
               await _optional(serverConfigProvider),
               overrides: state.features,
               toolIds: state.toolIds,

@@ -70,8 +70,12 @@ Map<String, dynamic> requestOptions(
           enabled[_adminSwitch[id]] == true)
         id: true,
   };
-  // What the person switched in this chat wins over the model's defaults.
   final allowed = availableFeatures(model, config);
+  // "Always search the web" in Settings > Chats.
+  if (ui['webSearch'] == 'always' && allowed.contains('web_search')) {
+    features['web_search'] = true;
+  }
+  // What the person switched in this chat wins over the model's defaults.
   for (final e in overrides.entries) {
     if (e.value && allowed.contains(e.key)) {
       features[e.key] = true;
@@ -93,5 +97,10 @@ Map<String, dynamic> requestOptions(
     if (terminal != null && terminal.isNotEmpty) 'terminal_id': terminal,
     'features': features,
     if (ui['params'] is Map) 'params': ui['params'],
+    // Naming and tagging new chats follow Settings > Chats, as on the web.
+    'background_tasks': {
+      'title_generation': (ui['title'] as Map?)?['auto'] != false,
+      'tags_generation': ui['autoTags'] != false,
+    },
   };
 }
