@@ -5,7 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
-import '../terminal/terminal_api.dart';
+import '../server/server_page.dart';
 import '../terminal/terminal_screen.dart';
 import '../update/update_screen.dart';
 import '../../core/theme.dart';
@@ -113,7 +113,6 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                 ref.read(chatControllerProvider.notifier).newChat();
               },
             ),
-            const _Places(),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async => refreshChatLists(ref.invalidate),
@@ -121,7 +120,12 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                   padding: const EdgeInsets.symmetric(horizontal: 8),
                   children: _query.isNotEmpty
                       ? _results(ref.watch(chatSearchProvider(_query)))
-                      : [..._pinned(small), ..._folders(), ..._chats(small)],
+                      : [
+                          const _Places(),
+                          ..._pinned(small),
+                          ..._folders(),
+                          ..._chats(small),
+                        ],
                 ),
               ),
             ),
@@ -515,43 +519,115 @@ void _showError(BuildContext context, Object e) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
 
 /// You, at the bottom of the menu, with app updates and sign-out.
-/// The rest of the server beside chats: its terminals and files for now.
+/// Channels the person is in, for the drawer.
+final channelsProvider = FutureProvider<List<({String id, String name})>>((
+  ref,
+) async {
+  try {
+    final res = await ref
+        .watch(clientProvider)
+        .send('GET', '/api/v1/channels/');
+    return [
+      for (final c in (res as List? ?? const []).whereType<Map>())
+        (id: '${c['id']}', name: '${c['name'] ?? c['id']}'),
+    ];
+  } catch (_) {
+    return const [];
+  }
+});
+
+/// The rest of the server beside chats: its terminals and files first, then
+/// every other section of the web UI (opened as the server's own pages until
+/// each one is native).
 class _Places extends ConsumerWidget {
   const _Places();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final servers = ref.watch(terminalServersProvider).value ?? const [];
+    final features =
+        (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
+        const {};
+    final admin = ref.watch(sessionProvider).value?.user?['role'] == 'admin';
+    final channels = features['enable_channels'] == true
+        ? ref.watch(channelsProvider).value ?? const []
+        : const <({String id, String name})>[];
+    final sections = <(IconData, String, String)>[
+      if (features['enable_notes'] == true)
+        (Icons.sticky_note_2_outlined, 'Notes', '/notes'),
+      (Icons.grid_view, 'Workspace', '/workspace'),
+      if (features['enable_calendar'] == true)
+        (Icons.calendar_month_outlined, 'Calendar', '/calendar'),
+      if (features['enable_automations'] == true)
+        (Icons.schedule, 'Automations', '/automations'),
+      if (admin) (Icons.code, 'Playground', '/playground'),
+      if (admin) (Icons.admin_panel_settings_outlined, 'Admin Panel', '/admin'),
+    ];
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         for (final server in servers) ...[
-          _place(context, Icons.terminal, server.name, server, false),
-          _place(context, Icons.folder_outlined, 'Files', server, true),
+          _tile(
+            context,
+            Icons.terminal,
+            server.name,
+            () => TerminalScreen(server: server, startInFiles: false),
+          ),
+          _tile(
+            context,
+            Icons.folder_outlined,
+            'Files',
+            () => TerminalScreen(server: server, startInFiles: true),
+          ),
         ],
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            dense: true,
+            tilePadding: const EdgeInsets.symmetric(horizontal: 24),
+            leading: const Icon(Icons.apps, size: 22),
+            title: const Text('More', style: TextStyle(fontSize: 15)),
+            children: [
+              for (final (icon, label, path) in sections)
+                _tile(
+                  context,
+                  icon,
+                  label,
+                  () => ServerPage(title: label, path: path),
+                  indent: true,
+                ),
+              for (final c in channels)
+                _tile(
+                  context,
+                  Icons.tag,
+                  c.name,
+                  () => ServerPage(
+                    title: '# ${c.name}',
+                    path: '/channels/${c.id}',
+                  ),
+                  indent: true,
+                ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _place(
+  Widget _tile(
     BuildContext context,
     IconData icon,
     String label,
-    TerminalServer server,
-    bool files,
-  ) => ListTile(
+    Widget Function() page, {
+    bool indent = false,
+  }) => ListTile(
     dense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+    contentPadding: EdgeInsets.only(left: indent ? 40 : 24, right: 24),
     leading: Icon(icon, size: 22),
     title: Text(label, style: const TextStyle(fontSize: 15)),
     onTap: () {
       Navigator.pop(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(
-          builder: (_) => TerminalScreen(server: server, startInFiles: files),
-        ),
-      );
+      Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page()));
     },
   );
 }
