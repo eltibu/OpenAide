@@ -21,6 +21,7 @@ import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'attach_more.dart';
 import 'chat_controls.dart';
+import 'chat_panel.dart';
 import 'emoji.dart';
 import 'embeds_view.dart';
 import 'markdown_extras.dart';
@@ -169,15 +170,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   .read(chatControllerProvider.notifier)
                   .newChat(temporary: !state.temporary),
             ),
+          // The web's chat panel: Controls, Files and Overview.
           IconButton(
-            tooltip: 'Chat controls',
+            tooltip: 'Controls, files and overview',
             isSelected: state.params.isNotEmpty,
-            icon: const Icon(Icons.settings_suggest_outlined),
-            selectedIcon: const Icon(
-              Icons.settings_suggest,
-              color: NexusColors.accent,
-            ),
-            onPressed: () => showChatControls(context),
+            icon: const Icon(Icons.tune),
+            selectedIcon: const Icon(Icons.tune, color: NexusColors.accent),
+            onPressed: () => showChatPanel(context),
           ),
           const ReadAloudButton(),
           IconButton(
@@ -295,16 +294,17 @@ class _EmptyState extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final name = ref.watch(sessionProvider).value?.userName.split(' ').first;
-    final style = Theme.of(context).textTheme.headlineMedium
+    final style = Theme.of(context).textTheme.headlineSmall
         ?.copyWith(fontFamily: 'serif', fontWeight: FontWeight.w400);
+    // Scrolls when the keyboard leaves too little room.
     return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const NexusLogo(size: 72),
-            const SizedBox(height: 16),
+            const NexusLogo(size: 56),
+            const SizedBox(height: 12),
             Text(
               name == null || name.isEmpty
                   ? _greeting()
@@ -353,34 +353,62 @@ class _Suggestions extends ConsumerWidget {
       config,
     ).take(4).toList();
     if (list.isEmpty) return const SizedBox.shrink();
-    final scheme = Theme.of(context).colorScheme;
+    final muted = context.nexus.muted;
+    final text = Theme.of(context).textTheme;
+    // Small rows under a "Suggested" label, as the web shows them, instead
+    // of full cards that crowd a phone screen.
     return Padding(
-      padding: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.only(top: 20),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
+        constraints: const BoxConstraints(maxWidth: 480),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+              child: Row(
+                children: [
+                  Icon(Icons.auto_awesome_outlined, size: 14, color: muted),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Suggested',
+                    style: text.labelMedium?.copyWith(color: muted),
+                  ),
+                ],
+              ),
+            ),
             for (final p in list)
-              Card(
-                elevation: 0,
-                margin: const EdgeInsets.only(bottom: 8),
-                color: scheme.surfaceContainerLow,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  side: BorderSide(color: scheme.outlineVariant),
-                ),
-                child: ListTile(
-                  title: Text(p.title, maxLines: 2),
-                  subtitle: p.subtitle.isEmpty
-                      ? null
-                      : Text(p.subtitle, maxLines: 1),
-                  trailing: const Icon(Icons.arrow_upward, size: 18),
-                  // Settings > Interface can put it in the box to edit first.
-                  onTap: () => insertSuggestion(ref)
-                      ? ref.read(composerDraftProvider.notifier).put(p.content)
-                      : ref
-                            .read(chatControllerProvider.notifier)
-                            .send(p.content),
+              InkWell(
+                borderRadius: BorderRadius.circular(10),
+                // Settings > Interface can put it in the box to edit first.
+                onTap: () => insertSuggestion(ref)
+                    ? ref.read(composerDraftProvider.notifier).put(p.content)
+                    : ref.read(chatControllerProvider.notifier).send(p.content),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        p.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (p.subtitle.isNotEmpty)
+                        Text(
+                          p.subtitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodySmall?.copyWith(color: muted),
+                        ),
+                    ],
+                  ),
                 ),
               ),
           ],
@@ -1093,16 +1121,19 @@ class _ComposerState extends ConsumerState<_Composer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Stop',
             icon: const Icon(Icons.stop_rounded),
             onPressed: controller.stop,
           ),
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Steer: stop the reply and send this now',
             icon: const Icon(Icons.turn_right),
             onPressed: _steer,
           ),
           IconButton.filled(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Queue: send this when the reply is done',
             icon: const Icon(Icons.arrow_upward),
             onPressed: _queue,
@@ -1111,12 +1142,14 @@ class _ComposerState extends ConsumerState<_Composer> {
       );
     } else if (widget.streaming) {
       action = IconButton.filled(
+        visualDensity: VisualDensity.compact,
         tooltip: 'Stop',
         icon: const Icon(Icons.stop_rounded),
         onPressed: controller.stop,
       );
     } else if (_hasText || hasFiles) {
       action = IconButton.filled(
+        visualDensity: VisualDensity.compact,
         tooltip: 'Send',
         icon: const Icon(Icons.arrow_upward),
         onPressed: ready ? _send : null,
@@ -1126,11 +1159,13 @@ class _ComposerState extends ConsumerState<_Composer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Record a voice note',
             icon: const Icon(Icons.mic_none),
             onPressed: ready ? () => setState(() => _recording = true) : null,
           ),
           IconButton.filled(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Voice call',
             icon: const Icon(Icons.graphic_eq),
             onPressed: ready
@@ -1147,14 +1182,14 @@ class _ComposerState extends ConsumerState<_Composer> {
       top: false,
       child: Container(
         margin: EdgeInsets.fromLTRB(
-          readingInset(context, 10),
-          4,
-          readingInset(context, 10),
-          10,
+          readingInset(context, 8),
+          2,
+          readingInset(context, 8),
+          8,
         ),
         decoration: BoxDecoration(
           color: colors.composer,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(color: colors.composerBorder),
           boxShadow: [
             BoxShadow(
@@ -1201,11 +1236,13 @@ class _ComposerState extends ConsumerState<_Composer> {
                 decoration: InputDecoration(
                   hintText: empty ? 'Chat with Nexus' : 'Reply to Nexus',
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 ),
               ),
+              // One slim row of small buttons under the text, as on the web.
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
                 child: Row(
                   children: [
                     const AttachButton(),

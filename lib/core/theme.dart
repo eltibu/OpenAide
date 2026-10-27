@@ -106,6 +106,15 @@ ThemeData nexusTheme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
     ),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant),
+    // Chips sized to the text they hold: small type, snug padding, so
+    // rows of them fit a phone screen.
+    chipTheme: base.chipTheme.copyWith(
+      labelStyle: base.textTheme.labelMedium,
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
+      side: BorderSide(color: scheme.outlineVariant),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
     extensions: [
       NexusColors(
         userBubble: dark ? const Color(0xFF141413) : const Color(0xFFF0EEE6),

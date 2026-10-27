@@ -8,6 +8,7 @@ import '../../core/models/chat.dart';
 import '../admin/admin_screen.dart';
 import '../automations/automations_screen.dart';
 import '../calendar/calendar_screen.dart';
+import '../channels/channels_api.dart' show Channel;
 import '../channels/channels_screen.dart';
 import '../notes/notes_screen.dart';
 import '../playground/playground_screen.dart';
@@ -26,7 +27,10 @@ import 'chat_controller.dart';
 import 'chat_extras.dart';
 import 'folder_settings.dart';
 
-/// The web UI's sidebar: search, pinned chats, folders, then the rest.
+/// The web UI's sidebar: a short list of places at the top (new chat,
+/// search, notes, workspace), then Channels, Folders and Chats as sections
+/// that fold away, with chats grouped by when they were last used. The rest
+/// of the server is in the menu on your name at the bottom.
 /// Long-press a chat to rename, pin, move, archive or delete it.
 class ChatDrawer extends ConsumerStatefulWidget {
   const ChatDrawer({super.key, this.docked = false});
@@ -38,10 +42,24 @@ class ChatDrawer extends ConsumerStatefulWidget {
   ConsumerState<ChatDrawer> createState() => _ChatDrawerState();
 }
 
+/// Sections of the sidebar folded away; kept while the app runs, so the
+/// sidebar opens as you left it.
+class _Folded extends Notifier<Set<String>> {
+  @override
+  Set<String> build() => const {};
+
+  void toggle(String section) => state = state.contains(section)
+      ? ({...state}..remove(section))
+      : {...state, section};
+}
+
+final _foldedProvider = NotifierProvider<_Folded, Set<String>>(_Folded.new);
+
 class _ChatDrawerState extends ConsumerState<ChatDrawer> {
   final _search = TextEditingController();
   Timer? _debounce;
   String _query = '';
+  bool _searching = false;
 
   @override
   void dispose() {
@@ -57,11 +75,21 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
     });
   }
 
+  void _stopSearch() {
+    _search.clear();
+    setState(() {
+      _query = '';
+      _searching = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider).value;
     final picking = ref.watch(chatSelectionProvider);
-    final small = Theme.of(context).textTheme.titleSmall;
+    final features =
+        (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
+        const {};
     final content = SafeArea(
       child: Column(
         children: [
@@ -69,86 +97,105 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
             _SelectionBar(ids: picking)
           else
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
+              padding: const EdgeInsets.fromLTRB(20, 10, 12, 6),
               child: Row(
                 children: [
-                  const NexusLogo(size: 32),
+                  const NexusLogo(size: 28),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       'Nexus',
-                      style: Theme.of(context).textTheme.headlineSmall
+                      style: Theme.of(context).textTheme.titleLarge
                           ?.copyWith(fontFamily: 'serif'),
                     ),
-                  ),
-                  IconButton(
-                    tooltip: 'New folder',
-                    icon: const Icon(Icons.create_new_folder_outlined),
-                    onPressed: () => _newFolder(context, ref),
                   ),
                 ],
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-            child: TextField(
-              controller: _search,
-              onChanged: _onSearch,
-              textInputAction: TextInputAction.search,
-              decoration: InputDecoration(
-                hintText: 'Search chats',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _search.text.isEmpty
-                    ? null
-                    : IconButton(
-                        icon: const Icon(Icons.close),
-                        onPressed: () {
-                          _search.clear();
-                          setState(() => _query = '');
-                        },
-                      ),
-                isDense: true,
-                filled: true,
-                fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(24),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
-          ),
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-            leading: const CircleAvatar(
-              radius: 14,
-              backgroundColor: NexusColors.accent,
-              child: Icon(Icons.add, size: 18, color: Colors.white),
-            ),
-            title: const Text(
-              'New chat',
-              style: TextStyle(
-                color: NexusColors.accent,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+          _NavRow(
+            icon: Icons.edit_outlined,
+            label: 'New chat',
             onTap: () {
               closeDrawer(context);
               ref.read(chatControllerProvider.notifier).newChat();
             },
           ),
+          if (_searching)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 2, 12, 2),
+              child: TextField(
+                controller: _search,
+                autofocus: true,
+                onChanged: _onSearch,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: 'Search chats',
+                  prefixIcon: const Icon(Icons.search, size: 20),
+                  suffixIcon: IconButton(
+                    tooltip: 'Close search',
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: _stopSearch,
+                  ),
+                  isDense: true,
+                  filled: true,
+                  fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            )
+          else
+            _NavRow(
+              icon: Icons.search,
+              label: 'Search',
+              onTap: () => setState(() => _searching = true),
+            ),
+          if (features['enable_notes'] == true)
+            _NavRow(
+              icon: Icons.sticky_note_2_outlined,
+              label: 'Notes',
+              onTap: () => openPlace(context, (_) => const NotesScreen()),
+            ),
+          _NavRow(
+            icon: Icons.grid_view,
+            label: 'Workspace',
+            onTap: () => openPlace(context, (_) => workspaceScreen()),
+          ),
+          _NavRow(
+            icon: Icons.edit_document,
+            label: 'Studio',
+            onTap: () => openPlace(context, (_) => const StudioScreen()),
+          ),
+          const SizedBox(height: 4),
           Expanded(
             child: RefreshIndicator(
-              onRefresh: () async => refreshChatLists(ref.invalidate),
-              child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                children: _query.isNotEmpty
-                    ? _results(ref.watch(chatSearchProvider(_query)))
-                    : [
-                        const _Places(),
-                        ..._pinned(small),
-                        ..._folders(),
-                        ..._chats(small),
-                      ],
+              onRefresh: () async {
+                refreshChatLists(ref.invalidate);
+                ref.invalidate(channelListProvider);
+              },
+              // Slim rows, as on the web, so more chats fit.
+              child: ListTileTheme(
+                data: ListTileTheme.of(context).copyWith(
+                  dense: true,
+                  minTileHeight: 38,
+                  minVerticalPadding: 0,
+                  visualDensity: VisualDensity.compact,
+                  titleTextStyle: Theme.of(context).textTheme.bodyMedium,
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  children: _query.isNotEmpty
+                      ? _results(ref.watch(chatSearchProvider(_query)))
+                      : [
+                          if (features['enable_channels'] == true)
+                            ..._channels(),
+                          ..._folders(),
+                          ..._pinned(),
+                          ..._chats(),
+                        ],
+                ),
               ),
             ),
           ),
@@ -157,7 +204,10 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
         ],
       ),
     );
-    if (!widget.docked) return Drawer(child: content);
+    if (!widget.docked) {
+      // Narrower than the default, so the chat still shows beside it.
+      return Drawer(width: 300, child: content);
+    }
     return Material(
       color:
           Theme.of(context).drawerTheme.backgroundColor ??
@@ -165,6 +215,17 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
       child: content,
     );
   }
+
+  bool _open(String section) => !ref.watch(_foldedProvider).contains(section);
+
+  _Section _section(String name, {VoidCallback? onAdd, String? addTip}) =>
+      _Section(
+        name,
+        open: _open(name),
+        onToggle: () => ref.read(_foldedProvider.notifier).toggle(name),
+        onAdd: onAdd,
+        addTip: addTip,
+      );
 
   List<Widget> _results(AsyncValue<List<ChatSummary>> found) => found.when(
     data: (list) => list.isEmpty
@@ -174,54 +235,247 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
     error: (e, _) => [_LoadError(error: e)],
   );
 
-  List<Widget> _pinned(TextStyle? style) {
+  List<Widget> _channels() {
+    final list = ref.watch(channelListProvider).value ?? const <Channel>[];
+    return [
+      _section(
+        'Channels',
+        addTip: 'All channels',
+        onAdd: () => openPlace(context, (_) => const ChannelsScreen()),
+      ),
+      if (_open('Channels'))
+        for (final c in list)
+          _SmallTile(
+            icon: c.type == 'dm' ? Icons.person_outline : Icons.tag,
+            label: c.name,
+            badge: c.unread,
+            onTap: () async {
+              await openPlace(context, (_) => ChannelScreen(channel: c));
+              ref.invalidate(channelListProvider);
+            },
+          ),
+    ];
+  }
+
+  List<Widget> _pinned() {
     final pinned = ref.watch(pinnedChatsProvider).value ?? const [];
     if (pinned.isEmpty) return const [];
     return [
-      _Header('Starred', style: style),
-      for (final c in pinned) ChatTile(chat: c, pinned: true),
+      _section('Starred'),
+      if (_open('Starred'))
+        for (final c in pinned) ChatTile(chat: c, pinned: true),
     ];
   }
 
   List<Widget> _folders() {
     final folders = ref.watch(foldersProvider).value ?? const [];
     return [
-      for (final f in folders.where((f) => f.parentId == null))
-        FolderTile(folder: f, all: folders),
+      _section(
+        'Folders',
+        addTip: 'New folder',
+        onAdd: () => _newFolder(context, ref),
+      ),
+      if (_open('Folders'))
+        for (final f in folders.where((f) => f.parentId == null))
+          FolderTile(folder: f, all: folders),
     ];
   }
 
-  List<Widget> _chats(TextStyle? style) {
+  List<Widget> _chats() {
     final pages = ref.watch(chatPagesProvider);
     return [
-      _Header('Recents', style: style),
-      ...ref
-          .watch(chatListProvider)
-          .when(
-            data: (list) => [
-              for (final c in list) ChatTile(chat: c),
-              if (list.length >= pages * chatPageSize)
-                TextButton(
-                  onPressed: () => ref.read(chatPagesProvider.notifier).more(),
-                  child: const Text('Load more'),
-                ),
-            ],
-            loading: () => [const _Loading()],
-            error: (e, _) => [_LoadError(error: e)],
-          ),
+      _section('Chats'),
+      if (_open('Chats'))
+        ...ref
+            .watch(chatListProvider)
+            .when(
+              data: (list) => [
+                for (final (group, chats) in groupByWhen(
+                  list,
+                  DateTime.now(),
+                )) ...[_When(group), for (final c in chats) ChatTile(chat: c)],
+                if (list.length >= pages * chatPageSize)
+                  TextButton(
+                    onPressed: () =>
+                        ref.read(chatPagesProvider.notifier).more(),
+                    child: const Text('Load more'),
+                  ),
+              ],
+              loading: () => [const _Loading()],
+              error: (e, _) => [_LoadError(error: e)],
+            ),
     ];
   }
 }
 
-class _Header extends StatelessWidget {
-  const _Header(this.text, {this.style});
-  final String text;
-  final TextStyle? style;
+/// Chats in the web UI's groups: Today, Yesterday, Previous 7 days,
+/// Previous 30 days, then by month. [chats] come newest first.
+List<(String, List<ChatSummary>)> groupByWhen(
+  List<ChatSummary> chats,
+  DateTime now,
+) {
+  final today = DateTime(now.year, now.month, now.day);
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June', 'July', //
+    'August', 'September', 'October', 'November', 'December',
+  ];
+  String label(DateTime t) {
+    final day = DateTime(t.year, t.month, t.day);
+    final days = today.difference(day).inDays;
+    if (days <= 0) return 'Today';
+    if (days == 1) return 'Yesterday';
+    if (days < 7) return 'Previous 7 days';
+    if (days < 30) return 'Previous 30 days';
+    final month = months[t.month - 1];
+    return t.year == now.year ? month : '$month ${t.year}';
+  }
+
+  final out = <(String, List<ChatSummary>)>[];
+  for (final c in chats) {
+    final l = label(c.updatedAt);
+    if (out.isNotEmpty && out.last.$1 == l) {
+      out.last.$2.add(c);
+    } else {
+      out.add((l, [c]));
+    }
+  }
+  return out;
+}
+
+/// One of the places at the top of the sidebar.
+class _NavRow extends StatelessWidget {
+  const _NavRow({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-    child: Text(text, style: style),
+    padding: const EdgeInsets.symmetric(horizontal: 8),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            const SizedBox(width: 12),
+            Icon(icon, size: 20),
+            const SizedBox(width: 14),
+            Expanded(child: Text(label, style: const TextStyle(fontSize: 15))),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// A row inside a section (a channel).
+class _SmallTile extends StatelessWidget {
+  const _SmallTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.badge = 0,
+  });
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final int badge;
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(10),
+    onTap: onTap,
+    child: SizedBox(
+      height: 36,
+      child: Row(
+        children: [
+          const SizedBox(width: 12),
+          Icon(icon, size: 18, color: context.nexus.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          if (badge > 0) ...[
+            Badge(label: Text('$badge')),
+            const SizedBox(width: 12),
+          ],
+        ],
+      ),
+    ),
+  );
+}
+
+/// A section's title: tap to fold it away, + to add to it.
+class _Section extends StatelessWidget {
+  const _Section(
+    this.name, {
+    required this.open,
+    required this.onToggle,
+    this.onAdd,
+    this.addTip,
+  });
+  final String name;
+  final bool open;
+  final VoidCallback onToggle;
+  final VoidCallback? onAdd;
+  final String? addTip;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.nexus.muted;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onToggle,
+        child: SizedBox(
+          height: 32,
+          child: Row(
+            children: [
+              const SizedBox(width: 12),
+              Text(
+                name,
+                style: Theme.of(context).textTheme.labelLarge
+                    ?.copyWith(color: muted),
+              ),
+              Icon(
+                open ? Icons.expand_more : Icons.chevron_right,
+                size: 16,
+                color: muted,
+              ),
+              const Spacer(),
+              if (onAdd != null)
+                IconButton(
+                  tooltip: addTip,
+                  visualDensity: VisualDensity.compact,
+                  iconSize: 18,
+                  color: muted,
+                  icon: const Icon(Icons.add),
+                  onPressed: onAdd,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Today, Yesterday... above the chats from then.
+class _When extends StatelessWidget {
+  const _When(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 10, 12, 2),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.labelSmall
+          ?.copyWith(color: context.nexus.muted),
+    ),
   );
 }
 
@@ -695,7 +949,6 @@ Future<bool> _confirm(BuildContext context, String title, String body) async =>
 void _showError(BuildContext context, Object e) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
 
-/// You, at the bottom of the menu, with app updates and sign-out.
 /// Channels the person is in, for the drawer.
 final channelsProvider = FutureProvider<List<({String id, String name})>>((
   ref,
@@ -713,147 +966,57 @@ final channelsProvider = FutureProvider<List<({String id, String name})>>((
   }
 });
 
-/// The rest of the server beside chats: its terminals and files first, then
-/// every other section of the web UI (opened as the server's own pages until
-/// each one is native).
-class _Places extends ConsumerWidget {
-  const _Places();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final servers = ref.watch(terminalServersProvider).value ?? const [];
-    final features =
-        (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
-        const {};
-    final admin = ref.watch(sessionProvider).value?.user?['role'] == 'admin';
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (final server in servers) ...[
-          _tile(
-            context,
-            Icons.terminal,
-            server.name,
-            () => TerminalScreen(server: server, startInFiles: false),
-          ),
-          _tile(
-            context,
-            Icons.folder_outlined,
-            'Files',
-            () => TerminalScreen(server: server, startInFiles: true),
-          ),
-        ],
-        _tile(
-          context,
-          Icons.grid_view,
-          'Workspace',
-          () => WorkspaceScreen(
-            sections: [
-              (
-                Icons.auto_awesome_outlined,
-                'Models',
-                'Your own models: instructions, knowledge, tools',
-                () => const ModelsScreen(),
-              ),
-              (
-                Icons.menu_book_outlined,
-                'Knowledge',
-                'Documents models can search',
-                () => const KnowledgeScreen(),
-              ),
-              (
-                Icons.bolt,
-                'Prompts',
-                'Saved prompts you type with /',
-                () => const PromptsScreen(),
-              ),
-              (
-                Icons.build_outlined,
-                'Tools',
-                'What models can do, and their settings',
-                () => const ToolsScreen(),
-              ),
-              (
-                Icons.psychology_outlined,
-                'Skills',
-                'Know-how models can use',
-                () => const SkillsScreen(),
-              ),
-            ],
-          ),
-        ),
-        if (features['enable_channels'] == true)
-          _tile(context, Icons.tag, 'Channels', () => const ChannelsScreen()),
-        if (features['enable_notes'] == true)
-          _tile(
-            context,
-            Icons.sticky_note_2_outlined,
-            'Notes',
-            () => const NotesScreen(),
-          ),
-        if (features['enable_calendar'] == true)
-          _tile(
-            context,
-            Icons.calendar_month_outlined,
-            'Calendar',
-            () => const CalendarScreen(),
-          ),
-        if (features['enable_automations'] == true)
-          _tile(
-            context,
-            Icons.schedule,
-            'Automations',
-            () => const AutomationsScreen(),
-          ),
-        _tile(
-          context,
-          Icons.edit_document,
-          'Studio',
-          () => const StudioScreen(),
-        ),
-        _tile(
-          context,
-          Icons.mic_none,
-          'Record notes',
-          () => const RecordNotesScreen(),
-        ),
-        _tile(context, Icons.mail_outline, 'Email', () => const EmailScreen()),
-        if (admin) ...[
-          _tile(
-            context,
-            Icons.code,
-            'Playground',
-            () => const PlaygroundScreen(),
-          ),
-          _tile(
-            context,
-            Icons.admin_panel_settings_outlined,
-            'Admin Panel',
-            () => const AdminScreen(),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _tile(
-    BuildContext context,
-    IconData icon,
-    String label,
-    Widget Function() page, {
-    bool indent = false,
-  }) => ListTile(
-    dense: true,
-    contentPadding: EdgeInsets.only(left: indent ? 40 : 24, right: 24),
-    leading: Icon(icon, size: 22),
-    title: Text(label, style: const TextStyle(fontSize: 15)),
-    onTap: () {
-      closeDrawer(context);
-      Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page()));
-    },
-  );
+/// Opens one of the server's sections over the chat, closing the sidebar
+/// first when it slid in.
+Future<void> openPlace(BuildContext context, WidgetBuilder page) {
+  final navigator = Navigator.of(context);
+  closeDrawer(context);
+  return navigator.push(MaterialPageRoute<void>(builder: page));
 }
 
+/// The web UI's Workspace: models, knowledge, prompts, tools and skills.
+Widget workspaceScreen() => WorkspaceScreen(
+  sections: [
+    (
+      Icons.auto_awesome_outlined,
+      'Models',
+      'Your own models: instructions, knowledge, tools',
+      () => const ModelsScreen(),
+    ),
+    (
+      Icons.menu_book_outlined,
+      'Knowledge',
+      'Documents models can search',
+      () => const KnowledgeScreen(),
+    ),
+    (
+      Icons.bolt,
+      'Prompts',
+      'Saved prompts you type with /',
+      () => const PromptsScreen(),
+    ),
+    (
+      Icons.build_outlined,
+      'Tools',
+      'What models can do, and their settings',
+      () => const ToolsScreen(),
+    ),
+    (
+      Icons.psychology_outlined,
+      'Skills',
+      'Know-how models can use',
+      () => const SkillsScreen(),
+    ),
+  ],
+);
+
+final _menuItem = MenuItemButton.styleFrom(
+  minimumSize: const Size(200, 40),
+  visualDensity: VisualDensity.compact,
+);
+
+/// You, at the bottom of the sidebar. Tap for the web UI's menu: the
+/// server's other sections, Settings and Sign out.
 class _Account extends ConsumerWidget {
   const _Account({required this.session});
   final Session? session;
@@ -862,28 +1025,127 @@ class _Account extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(meProvider).value ?? session?.user;
     final name = '${me?['name'] ?? session?.userName ?? ''}';
-    void settings() {
-      closeDrawer(context);
-      Navigator.push(
-        context,
-        MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-      );
-    }
+    final servers = ref.watch(terminalServersProvider).value ?? const [];
+    final features =
+        (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
+        const {};
+    final admin = me?['role'] == 'admin' || session?.user?['role'] == 'admin';
 
-    return ListTile(
-      contentPadding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
-      leading: Avatar(user: me),
-      title: Text(name.isEmpty ? 'Account' : name),
-      subtitle: Text(
-        Uri.tryParse(session?.serverUrl ?? '')?.host ?? '',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+    MenuItemButton item(IconData icon, String label, WidgetBuilder page) =>
+        MenuItemButton(
+          style: _menuItem,
+          leadingIcon: Icon(icon, size: 20),
+          onPressed: () => openPlace(context, page),
+          child: Text(label),
+        );
+
+    return MenuAnchor(
+      alignmentOffset: const Offset(12, 0),
+      style: MenuStyle(
+        shape: WidgetStatePropertyAll(
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        ),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(vertical: 6),
+        ),
       ),
-      onTap: settings,
-      trailing: IconButton(
-        tooltip: 'Settings',
-        icon: const Icon(Icons.settings_outlined),
-        onPressed: settings,
+      menuChildren: [
+        item(Icons.grid_view, 'Workspace', (_) => workspaceScreen()),
+        if (features['enable_notes'] == true)
+          item(
+            Icons.sticky_note_2_outlined,
+            'Notes',
+            (_) => const NotesScreen(),
+          ),
+        if (features['enable_calendar'] == true)
+          item(
+            Icons.calendar_month_outlined,
+            'Calendar',
+            (_) => const CalendarScreen(),
+          ),
+        if (features['enable_automations'] == true)
+          item(Icons.schedule, 'Automations', (_) => const AutomationsScreen()),
+        if (features['enable_channels'] == true)
+          item(Icons.tag, 'Channels', (_) => const ChannelsScreen()),
+        const Divider(height: 8),
+        item(Icons.edit_document, 'Studio', (_) => const StudioScreen()),
+        item(Icons.mic_none, 'Record notes', (_) => const RecordNotesScreen()),
+        item(Icons.mail_outline, 'Email', (_) => const EmailScreen()),
+        for (final server in servers) ...[
+          item(
+            Icons.terminal,
+            server.name,
+            (_) => TerminalScreen(server: server, startInFiles: false),
+          ),
+          item(
+            Icons.folder_outlined,
+            servers.length > 1 ? 'Files: ${server.name}' : 'Files',
+            (_) => TerminalScreen(server: server, startInFiles: true),
+          ),
+        ],
+        if (admin) ...[
+          const Divider(height: 8),
+          item(Icons.code, 'Playground', (_) => const PlaygroundScreen()),
+          item(
+            Icons.admin_panel_settings_outlined,
+            'Admin Panel',
+            (_) => const AdminScreen(),
+          ),
+        ],
+        const Divider(height: 8),
+        item(
+          Icons.settings_outlined,
+          'Settings',
+          (_) => const SettingsScreen(),
+        ),
+        MenuItemButton(
+          style: _menuItem,
+          leadingIcon: const Icon(Icons.logout, size: 20),
+          onPressed: () async {
+            final ok =
+                await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Sign out?'),
+                    content: const Text(
+                      "You'll need to sign in again to use Nexus.",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Sign out'),
+                      ),
+                    ],
+                  ),
+                ) ??
+                false;
+            if (ok) await ref.read(sessionProvider.notifier).signOut();
+          },
+          child: const Text('Sign out'),
+        ),
+      ],
+      builder: (context, menu, _) => ListTile(
+        contentPadding: const EdgeInsets.fromLTRB(16, 2, 12, 2),
+        leading: Avatar(user: me, radius: 16),
+        title: Text(
+          name.isEmpty ? 'Account' : name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          Uri.tryParse(session?.serverUrl ?? '')?.host ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Icon(
+          menu.isOpen ? Icons.expand_more : Icons.expand_less,
+          color: context.nexus.muted,
+        ),
+        onTap: () => menu.isOpen ? menu.close() : menu.open(),
       ),
     );
   }

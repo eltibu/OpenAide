@@ -15,7 +15,7 @@ Future<void> showChatControls(BuildContext context) =>
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (_) => const _ChatControls(),
+      builder: (_) => const ChatControlsView(),
     );
 
 /// A setting with a slider, as on the web: off means the default.
@@ -50,14 +50,17 @@ const _sliders = <_Slider>[
   ),
 ];
 
-class _ChatControls extends ConsumerStatefulWidget {
-  const _ChatControls();
+/// The controls themselves: in a sheet, or as the Controls tab of the
+/// chat panel ([inPanel]).
+class ChatControlsView extends ConsumerStatefulWidget {
+  const ChatControlsView({super.key, this.inPanel = false});
+  final bool inPanel;
 
   @override
-  ConsumerState<_ChatControls> createState() => _ChatControlsState();
+  ConsumerState<ChatControlsView> createState() => _ChatControlsState();
 }
 
-class _ChatControlsState extends ConsumerState<_ChatControls> {
+class _ChatControlsState extends ConsumerState<ChatControlsView> {
   late final _system = TextEditingController(
     text: '${ref.read(chatControllerProvider).params['system'] ?? ''}',
   );
@@ -86,79 +89,76 @@ class _ChatControlsState extends ConsumerState<_ChatControls> {
       child: Text(text, style: theme.textTheme.titleSmall),
     );
 
+    final list = ListView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        widget.inPanel ? 8 : 0,
+        20,
+        16 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                widget.inPanel ? 'This chat' : 'Chat controls',
+                style: widget.inPanel
+                    ? theme.textTheme.titleMedium
+                    : theme.textTheme.titleLarge,
+              ),
+            ),
+            if (params.isNotEmpty)
+              TextButton(
+                onPressed: () async {
+                  _system.clear();
+                  for (final k in params.keys.toList()) {
+                    await _chat.setParam(k, null);
+                  }
+                },
+                child: const Text('Reset all'),
+              ),
+          ],
+        ),
+        Text(
+          'Only for this chat, and saved with it. Anything left on '
+          'default follows Settings and the model.',
+          style: TextStyle(color: muted),
+        ),
+        heading('System prompt'),
+        TextField(
+          controller: _system,
+          minLines: 2,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            hintText: 'How Nexus should act in this chat',
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (v) {
+            _save?.cancel();
+            _save = Timer(
+              const Duration(milliseconds: 800),
+              () => _chat.setParam('system', v),
+            );
+          },
+        ),
+        heading('Model settings'),
+        for (final s in _sliders) _slider(s, params[s.key], muted),
+        _number('max_tokens', 'Max tokens', 'Longest reply allowed.', params),
+        _number('seed', 'Seed', 'The same seed repeats an answer.', params),
+        _choice('reasoning_effort', 'Reasoning effort', const [
+          'low',
+          'medium',
+          'high',
+        ], params),
+        _choice('function_calling', 'Tool calling', const ['native'], params),
+        ..._valves(heading),
+      ],
+    );
+    if (widget.inPanel) return list;
     return SafeArea(
       child: SizedBox(
         height: MediaQuery.sizeOf(context).height * 0.8,
-        child: ListView(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            0,
-            20,
-            16 + MediaQuery.viewInsetsOf(context).bottom,
-          ),
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Chat controls',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ),
-                if (params.isNotEmpty)
-                  TextButton(
-                    onPressed: () async {
-                      _system.clear();
-                      for (final k in params.keys.toList()) {
-                        await _chat.setParam(k, null);
-                      }
-                    },
-                    child: const Text('Reset all'),
-                  ),
-              ],
-            ),
-            Text(
-              'Only for this chat, and saved with it. Anything left on '
-              'default follows Settings and the model.',
-              style: TextStyle(color: muted),
-            ),
-            heading('System prompt'),
-            TextField(
-              controller: _system,
-              minLines: 2,
-              maxLines: 8,
-              decoration: const InputDecoration(
-                hintText: 'How Nexus should act in this chat',
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (v) {
-                _save?.cancel();
-                _save = Timer(
-                  const Duration(milliseconds: 800),
-                  () => _chat.setParam('system', v),
-                );
-              },
-            ),
-            heading('Model settings'),
-            for (final s in _sliders) _slider(s, params[s.key], muted),
-            _number(
-              'max_tokens',
-              'Max tokens',
-              'Longest reply allowed.',
-              params,
-            ),
-            _number('seed', 'Seed', 'The same seed repeats an answer.', params),
-            _choice('reasoning_effort', 'Reasoning effort', const [
-              'low',
-              'medium',
-              'high',
-            ], params),
-            _choice('function_calling', 'Tool calling', const [
-              'native',
-            ], params),
-            ..._valves(heading),
-          ],
-        ),
+        child: list,
       ),
     );
   }
