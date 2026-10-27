@@ -113,6 +113,58 @@ class TerminalApi {
     );
   }
 
+  /// Files and folders under [dir] whose name holds [query], best first,
+  /// as the web UI's Files search finds them (`files/search`, or a name
+  /// pattern on servers without it).
+  Future<List<({String path, String name, bool isDir})>> search(
+    String query, {
+    String dir = '.',
+    int limit = 100,
+  }) async {
+    List<({String path, String name, bool isDir})> read(
+      List? items,
+      String root,
+    ) => [
+      for (final e in (items ?? const []).whereType<Map>())
+        (
+          path: '${e['path']}'.startsWith('/')
+              ? '${e['path']}'
+              : joinPath(root, '${e['path']}'),
+          name: '${e['name'] ?? '${e['path']}'.split('/').last}',
+          isDir: e['type'] == 'directory',
+        ),
+    ];
+    try {
+      final j = await client.send(
+        'GET',
+        '$_base/files/search',
+        query: {
+          'query': query,
+          'path': dir,
+          'limit': '$limit',
+          'type': 'any',
+          'show_hidden': 'false',
+        },
+      );
+      if (j is Map && j['results'] is List) {
+        return read(j['results'] as List, dir);
+      }
+    } catch (_) {
+      // Older terminals have only the pattern search below.
+    }
+    final j = await client.send(
+      'GET',
+      '$_base/files/glob',
+      query: {
+        'pattern': '*$query*',
+        'path': dir,
+        'type': 'any',
+        'max_results': '$limit',
+      },
+    ) as Map;
+    return read(j['matches'] as List?, '${j['path'] ?? dir}');
+  }
+
   /// A file's raw bytes.
   Future<List<int>> read(String path) =>
       client.getBytes('$_base/files/view', {'path': path});
