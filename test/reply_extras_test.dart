@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markdown/markdown.dart' as m;
 import 'package:nexus_assistant/core/models/chat.dart';
 import 'package:nexus_assistant/features/chat/markdown_extras.dart';
 import 'package:nexus_assistant/features/chat/reply_actions.dart';
+import 'package:nexus_assistant/features/chat/tool_approval.dart';
 
 List<m.Element> _math(String text) {
   final doc = m.Document(
@@ -117,5 +120,90 @@ Done.''';
       },
     );
     expect(ratingOf(r), -1);
+  });
+
+  test('a reply paused on a tool waits for Allow or Deny', () {
+    ChatMessage reply(List output, {bool done = false}) => ChatMessage(
+      id: 'r',
+      role: 'assistant',
+      content: '',
+      extra: {'done': done, 'output': output},
+    );
+    final call = {
+      'type': 'function_call',
+      'call_id': 'c1',
+      'name': 'web_search',
+      'arguments': '{"query": "weather"}',
+      'status': 'pending',
+    };
+    final p = pendingCall(reply([call]))!;
+    expect(p.callId, 'c1');
+    expect(p.name, 'web_search');
+    expect(p.arguments['query'], 'weather');
+    expect(p.asksUser, isFalse);
+    // Answered, finished or rejected calls wait on nobody.
+    expect(
+      pendingCall(
+        reply([
+          call,
+          {'type': 'function_call_output', 'call_id': 'c1', 'output': 'x'},
+        ]),
+      ),
+      isNull,
+    );
+    expect(pendingCall(reply([call], done: true)), isNull);
+    expect(
+      pendingCall(
+        reply([
+          {...call, 'status': 'rejected'},
+        ]),
+      ),
+      isNull,
+    );
+  });
+
+  test('ask_user questions are read like the web UI reads them', () {
+    final p = pendingCall(
+      ChatMessage(
+        id: 'r',
+        role: 'assistant',
+        content: '',
+        extra: {
+          'output': [
+            {
+              'type': 'function_call',
+              'id': 'a1',
+              'name': 'ask_user',
+              'status': 'pending',
+              'arguments': jsonEncode(
+                jsonEncode({
+                  'allow_other': false,
+                  'questions': [
+                    {
+                      'id': 'size',
+                      'header': 'Size',
+                      'question': 'How big?',
+                      'options': [
+                        {'label': 'Small', 'description': 'Quick'},
+                        {'label': 'Large'},
+                      ],
+                    },
+                    {'question': 'Anything else?', 'allow_other': true},
+                  ],
+                }),
+              ),
+            },
+          ],
+        },
+      ),
+    )!;
+    expect(p.asksUser, isTrue);
+    expect(p.callId, 'a1');
+    final qs = p.questions;
+    expect(qs.map((q) => q.id), ['size', 'q1']);
+    expect(qs.first.options.map((o) => o.label), ['Small', 'Large']);
+    expect(qs.first.options.first.description, 'Quick');
+    expect(qs.first.allowOther, isFalse);
+    expect(qs.last.allowOther, isTrue);
   });
 }

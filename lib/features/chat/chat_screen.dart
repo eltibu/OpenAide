@@ -26,6 +26,7 @@ import 'side_panel.dart';
 import 'chat_controller.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
+import 'tool_approval.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -346,6 +347,7 @@ class _MessageList extends ConsumerWidget {
           );
         }
         final groups = groupParts(replyParts(m, live: live));
+        final waiting = live ? null : pendingCall(m);
         final firstText = groups.indexWhere((g) => g is TextPart);
         final working =
             live &&
@@ -393,14 +395,16 @@ class _MessageList extends ConsumerWidget {
                     ],
                   ],
                 )
-              else if (firstText < 0 && !live)
+              else if (firstText < 0 && !live && waiting == null)
                 Text(
                   m.error ?? 'No reply. Tap Retry above to ask again.',
                   style: TextStyle(color: scheme.error),
                 ),
               if (!live) ArtifactCard(all: artifacts, messageId: m.id),
               if (m.sources.isNotEmpty) _Sources(sources: m.sources),
-              if (!live && !streaming)
+              if (waiting != null && !streaming)
+                PendingCallCard(reply: m, call: waiting),
+              if (!live && !streaming && waiting == null)
                 _MessageActions(message: m, isLast: i == 0),
               if (i == 0 && !streaming) FollowUps(reply: m),
             ],

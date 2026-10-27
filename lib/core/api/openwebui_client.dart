@@ -301,6 +301,34 @@ class OpenWebUiClient {
     return Chat.fromServer((res as Map).cast<String, dynamic>());
   }
 
+  /// Answers a reply that is waiting on the person: [action] is `approve` or
+  /// `reject` for a tool call, `answer` (with [answers]) for the model's
+  /// questions. The server carries on with the reply itself; returns the
+  /// ids of the tasks now writing it.
+  Future<List<String>> resolveToolCall(
+    String chatId,
+    String messageId,
+    String callId,
+    String action, {
+    Map<String, dynamic>? answers,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/v1/chats/$chatId/messages/$messageId/resolve',
+      body: {
+        'call_id': callId,
+        'action': action,
+        'answers': ?answers,
+        if (action == 'answer') 'timed_out': false,
+      },
+    );
+    if (res is! Map) return const [];
+    return [
+      ...(res['task_ids'] as List? ?? const []).whereType<String>(),
+      if (res['task_id'] is String) res['task_id'] as String,
+    ];
+  }
+
   /// Records a thumbs up/down (and its reason) for Admin > Evaluations, the
   /// same record the web UI keeps. Returns the feedback id.
   Future<String?> saveFeedback(

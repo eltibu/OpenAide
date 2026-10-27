@@ -13,6 +13,7 @@ import '../workspace/prompts_api.dart' show fillSystemVariables;
 import 'read_aloud.dart';
 import 'reply_parts.dart';
 import 'request_options.dart';
+import 'tool_approval.dart';
 
 const _uuid = Uuid();
 
@@ -913,7 +914,7 @@ class ChatController extends Notifier<ChatState> {
       error:
           saved.error ??
           state.error ??
-          (saved.content.isEmpty
+          (saved.content.isEmpty && pendingCall(saved) == null
               ? 'No reply came back. Tap Retry to ask again.'
               : null),
     );
@@ -953,6 +954,8 @@ class ChatController extends Notifier<ChatState> {
         }
         if (data['error'] != null) reply.extra['error'] = data['error'];
         if (data['done'] == true || data['error'] != null) run.finish();
+        // Paused for the person: a tool to allow or questions to answer.
+        if (pendingCall(reply) != null) run.finish();
       case 'chat:message:error' when data is Map:
         reply.extra['error'] = data['error'];
         run.finish();
@@ -1000,6 +1003,78 @@ class ChatController extends Notifier<ChatState> {
     }
     _speak(run, reply.content);
     state = state.copyWith();
+  }
+
+  /// Answers a reply that paused for the person (Allow/Deny on a tool, or
+  /// the model's questions) and follows it as the server carries on.
+  Future<void> resolveTool(
+    ChatMessage reply,
+    String callId,
+    String action, {
+    Map<String, dynamic>? answers,
+  }) async {
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty || state.streaming) return;
+    final client = ref.read(clientProvider);
+    final socket = ref.read(chatSocketProvider);
+    // Mark the call as answered here, so the card goes and an early update
+    // still showing it as waiting doesn't end the run.
+    final output = reply.extra['output'];
+    if (output is List) {
+      reply.extra['output'] = [
+        for (final item in output)
+          if (item is Map && (item['call_id'] ?? item['id']) == callId)
+            {...item, 'status': action == 'reject' ? 'rejected' : 'in_progress'}
+          else
+            item,
+      ];
+    }
+    final run = _run = _Run(reply);
+    final view = _view;
+    state = state.copyWith(
+      chat: chat,
+      streaming: true,
+      clearError: true,
+      clearStatus: true,
+    );
+    final sub = socket.events
+        .where((e) => e['message_id'] == reply.id)
+        .listen((e) => _onEvent(chat, run, e));
+    try {
+      await socket.ready();
+      run.taskIds = await client.resolveToolCall(
+        chat.id,
+        reply.id,
+        callId,
+        action,
+        answers: answers,
+      );
+      if (run.stopped) await _stopTasks(run);
+      if (run.taskIds.isNotEmpty) {
+        unawaited(_poll(chat.id, run));
+        await run.finished.future;
+      }
+    } catch (e) {
+      if (view == _view) state = state.copyWith(error: '$e');
+    } finally {
+      run.finish();
+      await sub.cancel();
+      if (identical(_run, run)) _run = null;
+    }
+    if (view != _view) return;
+    try {
+      final saved = await client.chat(chat.id);
+      if (view != _view) return;
+      state = state.copyWith(chat: saved);
+      refreshChatLists(ref.invalidate);
+    } catch (_) {}
+    final saved = state.chat?.messages[reply.id] ?? reply;
+    if (!run.stopped) _speak(run, saved.content, done: true);
+    state = state.copyWith(
+      streaming: false,
+      clearStatus: true,
+      error: saved.error ?? state.error,
+    );
   }
 
   /// Reads one reply out loud in the model's voice (the speaker under a
@@ -1243,7 +1318,10 @@ class ChatController extends Notifier<ChatState> {
       if (run.finished.isCompleted) return;
       try {
         final saved = (await client.chat(chatId)).messages[run.reply.id];
-        if (saved != null && (saved.done || saved.error != null)) run.finish();
+        if (saved != null &&
+            (saved.done || saved.error != null || pendingCall(saved) != null)) {
+          run.finish();
+        }
       } catch (_) {
         // Try again on the next tick; the reply keeps running on the server.
       }
