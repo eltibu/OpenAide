@@ -25,6 +25,10 @@ class _ServerPageState extends ConsumerState<ServerPage> {
   late final WebViewController _web;
   int _progress = 0;
 
+  /// The first server page shown: back from here leaves, never deeper into
+  /// the web app's own history.
+  String? _start;
+
   @override
   void initState() {
     super.initState();
@@ -36,6 +40,11 @@ class _ServerPageState extends ConsumerState<ServerPage> {
         NavigationDelegate(
           onProgress: (p) {
             if (mounted) setState(() => _progress = p);
+          },
+          onPageFinished: (url) {
+            if (_start == null && Uri.tryParse(url)?.host == base.host) {
+              _start = url;
+            }
           },
           // The server's pages stay here; links elsewhere open the browser.
           onNavigationRequest: (r) {
@@ -92,14 +101,24 @@ class _ServerPageState extends ConsumerState<ServerPage> {
       canPop: false,
       onPopInvokedWithResult: (popped, _) async {
         if (popped) return;
-        if (await _web.canGoBack()) {
+        final at = await _web.currentUrl();
+        if (_start != null &&
+            at != null &&
+            Uri.parse(at).path != Uri.parse(_start!).path &&
+            await _web.canGoBack()) {
           await _web.goBack();
         } else if (context.mounted) {
-          Navigator.pop(context);
+          Navigator.of(context).pop();
         }
       },
       child: Scaffold(
         appBar: AppBar(
+          // Always straight back to the app, whatever the page did.
+          leading: IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
           title: Text(widget.title),
           actions: [
             IconButton(
