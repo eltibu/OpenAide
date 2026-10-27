@@ -8,7 +8,8 @@ import 'package:socket_io_client/socket_io_client.dart' as io;
 /// title) and pushes its progress here as `events`, the same feed the web UI
 /// listens to.
 class ChatSocket {
-  ChatSocket({required String baseUrl, required String token, String? cookie}) {
+  ChatSocket({required String baseUrl, required String token, String? cookie})
+    : _token = token {
     final uri = Uri.parse(baseUrl);
     _socket = io.io(
       uri.origin,
@@ -30,6 +31,7 @@ class ChatSocket {
         _socket.emit('user-join', {
           'auth': {'token': token},
         });
+        joinChannels();
         for (final c in _waiting) {
           if (!c.isCompleted) c.complete(_socket.id);
         }
@@ -40,14 +42,30 @@ class ChatSocket {
           _events.add(data.cast<String, dynamic>());
         }
       })
+      ..on('events:channel', (data) {
+        if (data is Map && !_channelEvents.isClosed) {
+          _channelEvents.add(data.cast<String, dynamic>());
+        }
+      })
       ..connect();
   }
 
   late final io.Socket _socket;
+  final String _token;
   final _events = StreamController<Map<String, dynamic>>.broadcast();
+  final _channelEvents = StreamController<Map<String, dynamic>>.broadcast();
   final _waiting = <Completer<String?>>[];
 
   Stream<Map<String, dynamic>> get events => _events.stream;
+
+  /// Channel activity: new, changed and deleted messages and reactions.
+  Stream<Map<String, dynamic>> get channelEvents => _channelEvents.stream;
+
+  /// Live messages from the channels the person is in; again after joining
+  /// one, since opening a channel makes them a member.
+  void joinChannels() => _socket.emit('join-channels', {
+    'auth': {'token': _token},
+  });
 
   /// The connection's session id, or null if it can't connect in [timeout].
   /// Replies still run and are saved without it; only live text is lost.
@@ -61,5 +79,6 @@ class ChatSocket {
   void dispose() {
     _socket.dispose();
     _events.close();
+    _channelEvents.close();
   }
 }

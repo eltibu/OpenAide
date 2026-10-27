@@ -1,0 +1,666 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:markdown_widget/markdown_widget.dart';
+
+import '../../core/auth/session.dart';
+import '../../core/theme.dart';
+import '../chat/chat_controller.dart';
+import 'channels_api.dart';
+
+final channelsApiProvider = Provider<ChannelsApi>(
+  (ref) => ChannelsApi(ref.watch(clientProvider)),
+);
+
+final channelListProvider = FutureProvider<List<Channel>>((ref) async {
+  final list = await ref.watch(channelsApiProvider).list();
+  return list..sort(
+    (a, b) => (b.lastMessageAt ?? DateTime(2000)).compareTo(
+      a.lastMessageAt ?? DateTime(2000),
+    ),
+  );
+});
+
+String? _me(WidgetRef ref) =>
+    ref.read(sessionProvider).value?.user?['id'] as String?;
+String? _myName(WidgetRef ref) =>
+    ref.read(sessionProvider).value?.user?['name'] as String?;
+
+String _clock(BuildContext context, DateTime t) {
+  final l10n = MaterialLocalizations.of(context);
+  final now = DateTime.now();
+  final time = l10n.formatTimeOfDay(TimeOfDay.fromDateTime(t));
+  if (t.year == now.year && t.month == now.month && t.day == now.day) {
+    return time;
+  }
+  return '${l10n.formatShortMonthDay(t)}, $time';
+}
+
+/// Every channel and direct message the person is in.
+class ChannelsScreen extends ConsumerWidget {
+  const ChannelsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final channels = ref.watch(channelListProvider);
+    final muted = context.nexus.muted;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Channels')),
+      body: RefreshIndicator(
+        onRefresh: () => ref.refresh(channelListProvider.future),
+        child: channels.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => ListView(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Couldn\'t load channels.\n$e'),
+              ),
+            ],
+          ),
+          data: (list) => ListView(
+            children: [
+              if (list.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'No channels yet',
+                    style: TextStyle(color: muted),
+                  ),
+                ),
+              for (final c in list)
+                ListTile(
+                  leading: CircleAvatar(
+                    child: Icon(c.isDm ? Icons.person_outline : Icons.tag),
+                  ),
+                  title: Text(
+                    c.title(_myName(ref)),
+                    style: c.unread > 0
+                        ? const TextStyle(fontWeight: FontWeight.w700)
+                        : null,
+                  ),
+                  subtitle: c.description?.isNotEmpty == true
+                      ? Text(
+                          c.description!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: muted),
+                        )
+                      : null,
+                  trailing: c.unread > 0
+                      ? Badge(label: Text('${c.unread}'))
+                      : null,
+                  onTap: () async {
+                    await Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => ChannelScreen(channel: c),
+                      ),
+                    );
+                    ref.invalidate(channelListProvider);
+                  },
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A channel's messages, live, or one thread in it when [parent] is set.
+class ChannelScreen extends ConsumerStatefulWidget {
+  const ChannelScreen({super.key, required this.channel, this.parent});
+  final Channel channel;
+  final ChannelMessage? parent;
+
+  @override
+  ConsumerState<ChannelScreen> createState() => _ChannelScreenState();
+}
+
+class _ChannelScreenState extends ConsumerState<ChannelScreen> {
+  late final ChannelsApi _api = ref.read(channelsApiProvider);
+  final _input = TextEditingController();
+  StreamSubscription<Map<String, dynamic>>? _live;
+
+  /// Newest first.
+  List<ChannelMessage> _messages = const [];
+  late ChannelMessage? _parent = widget.parent;
+  Object? _error;
+  bool _loading = true;
+  bool _more = true;
+  bool _sending = false;
+
+  bool get _isThread => widget.parent != null;
+  String get _id => widget.channel.id;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+    try {
+      final socket = ref.read(chatSocketProvider);
+      _live = socket.channelEvents.listen(_onEvent);
+    } catch (_) {
+      // Signed out: nothing live.
+    }
+  }
+
+  @override
+  void dispose() {
+    _live?.cancel();
+    _input.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      _messages = _isThread
+          ? await _api.thread(_id, widget.parent!.id)
+          : await _api.messages(_id);
+      _more = !_isThread && _messages.length >= 50;
+      _error = null;
+      // Opening a channel joins it; listen to it live from now on.
+      try {
+        ref.read(chatSocketProvider).joinChannels();
+      } catch (_) {}
+    } catch (e) {
+      _error = e;
+    }
+    if (mounted) setState(() => _loading = false);
+  }
+
+  Future<void> _loadMore() async {
+    if (!_more || _loading) return;
+    _loading = true;
+    try {
+      final older = await _api.messages(_id, skip: _messages.length);
+      _more = older.length >= 50;
+      setState(() => _messages = [..._messages, ...older]);
+    } catch (_) {}
+    _loading = false;
+  }
+
+  void _onEvent(Map<String, dynamic> e) {
+    if (e['channel_id'] != _id) return;
+    final inner = (e['data'] as Map?) ?? const {};
+    final type = inner['type'];
+    final data = inner['data'];
+    if (data is! Map) return;
+    final m = ChannelMessage.fromJson(data);
+    final mine = _isThread
+        ? m.parentId == widget.parent!.id
+        : m.parentId == null;
+    setState(() {
+      switch (type) {
+        case 'message':
+          if (!mine) return;
+          if (_messages.any((x) => x.id == m.id)) return;
+          _messages = [m, ..._messages];
+        case 'message:update':
+          if (_isThread && m.id == widget.parent!.id) {
+            _parent = m.copyWith(replyCount: _parent?.replyCount);
+          }
+          _messages = [
+            for (final x in _messages)
+              x.id == m.id
+                  ? m.copyWith(
+                      replyCount: x.replyCount,
+                      reactions: data.containsKey('reactions')
+                          ? m.reactions
+                          : x.reactions,
+                    )
+                  : x,
+          ];
+        case 'message:delete':
+          _messages = [
+            for (final x in _messages)
+              if (x.id != m.id) x,
+          ];
+        case 'message:reply':
+          // A thread under one of these messages grew.
+          _messages = [
+            for (final x in _messages)
+              x.id == m.id ? x.copyWith(replyCount: x.replyCount + 1) : x,
+          ];
+        case 'message:reaction:add' || 'message:reaction:remove':
+          _refreshOne(m.id);
+      }
+    });
+  }
+
+  Future<void> _refreshOne(String messageId) async {
+    try {
+      final fresh = await _api.message(_id, messageId);
+      if (!mounted) return;
+      setState(() {
+        if (_parent?.id == messageId) {
+          _parent = fresh;
+        }
+        _messages = [
+          for (final x in _messages)
+            x.id == messageId ? x.copyWith(reactions: fresh.reactions) : x,
+        ];
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _send() async {
+    final text = _input.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    try {
+      final sent = await _api.post(_id, text, parentId: widget.parent?.id);
+      _input.clear();
+      if (!_messages.any((x) => x.id == sent.id)) {
+        setState(() => _messages = [sent, ..._messages]);
+      }
+    } catch (e) {
+      _say('Not sent: $e');
+    }
+    if (mounted) setState(() => _sending = false);
+  }
+
+  void _say(String text) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    }
+  }
+
+  Future<void> _mention() async {
+    final models = ref.read(modelsProvider).value ?? const [];
+    final picked = await showModalBottomSheet<(String, String)>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Ask a model'),
+            ),
+            for (final m in models)
+              ListTile(
+                leading: const Icon(Icons.auto_awesome_outlined),
+                title: Text(m.name),
+                onTap: () => Navigator.pop(sheet, (m.id, m.name)),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked == null) return;
+    final tag = '<@M:${picked.$1}|${picked.$2}> ';
+    final sel = _input.selection;
+    final at = sel.isValid ? sel.start : _input.text.length;
+    _input.text = _input.text.replaceRange(at, sel.isValid ? sel.end : at, tag);
+    _input.selection = TextSelection.collapsed(offset: at + tag.length);
+  }
+
+  Future<void> _menu(ChannelMessage m) async {
+    final mine = m.userId == _me(ref) && m.modelName == null;
+    const quick = ['👍', '❤️', '😂', '🎉', '👀', '🙏'];
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                for (final e in quick)
+                  IconButton(
+                    onPressed: () => Navigator.pop(sheet, 'react:$e'),
+                    icon: Text(e, style: const TextStyle(fontSize: 24)),
+                  ),
+              ],
+            ),
+            if (!_isThread)
+              ListTile(
+                leading: const Icon(Icons.forum_outlined),
+                title: const Text('Reply in thread'),
+                onTap: () => Navigator.pop(sheet, 'thread'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy text'),
+              onTap: () => Navigator.pop(sheet, 'copy'),
+            ),
+            if (mine)
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit'),
+                onTap: () => Navigator.pop(sheet, 'edit'),
+              ),
+            if (mine ||
+                ref.read(sessionProvider).value?.user?['role'] == 'admin')
+              ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('Delete'),
+                onTap: () => Navigator.pop(sheet, 'delete'),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (action == null || !mounted) return;
+    try {
+      if (action.startsWith('react:')) {
+        await _toggleReaction(m, action.substring(6));
+      } else if (action == 'thread') {
+        _openThread(m);
+      } else if (action == 'copy') {
+        await Clipboard.setData(ClipboardData(text: showMentions(m.content)));
+      } else if (action == 'edit') {
+        final text = TextEditingController(text: m.content);
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (d) => AlertDialog(
+            title: const Text('Edit message'),
+            content: TextField(
+              controller: text,
+              maxLines: null,
+              autofocus: true,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(d, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(d, true),
+                child: const Text('Save'),
+              ),
+            ],
+          ),
+        );
+        if (ok == true && text.text.trim().isNotEmpty) {
+          await _api.edit(_id, m.id, text.text.trim());
+          setState(() {
+            _messages = [
+              for (final x in _messages)
+                x.id == m.id ? x.copyWith(content: text.text.trim()) : x,
+            ];
+          });
+        }
+      } else if (action == 'delete') {
+        await _api.delete(_id, m.id);
+        setState(() {
+          _messages = [
+            for (final x in _messages)
+              if (x.id != m.id) x,
+          ];
+        });
+      }
+    } catch (e) {
+      _say('$e');
+    }
+  }
+
+  Future<void> _toggleReaction(ChannelMessage m, String emoji) async {
+    final me = _me(ref);
+    final has = m.reactions.any(
+      (r) => r.name == emoji && r.userIds.contains(me),
+    );
+    await _api.react(_id, m.id, emoji, !has);
+    await _refreshOne(m.id);
+  }
+
+  void _openThread(ChannelMessage m) => Navigator.push(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => ChannelScreen(channel: widget.channel, parent: m),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.channel.title(_myName(ref));
+    final scheme = Theme.of(context).colorScheme;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          _isThread ? 'Thread' : (widget.channel.isDm ? title : '# $title'),
+        ),
+      ),
+      body: SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: _error != null && _messages.isEmpty
+                  ? Center(child: Text('Couldn\'t load messages.\n$_error'))
+                  : _loading && _messages.isEmpty
+                  ? const Center(child: CircularProgressIndicator())
+                  : NotificationListener<ScrollNotification>(
+                      onNotification: (n) {
+                        if (n.metrics.extentAfter < 400) _loadMore();
+                        return false;
+                      },
+                      child: ListView.builder(
+                        reverse: true,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: _messages.length + (_isThread ? 1 : 0),
+                        itemBuilder: (context, i) {
+                          if (_isThread && i == _messages.length) {
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                _MessageTile(
+                                  m: _parent!,
+                                  me: _me(ref),
+                                  onLongPress: () => _menu(_parent!),
+                                  onReact: (e) => _toggleReaction(_parent!, e),
+                                ),
+                                const Divider(),
+                              ],
+                            );
+                          }
+                          final m = _messages[i];
+                          final prev = i + 1 < _messages.length
+                              ? _messages[i + 1]
+                              : null;
+                          // Messages close together from one author group.
+                          final grouped =
+                              prev != null &&
+                              prev.author == m.author &&
+                              m.at.difference(prev.at).inMinutes < 5;
+                          return _MessageTile(
+                            m: m,
+                            me: _me(ref),
+                            compact: grouped,
+                            onLongPress: () => _menu(m),
+                            onReact: (e) => _toggleReaction(m, e),
+                            onThread: _isThread ? null : () => _openThread(m),
+                          );
+                        },
+                      ),
+                    ),
+            ),
+            Container(
+              margin: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerHigh,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  IconButton(
+                    tooltip: 'Ask a model',
+                    onPressed: _mention,
+                    icon: const Icon(Icons.alternate_email),
+                  ),
+                  Expanded(
+                    child: TextField(
+                      controller: _input,
+                      minLines: 1,
+                      maxLines: 6,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: InputDecoration(
+                        hintText: _isThread
+                            ? 'Reply in thread'
+                            : 'Message ${widget.channel.isDm ? title : '#$title'}',
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Send',
+                    onPressed: _sending ? null : _send,
+                    icon: const Icon(Icons.arrow_upward),
+                    color: NexusColors.accent,
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageTile extends StatelessWidget {
+  const _MessageTile({
+    required this.m,
+    required this.me,
+    required this.onLongPress,
+    required this.onReact,
+    this.onThread,
+    this.compact = false,
+  });
+
+  final ChannelMessage m;
+  final String? me;
+  final VoidCallback onLongPress;
+  final ValueChanged<String> onReact;
+  final VoidCallback? onThread;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final muted = context.nexus.muted;
+    final scheme = Theme.of(context).colorScheme;
+    final initial = m.author.isEmpty
+        ? '?'
+        : m.author.characters.first.toUpperCase();
+    return InkWell(
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(12, compact ? 2 : 10, 16, 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 44,
+              child: compact
+                  ? null
+                  : CircleAvatar(
+                      radius: 17,
+                      backgroundColor: m.modelName != null
+                          ? NexusColors.accent
+                          : scheme.surfaceContainerHighest,
+                      child: m.modelName != null
+                          ? const Icon(
+                              Icons.auto_awesome,
+                              size: 16,
+                              color: Colors.white,
+                            )
+                          : Text(initial),
+                    ),
+            ),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (!compact)
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            m.author,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _clock(context, m.at),
+                          style: TextStyle(color: muted, fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  if (m.content.isEmpty && !m.done)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Text('Thinking…', style: TextStyle(color: muted)),
+                    )
+                  else
+                    MarkdownBlock(
+                      data: showMentions(m.content),
+                      selectable: false,
+                      config: dark
+                          ? MarkdownConfig.darkConfig
+                          : MarkdownConfig.defaultConfig,
+                    ),
+                  if (m.reactions.isNotEmpty)
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final r in m.reactions)
+                          ActionChip(
+                            visualDensity: VisualDensity.compact,
+                            backgroundColor: r.userIds.contains(me)
+                                ? NexusColors.accent.withValues(alpha: 0.2)
+                                : null,
+                            label: Text('${_emoji(r.name)} ${r.count}'),
+                            onPressed: () => onReact(r.name),
+                          ),
+                      ],
+                    ),
+                  if (onThread != null && m.replyCount > 0)
+                    TextButton.icon(
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      onPressed: onThread,
+                      icon: const Icon(Icons.forum_outlined, size: 16),
+                      label: Text(
+                        m.replyCount == 1
+                            ? '1 reply'
+                            : '${m.replyCount} replies',
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// The web stores some reactions by shortcode.
+  static String _emoji(String name) => switch (name) {
+    'thumbsup' || '+1' => '👍',
+    'heart' => '❤️',
+    'joy' => '😂',
+    'tada' => '🎉',
+    'eyes' => '👀',
+    'pray' => '🙏',
+    'fire' => '🔥',
+    _ => name,
+  };
+}

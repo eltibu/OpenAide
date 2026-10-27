@@ -7,6 +7,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../automations/automations_screen.dart';
 import '../calendar/calendar_screen.dart';
+import '../channels/channels_screen.dart';
 import '../notes/notes_screen.dart';
 import '../server/server_page.dart';
 import '../terminal/terminal_screen.dart';
@@ -552,9 +553,6 @@ class _Places extends ConsumerWidget {
         (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
         const {};
     final admin = ref.watch(sessionProvider).value?.user?['role'] == 'admin';
-    final channels = features['enable_channels'] == true
-        ? ref.watch(channelsProvider).value ?? const []
-        : const <({String id, String name})>[];
     final sections = <(IconData, String, String)>[
       (Icons.grid_view, 'Workspace', '/workspace'),
       if (admin) (Icons.code, 'Playground', '/playground'),
@@ -577,6 +575,8 @@ class _Places extends ConsumerWidget {
             () => TerminalScreen(server: server, startInFiles: true),
           ),
         ],
+        if (features['enable_channels'] == true)
+          _tile(context, Icons.tag, 'Channels', () => const ChannelsScreen()),
         if (features['enable_notes'] == true)
           _tile(
             context,
@@ -612,17 +612,6 @@ class _Places extends ConsumerWidget {
                   icon,
                   label,
                   () => ServerPage(title: label, path: path),
-                  indent: true,
-                ),
-              for (final c in channels)
-                _tile(
-                  context,
-                  Icons.tag,
-                  c.name,
-                  () => ServerPage(
-                    title: '# ${c.name}',
-                    path: '/channels/${c.id}',
-                  ),
                   indent: true,
                 ),
             ],
