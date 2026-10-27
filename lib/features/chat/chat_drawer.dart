@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import '../terminal/terminal_api.dart';
+import '../terminal/terminal_screen.dart';
 import '../update/update_screen.dart';
 import '../../core/theme.dart';
 import 'chat_controller.dart';
@@ -111,6 +113,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                 ref.read(chatControllerProvider.notifier).newChat();
               },
             ),
+            const _Places(),
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async => refreshChatLists(ref.invalidate),
@@ -512,6 +515,47 @@ void _showError(BuildContext context, Object e) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
 
 /// You, at the bottom of the menu, with app updates and sign-out.
+/// The rest of the server beside chats: its terminals and files for now.
+class _Places extends ConsumerWidget {
+  const _Places();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final servers = ref.watch(terminalServersProvider).value ?? const [];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final server in servers) ...[
+          _place(context, Icons.terminal, server.name, server, false),
+          _place(context, Icons.folder_outlined, 'Files', server, true),
+        ],
+      ],
+    );
+  }
+
+  Widget _place(
+    BuildContext context,
+    IconData icon,
+    String label,
+    TerminalServer server,
+    bool files,
+  ) => ListTile(
+    dense: true,
+    contentPadding: const EdgeInsets.symmetric(horizontal: 24),
+    leading: Icon(icon, size: 22),
+    title: Text(label, style: const TextStyle(fontSize: 15)),
+    onTap: () {
+      Navigator.pop(context);
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => TerminalScreen(server: server, startInFiles: files),
+        ),
+      );
+    },
+  );
+}
+
 class _Account extends ConsumerWidget {
   const _Account({required this.session});
   final Session? session;

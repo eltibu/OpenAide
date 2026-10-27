@@ -91,7 +91,9 @@ class OpenWebUiClient {
       var message = text;
       try {
         final j = jsonDecode(text);
-        if (j is Map && j['detail'] != null) message = '${j['detail']}';
+        if (j is Map && (j['detail'] ?? j['error']) != null) {
+          message = '${j['detail'] ?? j['error']}';
+        }
       } on FormatException {
         // Non-JSON error body; use as-is.
       }
@@ -537,6 +539,69 @@ class OpenWebUiClient {
     if (token != null) 'Authorization': 'Bearer $token',
     if (cookie != null && cookie!.isNotEmpty) 'Cookie': cookie!,
   };
+
+  /// Any JSON endpoint of the server, for features that wrap its APIs
+  /// directly (terminal servers, notes...).
+  Future<dynamic> send(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) => _send(method, path, body: body, query: query);
+
+  /// A full address on the server.
+  Uri uri(String path, [Map<String, String>? query]) => _uri(path, query);
+
+  /// The raw bytes an endpoint serves (file contents).
+  Future<List<int>> getBytes(String path, [Map<String, String>? query]) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () =>
+            http.Request('GET', _uri(path, query))..headers.addAll(authHeaders),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    return res.bodyBytes;
+  }
+
+  /// Posts one file as multipart form data to [path].
+  Future<dynamic> sendFile(
+    String path,
+    List<int> bytes,
+    String filename, {
+    Map<String, String>? query,
+  }) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () => http.MultipartRequest('POST', _uri(path, query))
+          ..headers.addAll(authHeaders)
+          ..headers['Accept'] = 'application/json'
+          ..files.add(
+            http.MultipartFile.fromBytes('file', bytes, filename: filename),
+          ),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    final text = utf8.decode(res.bodyBytes);
+    return text.isEmpty ? null : jsonDecode(text);
+  }
+
+  static String _errorText(List<int> body) {
+    final text = utf8.decode(body, allowMalformed: true);
+    try {
+      final j = jsonDecode(text);
+      if (j is Map && (j['detail'] ?? j['error']) != null) {
+        return '${j['detail'] ?? j['error']}';
+      }
+    } on FormatException {
+      // Not JSON; use as-is.
+    }
+    return text;
+  }
 
   /// Stops a running reply; what was written so far stays saved.
   Future<void> stopTask(String taskId) =>

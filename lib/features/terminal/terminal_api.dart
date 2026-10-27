@@ -1,0 +1,170 @@
+import 'dart:convert';
+import 'dart:io';
+
+import '../../core/api/openwebui_client.dart';
+
+/// A terminal server the admin connected to Open WebUI (an Open Terminal:
+/// a shell and a file system). The app reaches it through Open WebUI's own
+/// proxy, signed in as the user, exactly as the web UI does.
+class TerminalServer {
+  const TerminalServer({required this.id, required this.name});
+
+  factory TerminalServer.fromJson(Map<String, dynamic> j) => TerminalServer(
+    id: '${j['id']}',
+    name: '${j['name'] ?? ''}'.isEmpty ? '${j['id']}' : '${j['name']}',
+  );
+
+  final String id;
+  final String name;
+}
+
+/// One file or folder in a listing.
+class TerminalEntry {
+  const TerminalEntry({
+    required this.name,
+    required this.path,
+    required this.isDir,
+    this.size,
+    this.modified,
+  });
+
+  final String name;
+  final String path;
+  final bool isDir;
+  final int? size;
+  final DateTime? modified;
+}
+
+class TerminalListing {
+  const TerminalListing({
+    required this.dir,
+    required this.entries,
+    required this.writable,
+  });
+  final String dir;
+  final List<TerminalEntry> entries;
+  final bool writable;
+}
+
+/// Joins a folder and a name the way the server writes paths.
+String joinPath(String dir, String name) =>
+    dir.endsWith('/') ? '$dir$name' : '$dir/$name';
+
+/// The folder a path is in ('/' for the top).
+String parentPath(String path) {
+  final i = path.lastIndexOf('/');
+  return i <= 0 ? '/' : path.substring(0, i);
+}
+
+Future<List<TerminalServer>> terminalServers(OpenWebUiClient client) async {
+  final res = await client.send('GET', '/api/v1/terminals/');
+  return [
+    for (final s in (res as List? ?? const []).whereType<Map>())
+      TerminalServer.fromJson(s.cast<String, dynamic>()),
+  ];
+}
+
+/// The files and shells of one terminal server.
+class TerminalApi {
+  TerminalApi(this.client, this.server);
+
+  final OpenWebUiClient client;
+  final TerminalServer server;
+
+  String get _base => '/api/v1/terminals/${Uri.encodeComponent(server.id)}';
+
+  /// The user's home and the folder the file browser starts in.
+  Future<({String home, String cwd})> cwd() async {
+    final j = await client.send('GET', '$_base/files/cwd') as Map;
+    final root = j['root'];
+    final home = '${(root is Map ? root['path'] : null) ?? j['home']}';
+    return (home: home, cwd: '${j['cwd'] ?? home}');
+  }
+
+  Future<TerminalListing> list(String dir) async {
+    final j = await client.send(
+      'GET',
+      '$_base/files/list',
+      query: {'directory': dir},
+    ) as Map;
+    final at = '${j['dir'] ?? dir}';
+    final entries =
+        [
+          for (final e in (j['entries'] as List? ?? const []).whereType<Map>())
+            TerminalEntry(
+              name: '${e['name']}',
+              path: joinPath(at, '${e['name']}'),
+              isDir: e['type'] == 'directory',
+              size: (e['size'] as num?)?.toInt(),
+              modified: e['modified'] is num
+                  ? DateTime.fromMillisecondsSinceEpoch(
+                      ((e['modified'] as num) * 1000).round(),
+                    )
+                  : null,
+            ),
+        ]..sort((a, b) {
+          if (a.isDir != b.isDir) return a.isDir ? -1 : 1;
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        });
+    return TerminalListing(
+      dir: at,
+      entries: entries,
+      writable: j['writable'] != false,
+    );
+  }
+
+  /// A file's raw bytes.
+  Future<List<int>> read(String path) =>
+      client.getBytes('$_base/files/view', {'path': path});
+
+  Future<void> write(String path, String content) => client.send(
+    'POST',
+    '$_base/files/write',
+    body: {'path': path, 'content': content},
+  );
+
+  Future<void> upload(String dir, List<int> bytes, String name) => client
+      .sendFile('$_base/files/upload', bytes, name, query: {'directory': dir});
+
+  Future<void> mkdir(String path) =>
+      client.send('POST', '$_base/files/mkdir', body: {'path': path});
+
+  Future<void> delete(String path) =>
+      client.send('DELETE', '$_base/files/delete', query: {'path': path});
+
+  Future<void> move(String from, String to) => client.send(
+    'POST',
+    '$_base/files/move',
+    body: {'source': from, 'destination': to},
+  );
+
+  /// Starts a shell and returns its id.
+  Future<String> openShell() async {
+    final j = await client.send('POST', '$_base/api/terminals') as Map;
+    return '${j['id']}';
+  }
+
+  Future<void> closeShell(String id) async {
+    try {
+      await client.send('DELETE', '$_base/api/terminals/$id');
+    } catch (_) {
+      // Already gone when the connection closed.
+    }
+  }
+
+  /// Connects to a shell: keystrokes go out and output comes back as binary
+  /// frames, after a first message that signs in.
+  Future<WebSocket> connect(String id) async {
+    final http = client.uri('$_base/api/terminals/$id');
+    final url = http.replace(scheme: http.scheme == 'https' ? 'wss' : 'ws');
+    final ws = await WebSocket.connect(
+      url.toString(),
+      headers: {
+        if (client.cookie != null && client.cookie!.isNotEmpty)
+          'Cookie': client.cookie!,
+      },
+    );
+    ws.add(jsonEncode({'type': 'auth', 'token': client.token, 'chat_id': ''}));
+    return ws;
+  }
+}

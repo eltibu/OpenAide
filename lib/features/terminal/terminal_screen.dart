@@ -1,0 +1,928 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:xterm/xterm.dart';
+
+import '../../core/auth/session.dart';
+import '../../core/theme.dart';
+import 'terminal_api.dart';
+
+/// The terminal servers this user may use; empty when none is set up.
+final terminalServersProvider = FutureProvider<List<TerminalServer>>((
+  ref,
+) async {
+  try {
+    return await terminalServers(ref.watch(clientProvider));
+  } catch (_) {
+    return const [];
+  }
+});
+
+/// A terminal server's shell and files, like the web UI's terminal panel:
+/// a real shell on one tab, a file browser on the other.
+class TerminalScreen extends ConsumerStatefulWidget {
+  const TerminalScreen({super.key, required this.server, this.startInFiles});
+  final TerminalServer server;
+  final bool? startInFiles;
+
+  @override
+  ConsumerState<TerminalScreen> createState() => _TerminalScreenState();
+}
+
+class _TerminalScreenState extends ConsumerState<TerminalScreen>
+    with SingleTickerProviderStateMixin {
+  late final TerminalApi _api = TerminalApi(
+    ref.read(clientProvider),
+    widget.server,
+  );
+  late final TabController _tabs = TabController(
+    length: 2,
+    vsync: this,
+    initialIndex: widget.startInFiles == true ? 1 : 0,
+  );
+  final _shell = GlobalKey<_ShellViewState>();
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  void _cdInShell(String dir) {
+    _tabs.animateTo(0);
+    _shell.currentState?.type("cd '${dir.replaceAll("'", "'\\''")}'\r");
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.server.name),
+        bottom: TabBar(
+          controller: _tabs,
+          tabs: const [
+            Tab(icon: Icon(Icons.terminal), text: 'Terminal'),
+            Tab(icon: Icon(Icons.folder_outlined), text: 'Files'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabs,
+        physics: const NeverScrollableScrollPhysics(),
+        children: [
+          _ShellView(key: _shell, api: _api),
+          FileBrowser(api: _api, onOpenInTerminal: _cdInShell),
+        ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------- the shell
+
+class _ShellView extends StatefulWidget {
+  const _ShellView({super.key, required this.api});
+  final TerminalApi api;
+
+  @override
+  State<_ShellView> createState() => _ShellViewState();
+}
+
+class _ShellViewState extends State<_ShellView>
+    with AutomaticKeepAliveClientMixin {
+  final _terminal = Terminal(maxLines: 10000);
+  final _focus = FocusNode();
+  WebSocket? _ws;
+  StreamSubscription<dynamic>? _sub;
+  String? _id;
+  String? _problem;
+  bool _connecting = true;
+  bool _ctrl = false;
+  late final Sink<List<int>> _decoder = const Utf8Decoder(allowMalformed: true)
+      .startChunkedConversion(_TerminalSink(_terminal));
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _terminal.onOutput = _output;
+    _terminal.onResize = (cols, rows, _, _) =>
+        _send(jsonEncode({'type': 'resize', 'cols': cols, 'rows': rows}));
+    _connect();
+  }
+
+  Future<void> _connect() async {
+    setState(() {
+      _connecting = true;
+      _problem = null;
+    });
+    try {
+      final id = await widget.api.openShell();
+      final ws = await widget.api.connect(id);
+      _id = id;
+      _ws = ws;
+      _sub = ws.listen(
+        (data) {
+          if (data is List<int>) _decoder.add(data);
+        },
+        onDone: () {
+          if (mounted) setState(() => _problem = 'The shell has ended.');
+        },
+        onError: (_) {
+          if (mounted) setState(() => _problem = 'Lost the connection.');
+        },
+      );
+      _send(
+        jsonEncode({
+          'type': 'resize',
+          'cols': _terminal.viewWidth,
+          'rows': _terminal.viewHeight,
+        }),
+      );
+      if (mounted) setState(() => _connecting = false);
+      _focus.requestFocus();
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _connecting = false;
+          _problem = '$e';
+        });
+      }
+    }
+  }
+
+  void _send(Object data) {
+    final ws = _ws;
+    if (ws != null && ws.readyState == WebSocket.open) ws.add(data);
+  }
+
+  /// What the user types; with Ctrl armed, a letter becomes its control code.
+  void _output(String data) {
+    if (_ctrl && data.length == 1) {
+      final c = data.toUpperCase().codeUnitAt(0);
+      if (c >= 0x40 && c <= 0x5f) data = String.fromCharCode(c & 0x1f);
+      setState(() => _ctrl = false);
+    }
+    _send(utf8.encode(data));
+  }
+
+  /// Types [text] into the shell, as if from the keyboard.
+  void type(String text) => _send(utf8.encode(text));
+
+  Future<void> _reconnect() async {
+    await _sub?.cancel();
+    await _ws?.close();
+    if (_id != null) unawaited(widget.api.closeShell(_id!));
+    _terminal.write('\r\n');
+    await _connect();
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    _ws?.close();
+    if (_id != null) unawaited(widget.api.closeShell(_id!));
+    _focus.dispose();
+    super.dispose();
+  }
+
+  Widget _key(Object label, VoidCallback onTap, {bool on = false}) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 2),
+    child: Material(
+      color: on ? NexusColors.accent : Colors.white12,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+          _focus.requestFocus();
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: label is IconData
+              ? Icon(label, color: Colors.white, size: 18)
+              : Text(
+                  '$label',
+                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                ),
+        ),
+      ),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return ColoredBox(
+      color: const Color(0xFF141413),
+      child: Column(
+        children: [
+          if (_connecting) const LinearProgressIndicator(minHeight: 2),
+          if (_problem != null)
+            MaterialBanner(
+              content: Text(_problem!),
+              actions: [
+                TextButton(
+                  onPressed: _reconnect,
+                  child: const Text('Reconnect'),
+                ),
+              ],
+            ),
+          Expanded(
+            child: TerminalView(
+              _terminal,
+              focusNode: _focus,
+              autofocus: true,
+              padding: const EdgeInsets.all(6),
+              keyboardType: TextInputType.visiblePassword,
+              deleteDetection: true,
+              theme: const TerminalTheme(
+                cursor: Color(0xFFF5F4EE),
+                selection: Color(0x66C96442),
+                foreground: Color(0xFFF5F4EE),
+                background: Color(0xFF141413),
+                black: Color(0xFF141413),
+                red: Color(0xFFE5534B),
+                green: Color(0xFF6BC46D),
+                yellow: Color(0xFFE2C08D),
+                blue: Color(0xFF6CB6FF),
+                magenta: Color(0xFFDCBDFB),
+                cyan: Color(0xFF76E3EA),
+                white: Color(0xFFD0CFC8),
+                brightBlack: Color(0xFF6E6D68),
+                brightRed: Color(0xFFFF938A),
+                brightGreen: Color(0xFF8DDB8C),
+                brightYellow: Color(0xFFF0D399),
+                brightBlue: Color(0xFF96D0FF),
+                brightMagenta: Color(0xFFEECCFF),
+                brightCyan: Color(0xFFB3F0FF),
+                brightWhite: Color(0xFFFFFFFF),
+                searchHitBackground: Color(0xFFC96442),
+                searchHitBackgroundCurrent: Color(0xFFE08A6A),
+                searchHitForeground: Color(0xFF141413),
+              ),
+            ),
+          ),
+          // Keys a phone keyboard doesn't have.
+          SafeArea(
+            top: false,
+            child: SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                children: [
+                  _key('Esc', () => _terminal.keyInput(TerminalKey.escape)),
+                  _key('Tab', () => _terminal.keyInput(TerminalKey.tab)),
+                  _key('Ctrl', () => setState(() => _ctrl = !_ctrl), on: _ctrl),
+                  _key(
+                    Icons.keyboard_arrow_up,
+                    () => _terminal.keyInput(TerminalKey.arrowUp),
+                  ),
+                  _key(
+                    Icons.keyboard_arrow_down,
+                    () => _terminal.keyInput(TerminalKey.arrowDown),
+                  ),
+                  _key(
+                    Icons.keyboard_arrow_left,
+                    () => _terminal.keyInput(TerminalKey.arrowLeft),
+                  ),
+                  _key(
+                    Icons.keyboard_arrow_right,
+                    () => _terminal.keyInput(TerminalKey.arrowRight),
+                  ),
+                  for (final c in ['|', '~', '/', '-', '>', '\$', '&'])
+                    _key(c, () => _terminal.textInput(c)),
+                  _key('^C', () => type('\x03')),
+                  _key('Paste', () async {
+                    final clip = await Clipboard.getData('text/plain');
+                    final text = clip?.text;
+                    if (text != null) _terminal.paste(text);
+                  }),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TerminalSink implements Sink<String> {
+  _TerminalSink(this.terminal);
+  final Terminal terminal;
+  @override
+  void add(String data) => terminal.write(data);
+  @override
+  void close() {}
+}
+
+// ---------------------------------------------------------------- the files
+
+/// Browses, opens, edits, uploads and organizes the terminal server's files.
+class FileBrowser extends StatefulWidget {
+  const FileBrowser({super.key, required this.api, this.onOpenInTerminal});
+  final TerminalApi api;
+  final void Function(String dir)? onOpenInTerminal;
+
+  @override
+  State<FileBrowser> createState() => _FileBrowserState();
+}
+
+class _FileBrowserState extends State<FileBrowser>
+    with AutomaticKeepAliveClientMixin {
+  String? _home;
+  String? _dir;
+  TerminalListing? _listing;
+  Object? _error;
+  bool _busy = true;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  Future<void> _start() async {
+    try {
+      final at = await widget.api.cwd();
+      _home = at.home;
+      await _open(at.cwd);
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e;
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _open(String dir) async {
+    setState(() => _busy = true);
+    try {
+      final listing = await widget.api.list(dir);
+      if (!mounted) return;
+      setState(() {
+        _listing = listing;
+        _dir = listing.dir;
+        _error = null;
+        _busy = false;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = e;
+          _busy = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _refresh() => _open(_dir ?? _home ?? '.');
+
+  void _toast(String message) =>
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
+
+  Future<void> _run(Future<void> Function() action, String done) async {
+    try {
+      await action();
+      if (mounted) _toast(done);
+    } catch (e) {
+      if (mounted) _toast('$e');
+    }
+    await _refresh();
+  }
+
+  Future<String?> _ask(String title, {String initial = ''}) {
+    final text = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: text,
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(context, v.trim()),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, text.text.trim()),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _upload() async {
+    final dir = _dir;
+    if (dir == null) return;
+    final picked = await FilePicker.pickFiles();
+    for (final f in picked) {
+      await _run(
+        () async => widget.api.upload(dir, await f.readAsBytes(), f.name),
+        'Uploaded ${f.name}',
+      );
+    }
+  }
+
+  Future<void> _newFolder() async {
+    final name = await _ask('New folder');
+    if (name == null || name.isEmpty || _dir == null) return;
+    await _run(() => widget.api.mkdir(joinPath(_dir!, name)), 'Created $name');
+  }
+
+  Future<void> _newFile() async {
+    final name = await _ask('New file');
+    if (name == null || name.isEmpty || _dir == null) return;
+    final path = joinPath(_dir!, name);
+    await _run(() => widget.api.write(path, ''), 'Created $name');
+    if (mounted) await _openFile(path, name);
+  }
+
+  Future<void> _entryMenu(TerminalEntry e) async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(
+                e.name,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(e.path),
+            ),
+            if (e.isDir && widget.onOpenInTerminal != null)
+              ListTile(
+                leading: const Icon(Icons.terminal),
+                title: const Text('Open in terminal'),
+                onTap: () => Navigator.pop(context, 'terminal'),
+              ),
+            ListTile(
+              leading: const Icon(Icons.copy),
+              title: const Text('Copy path'),
+              onTap: () => Navigator.pop(context, 'copy'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.drive_file_rename_outline),
+              title: const Text('Rename'),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline),
+              title: const Text('Delete'),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted) return;
+    switch (choice) {
+      case 'terminal':
+        widget.onOpenInTerminal!(e.path);
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: e.path));
+        _toast('Path copied');
+      case 'rename':
+        final name = await _ask('Rename', initial: e.name);
+        if (name == null || name.isEmpty || name == e.name) return;
+        await _run(
+          () => widget.api.move(e.path, joinPath(parentPath(e.path), name)),
+          'Renamed to $name',
+        );
+      case 'delete':
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Delete ${e.name}?'),
+            content: Text(
+              e.isDir
+                  ? 'The folder and everything in it will be deleted from the server.'
+                  : 'The file will be deleted from the server.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (ok == true) {
+          await _run(() => widget.api.delete(e.path), 'Deleted ${e.name}');
+        }
+    }
+  }
+
+  Future<void> _openFile(String path, String name) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) => FileViewer(api: widget.api, path: path, name: name),
+      ),
+    );
+    if (mounted) await _refresh();
+  }
+
+  List<(String, String)> _crumbs(String dir) {
+    final home = _home;
+    final out = <(String, String)>[];
+    var rest = dir;
+    var prefix = '';
+    if (home != null && (dir == home || dir.startsWith('$home/'))) {
+      out.add(('Home', home));
+      rest = dir.substring(home.length);
+      prefix = home;
+    } else {
+      out.add(('/', '/'));
+    }
+    for (final part in rest.split('/').where((p) => p.isNotEmpty)) {
+      prefix = prefix == '/' ? '/$part' : '$prefix/$part';
+      out.add((part, prefix));
+    }
+    return out;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final listing = _listing;
+    final dir = _dir;
+    final muted = context.nexus.muted;
+    return Scaffold(
+      floatingActionButton: dir == null
+          ? null
+          : FloatingActionButton(
+              tooltip: 'Add',
+              onPressed: () async {
+                final choice = await showModalBottomSheet<String>(
+                  context: context,
+                  showDragHandle: true,
+                  builder: (context) => SafeArea(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ListTile(
+                          leading: const Icon(Icons.upload_file),
+                          title: const Text('Upload from phone'),
+                          onTap: () => Navigator.pop(context, 'upload'),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.create_new_folder_outlined),
+                          title: const Text('New folder'),
+                          onTap: () => Navigator.pop(context, 'folder'),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.note_add_outlined),
+                          title: const Text('New file'),
+                          onTap: () => Navigator.pop(context, 'file'),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+                switch (choice) {
+                  case 'upload':
+                    await _upload();
+                  case 'folder':
+                    await _newFolder();
+                  case 'file':
+                    await _newFile();
+                }
+              },
+              child: const Icon(Icons.add),
+            ),
+      body: Column(
+        children: [
+          if (_busy) const LinearProgressIndicator(minHeight: 2),
+          if (dir != null)
+            SizedBox(
+              height: 44,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                reverse: true,
+                children: [
+                  for (final (label, path) in _crumbs(dir).reversed)
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: path == dir ? null : () => _open(path),
+                          child: Text(label),
+                        ),
+                        if (path != dir)
+                          Icon(Icons.chevron_right, size: 16, color: muted),
+                      ],
+                    ),
+                ].reversed.toList(),
+              ),
+            ),
+          Expanded(
+            child: _error != null && listing == null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('$_error', textAlign: TextAlign.center),
+                          const SizedBox(height: 12),
+                          OutlinedButton(
+                            onPressed: _start,
+                            child: const Text('Try again'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : listing == null
+                ? const SizedBox.shrink()
+                : RefreshIndicator(
+                    onRefresh: _refresh,
+                    child: ListView(
+                      padding: const EdgeInsets.only(bottom: 88),
+                      children: [
+                        if (dir != '/')
+                          ListTile(
+                            leading: const Icon(Icons.arrow_upward),
+                            title: const Text('..'),
+                            onTap: () => _open(parentPath(dir!)),
+                          ),
+                        if (listing.entries.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(32),
+                            child: Center(
+                              child: Text(
+                                'This folder is empty',
+                                style: TextStyle(color: muted),
+                              ),
+                            ),
+                          ),
+                        for (final e in listing.entries)
+                          ListTile(
+                            leading: Icon(
+                              e.isDir ? Icons.folder : _iconFor(e.name),
+                              color: e.isDir ? NexusColors.accent : muted,
+                            ),
+                            title: Text(e.name),
+                            subtitle: Text(
+                              [
+                                if (!e.isDir && e.size != null) _size(e.size!),
+                                if (e.modified != null) _when(e.modified!),
+                              ].join(' · '),
+                              style: TextStyle(color: muted, fontSize: 12),
+                            ),
+                            onTap: () => e.isDir
+                                ? _open(e.path)
+                                : _openFile(e.path, e.name),
+                            onLongPress: () => _entryMenu(e),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.more_vert),
+                              onPressed: () => _entryMenu(e),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+const _imageTypes = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'};
+
+String _ext(String name) {
+  final i = name.lastIndexOf('.');
+  return i < 0 ? '' : name.substring(i + 1).toLowerCase();
+}
+
+IconData _iconFor(String name) {
+  final ext = _ext(name);
+  if (_imageTypes.contains(ext)) return Icons.image_outlined;
+  if (const {'pdf'}.contains(ext)) return Icons.picture_as_pdf_outlined;
+  if (const {'zip', 'gz', 'tar', 'xz', '7z'}.contains(ext)) {
+    return Icons.folder_zip_outlined;
+  }
+  if (const {'mp3', 'wav', 'ogg', 'flac', 'm4a'}.contains(ext)) {
+    return Icons.audio_file_outlined;
+  }
+  if (const {'mp4', 'mkv', 'mov', 'webm'}.contains(ext)) {
+    return Icons.video_file_outlined;
+  }
+  return Icons.description_outlined;
+}
+
+String _size(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  if (bytes < 1024 * 1024 * 1024) {
+    return '${(bytes / 1024 / 1024).toStringAsFixed(1)} MB';
+  }
+  return '${(bytes / 1024 / 1024 / 1024).toStringAsFixed(1)} GB';
+}
+
+String _when(DateTime t) {
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inHours < 1) return '${d.inMinutes} min ago';
+  if (d.inDays < 1) return '${d.inHours} h ago';
+  if (d.inDays < 7) return '${d.inDays} d ago';
+  return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+}
+
+/// Shows a file: pictures as pictures, text as editable text.
+class FileViewer extends StatefulWidget {
+  const FileViewer({
+    super.key,
+    required this.api,
+    required this.path,
+    required this.name,
+  });
+  final TerminalApi api;
+  final String path;
+  final String name;
+
+  @override
+  State<FileViewer> createState() => _FileViewerState();
+}
+
+class _FileViewerState extends State<FileViewer> {
+  List<int>? _bytes;
+  String? _text;
+  Object? _error;
+  final _edit = TextEditingController();
+  bool _dirty = false;
+  bool _saving = false;
+
+  bool get _image => _imageTypes.contains(_ext(widget.name));
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final bytes = await widget.api.read(widget.path);
+      String? text;
+      if (!_image) {
+        try {
+          text = utf8.decode(bytes);
+        } on FormatException {
+          text = null;
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _bytes = bytes;
+        _text = text;
+        if (text != null) _edit.text = text;
+      });
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
+    }
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await widget.api.write(widget.path, _edit.text);
+      if (!mounted) return;
+      setState(() => _dirty = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Saved')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  void dispose() {
+    _edit.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bytes = _bytes;
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (popped, _) async {
+        if (popped) return;
+        final leave = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Discard your changes?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Keep editing'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Discard'),
+              ),
+            ],
+          ),
+        );
+        if (leave == true && context.mounted) {
+          setState(() => _dirty = false);
+          Navigator.pop(context);
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.name),
+          actions: [
+            if (_text != null)
+              IconButton(
+                tooltip: 'Copy all',
+                icon: const Icon(Icons.copy),
+                onPressed: () =>
+                    Clipboard.setData(ClipboardData(text: _edit.text)),
+              ),
+            if (_dirty)
+              IconButton(
+                tooltip: 'Save',
+                icon: _saving
+                    ? const SizedBox.square(
+                        dimension: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.save_outlined),
+                onPressed: _saving ? null : _save,
+              ),
+          ],
+        ),
+        body: _error != null
+            ? Center(child: Text('$_error'))
+            : bytes == null
+            ? const Center(child: CircularProgressIndicator())
+            : _image
+            ? InteractiveViewer(
+                maxScale: 8,
+                child: Center(child: Image.memory(Uint8List.fromList(bytes))),
+              )
+            : _text == null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    "This file can't be shown here (${_size(bytes.length)}).",
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            : TextField(
+                controller: _edit,
+                maxLines: null,
+                expands: true,
+                textAlignVertical: TextAlignVertical.top,
+                keyboardType: TextInputType.multiline,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                decoration: const InputDecoration(
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.all(12),
+                ),
+                onChanged: (_) {
+                  if (!_dirty) setState(() => _dirty = true);
+                },
+              ),
+      ),
+    );
+  }
+}
