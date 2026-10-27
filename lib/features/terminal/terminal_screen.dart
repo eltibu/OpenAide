@@ -12,6 +12,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../server/server_page.dart';
 import 'file_tools.dart';
+import 'sqlite_view.dart';
 import 'terminal_api.dart';
 
 /// The terminal servers this user may use; empty when none is set up.
@@ -1139,6 +1140,8 @@ class _FileViewerState extends State<FileViewer> {
 
   bool get _image => _imageTypes.contains(_ext(widget.name));
   bool get _notebook => _ext(widget.name) == 'ipynb';
+  bool get _sqlite =>
+      const {'db', 'sqlite', 'sqlite3', 'db3'}.contains(_ext(widget.name));
 
   /// Notebooks show as cells; this switches to their raw text to edit.
   bool _raw = false;
@@ -1176,7 +1179,7 @@ class _FileViewerState extends State<FileViewer> {
     try {
       final bytes = await widget.api.read(widget.path);
       String? text;
-      if (!_image) {
+      if (!_image && !_sqlite) {
         try {
           text = utf8.decode(bytes);
         } on FormatException {
@@ -1309,6 +1312,8 @@ class _FileViewerState extends State<FileViewer> {
             ? Center(child: Text('$_error'))
             : bytes == null
             ? const Center(child: CircularProgressIndicator())
+            : _sqlite
+            ? SqliteView(bytes: bytes, name: widget.name)
             : _image
             ? InteractiveViewer(
                 transformationController: _zoom,
