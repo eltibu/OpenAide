@@ -68,6 +68,20 @@ void main() {
       expect(Schedule.parse(a.rrule).days, ['MO', 'FR']);
       expect((await api.list()).any((x) => x.id == a.id), isTrue);
 
+      // A terminal to run commands on comes back as it was saved.
+      final withTerminal = await api.save(a.id, {
+        'name': a.name,
+        'data': {
+          ...a.data,
+          'terminal': {'server_id': 'box', 'cwd': '/work'},
+        },
+        'is_active': true,
+      });
+      expect(withTerminal.data['terminal'], {
+        'server_id': 'box',
+        'cwd': '/work',
+      });
+
       await api.toggle(a.id);
       expect((await api.get(a.id)).active, isFalse);
 

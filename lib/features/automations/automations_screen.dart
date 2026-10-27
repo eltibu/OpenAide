@@ -5,6 +5,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_drawer.dart' show channelsProvider;
+import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'automations_api.dart';
 
 String _time(BuildContext context, int h, int m) =>
@@ -205,6 +206,7 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
     final muted = context.nexus.muted;
     final models = ref.watch(modelsProvider).value ?? const [];
     final channels = ref.watch(channelsProvider).value ?? const [];
+    final terminals = ref.watch(terminalServersProvider).value ?? const [];
     String modelName(String id) =>
         models.where((m) => m.id == id).firstOrNull?.name ?? id;
     return Scaffold(
@@ -236,6 +238,16 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
                 _load();
               },
               icon: const Icon(Icons.edit_outlined),
+            ),
+            IconButton(
+              tooltip: 'Duplicate',
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => AutomationEditor(api: widget.api, copyOf: a),
+                ),
+              ),
+              icon: const Icon(Icons.copy_all_outlined),
             ),
             IconButton(
               tooltip: 'Delete',
@@ -282,6 +294,22 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
                         ? '# ${channels.where((c) => c.id == a.channelId).firstOrNull?.name ?? 'channel'}'
                         : 'A new chat',
                   ),
+                  if (a.data['terminal'] is Map)
+                    _Row(
+                      'Terminal',
+                      [
+                        terminals
+                                .where(
+                                  (t) =>
+                                      t.id ==
+                                      (a.data['terminal'] as Map)['server_id'],
+                                )
+                                .firstOrNull
+                                ?.name ??
+                            '${(a.data['terminal'] as Map)['server_id']}',
+                        ?(a.data['terminal'] as Map)['cwd'] as String?,
+                      ].join(' · '),
+                    ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
                     child: Text('Instructions', style: TextStyle(color: muted)),
@@ -366,9 +394,19 @@ class _Row extends StatelessWidget {
 
 /// Creating or changing an automation, with the web UI's choices.
 class AutomationEditor extends ConsumerStatefulWidget {
-  const AutomationEditor({super.key, required this.api, this.automation});
+  const AutomationEditor({
+    super.key,
+    required this.api,
+    this.automation,
+    this.copyOf,
+  });
   final AutomationsApi api;
+
+  /// The automation being changed; null for a new one.
   final Automation? automation;
+
+  /// A new automation starts as a copy of this one.
+  final Automation? copyOf;
 
   @override
   ConsumerState<AutomationEditor> createState() => _AutomationEditorState();
@@ -376,13 +414,25 @@ class AutomationEditor extends ConsumerStatefulWidget {
 
 class _AutomationEditorState extends ConsumerState<AutomationEditor> {
   late final Automation? _a = widget.automation;
-  late final _name = TextEditingController(text: _a?.name ?? '');
-  late final _prompt = TextEditingController(text: _a?.prompt ?? '');
+
+  /// Where the fields start from: the automation, or the one copied.
+  late final Automation? _from = _a ?? widget.copyOf;
+  late final _name = TextEditingController(
+    text: widget.copyOf != null
+        ? '${widget.copyOf!.name} (copy)'
+        : _a?.name ?? '',
+  );
+  late final _prompt = TextEditingController(text: _from?.prompt ?? '');
   late final _custom = TextEditingController(text: _schedule.custom);
-  late final Schedule _schedule = Schedule.parse(_a?.rrule ?? '');
-  late String _model = _a?.modelId ?? '';
-  late String _channel = _a?.channelId ?? '';
-  late String _folder = _a?.folderId ?? '';
+  late final Schedule _schedule = Schedule.parse(_from?.rrule ?? '');
+  late String _model = _from?.modelId ?? '';
+  late String _channel = _from?.channelId ?? '';
+  late String _folder = _from?.folderId ?? '';
+  late String _terminal =
+      '${(_from?.data['terminal'] as Map?)?['server_id'] ?? ''}';
+  late final _cwd = TextEditingController(
+    text: '${(_from?.data['terminal'] as Map?)?['cwd'] ?? ''}',
+  );
   bool _busy = false;
 
   Future<void> _save() async {
@@ -404,14 +454,20 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
         'name': _name.text.trim(),
         'folder_id': _channel.isNotEmpty || _folder.isEmpty ? null : _folder,
         'data': {
-          // Anything else it carries (a terminal) stays as it was.
-          ...?_a?.data,
+          // Anything else it carries stays as it was.
+          ...?_from?.data,
           'prompt': _prompt.text.trim(),
           'model_id': _model,
           'rrule': _schedule.build(),
           'target': _channel.isEmpty
               ? {'type': 'chat'}
               : {'type': 'channel', 'channel_id': _channel},
+          'terminal': _terminal.isEmpty
+              ? null
+              : {
+                  'server_id': _terminal,
+                  if (_cwd.text.trim().isNotEmpty) 'cwd': _cwd.text.trim(),
+                },
         },
         'is_active': _a?.active ?? true,
       });
@@ -429,6 +485,7 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
     final models = ref.watch(modelsProvider).value ?? const [];
     final channels = ref.watch(channelsProvider).value ?? const [];
     final folders = ref.watch(foldersProvider).value ?? const [];
+    final terminals = ref.watch(terminalServersProvider).value ?? const [];
     if (_model.isEmpty && models.isNotEmpty) _model = models.first.id;
     final s = _schedule;
     Widget dropdown<T>(
@@ -644,6 +701,23 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
               ('', 'No folder'),
               for (final f in folders) (f.id, f.name),
             ], (v) => _folder = v),
+          if (terminals.isNotEmpty || _terminal.isNotEmpty)
+            dropdown<String>(Icons.terminal, _terminal, [
+              ('', 'No terminal'),
+              for (final t in terminals) (t.id, t.name),
+            ], (v) => _terminal = v),
+          if (_terminal.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(72, 0, 20, 8),
+              child: TextField(
+                controller: _cwd,
+                decoration: const InputDecoration(
+                  labelText: 'Working folder (optional)',
+                  hintText: 'Where its commands run',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
         ],
       ),
     );
