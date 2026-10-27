@@ -221,6 +221,10 @@ class _EventEditorState extends State<EventEditor> {
             child: TextField(
               controller: _title,
               autofocus: _e == null,
+              minLines: 1,
+              maxLines: 3,
+              keyboardType: TextInputType.text,
+              textInputAction: TextInputAction.done,
               style: const TextStyle(fontSize: 20),
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(

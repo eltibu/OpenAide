@@ -551,8 +551,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                 TextField(
                   controller: _title,
                   onChanged: (_) => _changed(),
+                  // Long titles wrap instead of running off the screen.
+                  minLines: 1,
+                  maxLines: 3,
+                  keyboardType: TextInputType.text,
+                  textInputAction: TextInputAction.done,
                   style: const TextStyle(
-                    fontSize: 24,
+                    fontSize: 22,
                     fontWeight: FontWeight.w600,
                   ),
                   textCapitalization: TextCapitalization.sentences,

@@ -956,10 +956,16 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     final titleField = TextField(
       controller: _title,
       enabled: !busy,
-      style: Theme.of(context).textTheme.headlineSmall,
+      // Long titles wrap onto more lines instead of running off the screen.
+      minLines: 1,
+      maxLines: 3,
+      keyboardType: TextInputType.text,
+      textInputAction: TextInputAction.done,
+      style: Theme.of(context).textTheme.titleLarge,
       decoration: const InputDecoration(
         hintText: 'Title',
         border: InputBorder.none,
+        isDense: true,
       ),
       onChanged: (_) => _changed(),
     );
