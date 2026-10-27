@@ -5,6 +5,9 @@
 library;
 
 import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -94,6 +97,7 @@ class ConfigSection {
     this.engines = const {},
     this.help,
     this.toSave,
+    this.actions = const [],
   });
 
   final String title;
@@ -114,6 +118,32 @@ class ConfigSection {
   /// The body to save, when the server takes it in another shape than it
   /// reads.
   final Map<String, dynamic> Function(Map<String, dynamic> read)? toSave;
+
+  /// Buttons under the settings: reindex, reset, download.
+  final List<ConfigAction> actions;
+}
+
+/// A one-off job on the server, asked for with a button.
+class ConfigAction {
+  const ConfigAction({
+    required this.label,
+    required this.path,
+    this.method = 'POST',
+    this.confirm,
+    this.saveAs,
+    this.icon = Icons.play_arrow_outlined,
+  });
+
+  final String label;
+  final String path;
+  final String method;
+
+  /// Asked first, for jobs that can't be undone.
+  final String? confirm;
+
+  /// Downloads what the server sends to a file of this name.
+  final String? saveAs;
+  final IconData icon;
 }
 
 Map<String, dynamic> _ldapSwitch(Map<String, dynamic> read) => {
@@ -194,6 +224,70 @@ final adminConfigSections = <ConfigSection>[
       },
     },
     help: 'How files are read, split and searched.',
+    actions: [
+      ConfigAction(
+        label: 'Reindex knowledge',
+        path: '/api/v1/knowledge/reindex',
+        icon: Icons.refresh,
+        confirm: 'Every knowledge base is read again. This can take a while.',
+      ),
+      ConfigAction(
+        label: 'Reset uploads',
+        path: '/api/v1/retrieval/reset/uploads',
+        icon: Icons.folder_delete_outlined,
+        confirm: 'Every uploaded file is deleted from the server.',
+      ),
+      ConfigAction(
+        label: 'Reset vector storage and knowledge',
+        path: '/api/v1/retrieval/reset/db',
+        icon: Icons.delete_forever_outlined,
+        confirm: 'All knowledge and what was learned from files is deleted.',
+      ),
+    ],
+  ),
+  const ConfigSection(
+    title: 'Embedding',
+    read: '/api/v1/retrieval/embedding',
+    save: '/api/v1/retrieval/embedding/update',
+    choices: {
+      'RAG_EMBEDDING_ENGINE': ['', 'ollama', 'openai', 'azure_openai'],
+    },
+    engines: {
+      'RAG_EMBEDDING_ENGINE': {
+        '': [],
+        'ollama': ['ollama_config'],
+        'openai': ['openai_config'],
+        'azure_openai': ['azure_openai_config'],
+      },
+    },
+    help:
+        'The model that turns text into vectors for search. Changing it '
+        'means reindexing knowledge.',
+  ),
+  const ConfigSection(
+    title: 'Database',
+    read: '/api/v1/configs/connections',
+    save: '/api/v1/configs/connections',
+    exclude: {
+      'ENABLE_DIRECT_CONNECTIONS',
+      'ENABLE_DIRECT_INTEGRATIONS',
+      'ENABLE_BASE_MODELS_CACHE',
+    },
+    help: 'A copy of the server\'s database.',
+    actions: [
+      ConfigAction(
+        label: 'Download database',
+        path: '/api/v1/utils/db/download',
+        saveAs: 'webui.db',
+        icon: Icons.download_outlined,
+      ),
+      ConfigAction(
+        label: 'Export settings',
+        path: '/api/v1/configs/export',
+        saveAs: 'config.json',
+        icon: Icons.settings_backup_restore,
+      ),
+    ],
   ),
   const ConfigSection(
     title: 'Web Search',
@@ -409,6 +503,45 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
     if (!_dirty) setState(() => _dirty = true);
   }
 
+  Future<void> _run(ConfigAction a) async {
+    if (a.confirm != null) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: Text('${a.label}?'),
+          content: Text(a.confirm!),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: Text(a.label),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final client = ref.read(clientProvider);
+    try {
+      if (a.saveAs != null) {
+        final bytes = await client.getBytes(a.path);
+        final saved = await FilePicker.saveFile(
+          fileName: a.saveAs!,
+          bytes: Uint8List.fromList(bytes),
+        );
+        if (saved != null && mounted) _say(context, 'Saved ${a.saveAs}');
+      } else {
+        await client.send(a.method, a.path);
+        if (mounted) _say(context, 'Done');
+      }
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
   Future<bool> _leave() async {
     if (!_dirty) return true;
     final leave = await showDialog<bool>(
@@ -495,6 +628,15 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
                     ),
                   ),
                   ..._fields(_data, const []),
+                  if (_s.actions.isNotEmpty) ...[
+                    const Divider(height: 32),
+                    for (final a in _s.actions)
+                      ListTile(
+                        leading: Icon(a.icon),
+                        title: Text(a.label),
+                        onTap: () => _run(a),
+                      ),
+                  ],
                 ],
               ),
       ),
@@ -514,11 +656,13 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
       if (key == 'status') continue;
       final v = m[key];
       // Maps of settings (not free-form parameters) become their own group.
-      if (v is Map && v.values.any((x) => x is! Map) && _looksLikeSettings(v)) {
+      if (!_showAll && hiddenByEngine(key, m, _s.engines)) continue;
+      if (v is Map &&
+          v.values.any((x) => x is! Map) &&
+          _looksLikeSettings(key, v)) {
         nested.add(key);
         continue;
       }
-      if (!_showAll && hiddenByEngine(key, m, _s.engines)) continue;
       if (!_matches(key)) continue;
       out.add(_field(m, key));
     }
@@ -543,9 +687,12 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
     return out;
   }
 
-  /// Groups of settings have names in capitals; parameters don't.
-  static bool _looksLikeSettings(Map v) =>
-      v.isNotEmpty && v.keys.every((k) => '$k' == '$k'.toUpperCase());
+  /// Groups of settings have names in capitals, or are a "…_config";
+  /// parameters are neither.
+  static bool _looksLikeSettings(String key, Map v) =>
+      v.isNotEmpty &&
+      (key.endsWith('_config') ||
+          v.keys.every((k) => '$k' == '$k'.toUpperCase()));
 
   static String _groupName(String key) => switch (key) {
     'tts' => 'Text to speech',

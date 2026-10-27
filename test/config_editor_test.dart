@@ -130,4 +130,45 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Brave search API key'), findsOneWidget);
   });
+
+  testWidgets('embedding shows the chosen engine\'s server only', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    final client = _FakeClient({
+      'RAG_EMBEDDING_ENGINE': 'ollama',
+      'RAG_EMBEDDING_MODEL': 'nomic',
+      'openai_config': {'url': 'https://o', 'key': ''},
+      'ollama_config': {'url': 'http://l', 'key': ''},
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [clientProvider.overrideWithValue(client)],
+        child: MaterialApp(
+          theme: nexusTheme(Brightness.light),
+          home: ConfigEditorScreen(
+            section: adminConfigSections.firstWhere(
+              (s) => s.title == 'Embedding',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Ollama config'), findsOneWidget);
+    expect(find.text('Openai config'), findsNothing);
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'URL'),
+      'http://m',
+    );
+    await tester.pump();
+    await tester.tap(find.text('Save'));
+    await tester.pumpAndSettle();
+    expect(
+      ((client.saved.single as Map)['ollama_config'] as Map)['url'],
+      'http://m',
+    );
+  });
 }

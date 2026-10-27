@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
+import 'package:nexus_assistant/features/admin/banners_screen.dart';
 import 'package:nexus_assistant/features/admin/config_editor.dart';
 import 'package:nexus_assistant/features/admin/connections_screen.dart';
 import 'package:nexus_assistant/features/admin/groups_screen.dart';
@@ -46,6 +47,30 @@ void main() {
       (await client.send('GET', '/api/v1/auths/admin/config/ldap')
           as Map)['ENABLE_LDAP'],
       isFalse,
+    );
+
+    // The download buttons get files.
+    final db = await client.getBytes('/api/v1/utils/db/download');
+    expect(String.fromCharCodes(db.take(15)), 'SQLite format 3');
+    final exported = await client.getBytes('/api/v1/configs/export');
+    expect(exported, isNotEmpty);
+    expect(await client.send('POST', '/api/v1/knowledge/reindex'), isTrue);
+
+    // Banners save and come back.
+    final banner = {...newBanner(), 'content': 'Maintenance tonight'};
+    await client.send(
+      'POST',
+      '/api/v1/configs/banners',
+      body: {
+        'banners': [banner],
+      },
+    );
+    final banners = await client.send('GET', '/api/v1/configs/banners') as List;
+    expect((banners.single as Map)['content'], 'Maintenance tonight');
+    await client.send(
+      'POST',
+      '/api/v1/configs/banners',
+      body: {'banners': <Object>[]},
     );
 
     // A change is kept.

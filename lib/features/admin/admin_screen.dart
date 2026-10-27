@@ -7,6 +7,7 @@ import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'admin_api.dart';
+import 'banners_screen.dart';
 import 'config_editor.dart';
 import 'connections_screen.dart';
 import 'groups_screen.dart';
@@ -32,6 +33,8 @@ const _sectionIcons = {
   'Interface and tasks': Icons.view_quilt_outlined,
   'Connections': Icons.cable,
   'Evaluations': Icons.leaderboard_outlined,
+  'Embedding': Icons.scatter_plot_outlined,
+  'Database': Icons.storage_outlined,
   'Sign-in and features': Icons.login,
   'OAuth / OIDC': Icons.key_outlined,
   'LDAP': Icons.account_tree_outlined,
@@ -82,6 +85,12 @@ class AdminScreen extends StatelessWidget {
             onTap: () => open(const FunctionsScreen()),
           ),
           const Divider(),
+          ListTile(
+            leading: const Icon(Icons.campaign_outlined),
+            title: const Text('Banners'),
+            subtitle: const Text('Notices shown to everyone'),
+            onTap: () => open(const BannersScreen()),
+          ),
           ListTile(
             leading: const Icon(Icons.cable),
             title: const Text('Model connections'),
