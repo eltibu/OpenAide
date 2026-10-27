@@ -11,6 +11,7 @@ import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import 'chat_controller.dart';
+import 'side_panel.dart';
 
 /// The paperclip: photos and videos from the gallery or camera, or any file.
 class AttachButton extends ConsumerWidget {
@@ -373,10 +374,8 @@ class MarkdownImage extends ConsumerWidget {
   }
 }
 
-void _openPhoto(BuildContext context, ImageProvider image) => Navigator.push(
-  context,
-  MaterialPageRoute<void>(builder: (_) => _PhotoView(image: image)),
-);
+void _openPhoto(BuildContext context, ImageProvider image) =>
+    showBeside(context, image, (_) => _PhotoView(image: image));
 
 class _Thumb extends StatelessWidget {
   const _Thumb({required this.image, required this.name, required this.size});
@@ -581,6 +580,7 @@ class _PhotoView extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Colors.black,
     appBar: AppBar(
+      leading: panelLeading(context),
       backgroundColor: Colors.black,
       foregroundColor: Colors.white,
     ),

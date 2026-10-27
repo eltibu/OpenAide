@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'reply_parts.dart';
+import 'side_panel.dart';
 
 /// A group of steps (thinking, tool calls, task steps) folded into one line,
 /// like the Claude app: tap to see each step, tap a step to see its detail.
@@ -220,7 +221,35 @@ class _StepState extends State<_Step> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: small?.copyWith(fontWeight: FontWeight.w600)),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  label,
+                  style: small?.copyWith(fontWeight: FontWeight.w600),
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: () => showBeside(
+                  context,
+                  'step:${identityHashCode(s)}:$label',
+                  (_) => _StepPage(
+                    title:
+                        '${_capital(toolLabel((s as ToolPart).name))}: '
+                        '${label.toLowerCase()}',
+                    text: label == 'Result'
+                        ? prettyJson(s.result ?? '')
+                        : prettyJson(s.arguments),
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(Icons.open_in_new, size: 14, color: muted),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 4),
           Container(
             width: double.infinity,
@@ -263,3 +292,25 @@ String _clip(String text) =>
 
 String _capital(String s) =>
     s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+/// A tool's whole input or result, beside the chat or full screen.
+class _StepPage extends StatelessWidget {
+  const _StepPage({required this.title, required this.text});
+  final String title;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      leading: panelLeading(context),
+      title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
+    ),
+    body: SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: SelectableText(
+        text,
+        style: const TextStyle(fontFamily: 'monospace', fontSize: 12.5),
+      ),
+    ),
+  );
+}

@@ -4,6 +4,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/models/chat.dart';
 import '../../core/theme.dart';
+import 'side_panel.dart';
 
 /// Something a reply built that can be shown live, as in the web UI's
 /// Artifacts panel: a web page (its HTML, CSS and JS blocks together) or a
@@ -160,11 +161,10 @@ class ArtifactCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(14),
-                  onTap: () => Navigator.push(
+                  onTap: () => showBeside(
                     context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => ArtifactScreen(all: all, index: i),
-                    ),
+                    'artifact:$messageId:$i',
+                    (_) => ArtifactScreen(all: all, index: i),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
@@ -261,6 +261,7 @@ class _ArtifactScreenState extends State<ArtifactScreen> {
     final total = widget.all.length;
     return Scaffold(
       appBar: AppBar(
+        leading: panelLeading(context),
         title: Text(total > 1 ? 'Version ${_index + 1} of $total' : 'Artifact'),
         actions: [
           IconButton(

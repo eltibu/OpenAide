@@ -20,15 +20,78 @@ import 'embeds_view.dart';
 import 'read_aloud.dart';
 import 'reply_parts.dart';
 import 'reply_steps.dart';
+import 'side_panel.dart';
 import 'chat_controller.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
 
-class ChatScreen extends ConsumerWidget {
+class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ChatScreen> createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends ConsumerState<ChatScreen> {
+  /// Wide screens: the chat list docked on the left (the menu button hides
+  /// and shows it), and what is open in the right panel.
+  bool _nav = true;
+  SidePanelContent? _panel;
+
+  /// Keeps the conversation (and where it is scrolled to) when the panels
+  /// around it change or the phone folds.
+  final _chatKey = GlobalKey();
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    final wide = size.width >= wideLayout;
+    final chat = KeyedSubtree(key: _chatKey, child: _chat(context, wide));
+    if (!wide) return chat;
+    final panelWidth = (size.width * 0.5).clamp(340.0, 720.0);
+    // The chat lays itself out for the room it has, not the whole screen.
+    Widget fit(Widget child) => LayoutBuilder(
+      builder: (context, c) => MediaQuery(
+        data: MediaQuery.of(context)
+            .copyWith(size: Size(c.maxWidth, size.height)),
+        child: child,
+      ),
+    );
+    final showNav = _nav && _panel == null;
+    return SidePanelHost(
+      current: _panel,
+      open: (content) => setState(() => _panel = content),
+      close: () => setState(() => _panel = null),
+      child: Row(
+        children: [
+          if (showNav) ...[
+            const SizedBox(
+              key: ValueKey('nav'),
+              width: 300,
+              child: ChatDrawer(docked: true),
+            ),
+            const VerticalDivider(key: ValueKey('navLine'), width: 1),
+          ],
+          Expanded(key: const ValueKey('chat'), child: fit(chat)),
+          if (_panel != null) ...[
+            const VerticalDivider(key: ValueKey('panelLine'), width: 1),
+            SizedBox(
+              key: const ValueKey('panel'),
+              width: panelWidth,
+              child: fit(
+                SidePanelView(
+                  content: _panel!,
+                  close: () => setState(() => _panel = null),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _chat(BuildContext context, bool wide) {
     final state = ref.watch(chatControllerProvider);
 
     // Start with your default model once it is known.
@@ -48,7 +111,18 @@ class ChatScreen extends ConsumerWidget {
           builder: (context) => IconButton(
             tooltip: 'Chats',
             icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+            onPressed: () => wide
+                // Docked: hide or show it; with a panel open, the panel
+                // closes and the list comes back.
+                ? setState(() {
+                    if (_panel != null) {
+                      _panel = null;
+                      _nav = true;
+                    } else {
+                      _nav = !_nav;
+                    }
+                  })
+                : Scaffold.of(context).openDrawer(),
           ),
         ),
         title: Text(
@@ -66,7 +140,7 @@ class ChatScreen extends ConsumerWidget {
           ),
         ],
       ),
-      drawer: const ChatDrawer(),
+      drawer: wide ? null : const ChatDrawer(),
       body: Column(
         children: [
           const UpdateBanner(),

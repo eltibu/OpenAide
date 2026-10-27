@@ -26,7 +26,10 @@ import 'chat_controller.dart';
 /// The web UI's sidebar: search, pinned chats, folders, then the rest.
 /// Long-press a chat to rename, pin, move, archive or delete it.
 class ChatDrawer extends ConsumerStatefulWidget {
-  const ChatDrawer({super.key});
+  const ChatDrawer({super.key, this.docked = false});
+
+  /// Shown as a panel beside the chat (wide screens) instead of sliding in.
+  final bool docked;
 
   @override
   ConsumerState<ChatDrawer> createState() => _ChatDrawerState();
@@ -55,97 +58,102 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider).value;
     final small = Theme.of(context).textTheme.titleSmall;
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Nexus',
-                      style: Theme.of(context).textTheme.headlineSmall
-                          ?.copyWith(fontFamily: 'serif'),
-                    ),
+    final content = SafeArea(
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Nexus',
+                    style: Theme.of(context).textTheme.headlineSmall
+                        ?.copyWith(fontFamily: 'serif'),
                   ),
-                  IconButton(
-                    tooltip: 'New folder',
-                    icon: const Icon(Icons.create_new_folder_outlined),
-                    onPressed: () => _newFolder(context, ref),
-                  ),
-                ],
-              ),
+                ),
+                IconButton(
+                  tooltip: 'New folder',
+                  icon: const Icon(Icons.create_new_folder_outlined),
+                  onPressed: () => _newFolder(context, ref),
+                ),
+              ],
             ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
-              child: TextField(
-                controller: _search,
-                onChanged: _onSearch,
-                textInputAction: TextInputAction.search,
-                decoration: InputDecoration(
-                  hintText: 'Search chats',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _search.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () {
-                            _search.clear();
-                            setState(() => _query = '');
-                          },
-                        ),
-                  isDense: true,
-                  filled: true,
-                  fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                    borderSide: BorderSide.none,
-                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+            child: TextField(
+              controller: _search,
+              onChanged: _onSearch,
+              textInputAction: TextInputAction.search,
+              decoration: InputDecoration(
+                hintText: 'Search chats',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _search.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          _search.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                isDense: true,
+                filled: true,
+                fillColor: Theme.of(context).colorScheme.surfaceContainerHigh,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(24),
+                  borderSide: BorderSide.none,
                 ),
               ),
             ),
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 20),
-              leading: const CircleAvatar(
-                radius: 14,
-                backgroundColor: NexusColors.accent,
-                child: Icon(Icons.add, size: 18, color: Colors.white),
-              ),
-              title: const Text(
-                'New chat',
-                style: TextStyle(
-                  color: NexusColors.accent,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(context);
-                ref.read(chatControllerProvider.notifier).newChat();
-              },
+          ),
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+            leading: const CircleAvatar(
+              radius: 14,
+              backgroundColor: NexusColors.accent,
+              child: Icon(Icons.add, size: 18, color: Colors.white),
             ),
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: () async => refreshChatLists(ref.invalidate),
-                child: ListView(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  children: _query.isNotEmpty
-                      ? _results(ref.watch(chatSearchProvider(_query)))
-                      : [
-                          const _Places(),
-                          ..._pinned(small),
-                          ..._folders(),
-                          ..._chats(small),
-                        ],
-                ),
+            title: const Text(
+              'New chat',
+              style: TextStyle(
+                color: NexusColors.accent,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const Divider(height: 1),
-            _Account(session: session),
-          ],
-        ),
+            onTap: () {
+              closeDrawer(context);
+              ref.read(chatControllerProvider.notifier).newChat();
+            },
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async => refreshChatLists(ref.invalidate),
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                children: _query.isNotEmpty
+                    ? _results(ref.watch(chatSearchProvider(_query)))
+                    : [
+                        const _Places(),
+                        ..._pinned(small),
+                        ..._folders(),
+                        ..._chats(small),
+                      ],
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          _Account(session: session),
+        ],
       ),
+    );
+    if (!widget.docked) return Drawer(child: content);
+    return Material(
+      color:
+          Theme.of(context).drawerTheme.backgroundColor ??
+          Theme.of(context).colorScheme.surfaceContainerLow,
+      child: content,
     );
   }
 
@@ -338,7 +346,7 @@ class ChatTile extends ConsumerWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
       title: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis),
       onTap: () {
-        Navigator.pop(context);
+        closeDrawer(context);
         ref.read(chatControllerProvider.notifier).open(chat.id);
       },
       onLongPress: () => _actions(context, ref),
@@ -683,7 +691,7 @@ class _Places extends ConsumerWidget {
     leading: Icon(icon, size: 22),
     title: Text(label, style: const TextStyle(fontSize: 15)),
     onTap: () {
-      Navigator.pop(context);
+      closeDrawer(context);
       Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page()));
     },
   );
@@ -698,7 +706,7 @@ class _Account extends ConsumerWidget {
     final me = ref.watch(meProvider).value ?? session?.user;
     final name = '${me?['name'] ?? session?.userName ?? ''}';
     void settings() {
-      Navigator.pop(context);
+      closeDrawer(context);
       Navigator.push(
         context,
         MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
@@ -722,4 +730,10 @@ class _Account extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// Closes the chat list when it slid in over the chat; a docked one stays.
+void closeDrawer(BuildContext context) {
+  final scaffold = Scaffold.maybeOf(context);
+  if (scaffold != null && scaffold.isDrawerOpen) scaffold.closeDrawer();
 }
