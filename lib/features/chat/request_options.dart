@@ -29,11 +29,33 @@ List<String> availableFeatures(ModelInfo? model, Map<String, dynamic>? config) {
   ];
 }
 
+/// A tool or skill the person can switch on for a chat.
+class Pickable {
+  const Pickable({required this.id, required this.name, this.description});
+
+  factory Pickable.fromJson(Map<String, dynamic> j) => Pickable(
+    id: '${j['id']}',
+    name: '${j['name'] ?? j['id']}',
+    description:
+        (j['description'] ?? (j['meta'] as Map?)?['description']) as String?,
+  );
+
+  final String id;
+  final String name;
+  final String? description;
+}
+
+/// [toolIds] and [skillIds] are what the person picked in this chat (null:
+/// the model's own tools, no extra skills); [terminalId] is the terminal
+/// they picked (null: the model's, '': none).
 Map<String, dynamic> requestOptions(
   ModelInfo? model,
   Map<String, dynamic>? settings,
   Map<String, dynamic>? config, {
   Map<String, bool> overrides = const {},
+  Set<String>? toolIds,
+  Set<String>? skillIds,
+  String? terminalId,
 }) {
   final ui = (settings?['ui'] as Map?) ?? const {};
   final enabled = (config?['features'] as Map?) ?? const {};
@@ -61,11 +83,14 @@ Map<String, dynamic> requestOptions(
   final memory = ui['memory'] ?? enabled['enable_memories'] ?? true;
   if (memory == true) features['memory'] = true;
 
+  final tools = toolIds?.toList() ?? model?.toolIds ?? const <String>[];
+  final terminal = terminalId ?? model?.terminalId;
   return {
-    if (model != null && model.toolIds.isNotEmpty) 'tool_ids': model.toolIds,
+    if (tools.isNotEmpty && enabled['enable_tools'] != false) 'tool_ids': tools,
+    if (skillIds != null && skillIds.isNotEmpty) 'skill_ids': skillIds.toList(),
     if (model != null && model.defaultFilterIds.isNotEmpty)
       'filter_ids': model.defaultFilterIds,
-    'terminal_id': ?model?.terminalId,
+    if (terminal != null && terminal.isNotEmpty) 'terminal_id': terminal,
     'features': features,
     if (ui['params'] is Map) 'params': ui['params'],
   };

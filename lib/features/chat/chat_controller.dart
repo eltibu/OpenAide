@@ -27,6 +27,22 @@ final serverConfigProvider = FutureProvider<Map<String, dynamic>>(
   (ref) => ref.watch(clientProvider).config(),
 );
 
+/// The tools and skills this person may switch on in a chat.
+final toolsProvider = FutureProvider<List<Pickable>>((ref) async {
+  final res = await ref.watch(clientProvider).send('GET', '/api/v1/tools/');
+  return [
+    for (final t in (res as List? ?? const []).whereType<Map>())
+      Pickable.fromJson(t.cast<String, dynamic>()),
+  ];
+});
+final skillsProvider = FutureProvider<List<Pickable>>((ref) async {
+  final res = await ref.watch(clientProvider).send('GET', '/api/v1/skills/');
+  return [
+    for (final t in (res as List? ?? const []).whereType<Map>())
+      if (t['is_active'] != false) Pickable.fromJson(t.cast<String, dynamic>()),
+  ];
+});
+
 /// How many pages of the main chat list to show (60 chats each).
 class ChatPages extends Notifier<int> {
   @override
@@ -102,6 +118,9 @@ class ChatState {
     this.error,
     this.status,
     this.features = const {},
+    this.toolIds,
+    this.skillIds,
+    this.terminalId,
     this.attachments = const [],
     this.revision = 0,
   });
@@ -117,6 +136,14 @@ class ChatState {
 
   /// Features the person switched on or off in this chat (web search...).
   final Map<String, bool> features;
+
+  /// Tools and skills switched on in this chat; null until the person picks
+  /// (then the model's own tools apply, and no extra skills).
+  final Set<String>? toolIds;
+  final Set<String>? skillIds;
+
+  /// The terminal picked for this chat: null is the model's, '' is none.
+  final String? terminalId;
 
   /// Photos and files waiting in the composer for the next message.
   final List<PendingAttachment> attachments;
@@ -137,6 +164,9 @@ class ChatState {
     String? status,
     bool clearStatus = false,
     Map<String, bool>? features,
+    Set<String>? toolIds,
+    Set<String>? skillIds,
+    String? terminalId,
     List<PendingAttachment>? attachments,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
@@ -146,6 +176,9 @@ class ChatState {
     error: clearError ? null : error ?? this.error,
     status: clearStatus ? null : status ?? this.status,
     features: features ?? this.features,
+    toolIds: toolIds ?? this.toolIds,
+    skillIds: skillIds ?? this.skillIds,
+    terminalId: terminalId ?? this.terminalId,
     attachments: attachments ?? this.attachments,
     revision: revision + 1,
   );
@@ -222,6 +255,27 @@ class ChatController extends Notifier<ChatState> {
 
   void setFeature(String id, bool on) =>
       state = state.copyWith(features: {...state.features, id: on});
+
+  /// Switches a tool for this chat, starting from the model's own tools.
+  void setTool(String id, bool on) {
+    final model = ref
+        .read(modelsProvider)
+        .value
+        ?.where((m) => m.id == state.modelId)
+        .firstOrNull;
+    final now = {...?state.toolIds ?? model?.toolIds.toSet()};
+    on ? now.add(id) : now.remove(id);
+    state = state.copyWith(toolIds: now);
+  }
+
+  void setSkill(String id, bool on) {
+    final now = {...?state.skillIds};
+    on ? now.add(id) : now.remove(id);
+    state = state.copyWith(skillIds: now);
+  }
+
+  /// '' switches the terminal off for this chat.
+  void setTerminal(String id) => state = state.copyWith(terminalId: id);
 
   void newChat() {
     _view++;
@@ -524,6 +578,9 @@ class ChatController extends Notifier<ChatState> {
               await _optional(userSettingsProvider),
               await _optional(serverConfigProvider),
               overrides: state.features,
+              toolIds: state.toolIds,
+              skillIds: state.skillIds,
+              terminalId: state.terminalId,
             ),
           ),
           'files': ?_documents(chat),

@@ -10,6 +10,8 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/theme.dart';
 import '../update/update_screen.dart';
+import '../terminal/terminal_screen.dart' show terminalServersProvider;
+import 'artifacts_view.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'chat_controller.dart';
@@ -161,6 +163,7 @@ class _MessageList extends ConsumerWidget {
         ? MarkdownConfig.darkConfig
         : MarkdownConfig.defaultConfig;
     final body = Theme.of(context).textTheme.bodyLarge;
+    final artifacts = artifactsOfChat(messages);
     return ListView.builder(
       reverse: true,
       padding: EdgeInsets.symmetric(
@@ -241,6 +244,7 @@ class _MessageList extends ConsumerWidget {
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
+              if (!live) ArtifactCard(all: artifacts, messageId: m.id),
               if (m.sources.isNotEmpty) _Sources(sources: m.sources),
               if (!live && !streaming) _MessageActions(message: m),
             ],
@@ -710,41 +714,164 @@ class _FeaturesButton extends ConsumerWidget {
         ?.where((m) => m.id == state.modelId)
         .firstOrNull;
     final config = ref.watch(serverConfigProvider).value;
-    final available = availableFeatures(model, config);
-    if (available.isEmpty) return const SizedBox.shrink();
-    final anyOn = available.any((id) => state.features[id] == true);
-    return IconButton(
-      tooltip: 'Tools',
-      isSelected: anyOn,
-      visualDensity: VisualDensity.compact,
-      color: context.nexus.muted,
-      selectedIcon: const Icon(Icons.tune, color: NexusColors.accent),
-      icon: const Icon(Icons.tune),
-      onPressed: () => showModalBottomSheet<void>(
-        context: context,
-        showDragHandle: true,
-        builder: (context) => Consumer(
-          builder: (context, ref, _) {
-            final on = ref.watch(chatControllerProvider).features;
-            return SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final id in available)
-                    SwitchListTile(
-                      title: Text(featureLabels[id] ?? id),
-                      value:
-                          on[id] ??
-                          model?.defaultFeatureIds.contains(id) ??
-                          false,
-                      onChanged: (v) => ref
-                          .read(chatControllerProvider.notifier)
-                          .setFeature(id, v),
+    final features = availableFeatures(model, config);
+    final tools = ref.watch(toolsProvider).value ?? const [];
+    final skills = ref.watch(skillsProvider).value ?? const [];
+    final terminals = ref.watch(terminalServersProvider).value ?? const [];
+    if (features.isEmpty &&
+        tools.isEmpty &&
+        skills.isEmpty &&
+        terminals.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    bool on(String id) =>
+        state.features[id] ?? model?.defaultFeatureIds.contains(id) ?? false;
+    final activeTools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
+    final terminalId = state.terminalId ?? model?.terminalId ?? '';
+    final terminal = terminals.where((t) => t.id == terminalId).firstOrNull;
+    final count = activeTools.length + (state.skillIds?.length ?? 0);
+    final accent = NexusColors.accent;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: 'Tools',
+          visualDensity: VisualDensity.compact,
+          color: context.nexus.muted,
+          icon: Badge(
+            isLabelVisible: count > 0,
+            backgroundColor: accent,
+            label: Text('$count'),
+            child: const Icon(Icons.tune),
+          ),
+          onPressed: () => showModalBottomSheet<void>(
+            context: context,
+            showDragHandle: true,
+            isScrollControlled: true,
+            builder: (context) => const _ToolsSheet(),
+          ),
+        ),
+        // What's switched on, at a glance, as in the web UI's text box.
+        if (on('web_search')) Icon(Icons.language, size: 20, color: accent),
+        if (on('image_generation'))
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Icon(Icons.image_outlined, size: 20, color: accent),
+          ),
+        if (on('code_interpreter'))
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Icon(Icons.code, size: 20, color: accent),
+          ),
+        if (terminal != null)
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Tooltip(
+              message: terminal.name,
+              child: Icon(Icons.terminal, size: 20, color: accent),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// The web UI's tools menu: features, tools, skills and the terminal.
+class _ToolsSheet extends ConsumerWidget {
+  const _ToolsSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(chatControllerProvider);
+    final chat = ref.read(chatControllerProvider.notifier);
+    final model = ref
+        .watch(modelsProvider)
+        .value
+        ?.where((m) => m.id == state.modelId)
+        .firstOrNull;
+    final config = ref.watch(serverConfigProvider).value;
+    final features = availableFeatures(model, config);
+    final tools = ref.watch(toolsProvider).value ?? const [];
+    final skills = ref.watch(skillsProvider).value ?? const [];
+    final terminals = ref.watch(terminalServersProvider).value ?? const [];
+    final activeTools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
+    final terminalId = state.terminalId ?? model?.terminalId ?? '';
+    final heading = Theme.of(context).textTheme.labelLarge
+        ?.copyWith(color: context.nexus.muted);
+    Widget title(String text) => Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+      child: Text(text, style: heading),
+    );
+    String? describe(Pickable p) =>
+        (p.description ?? '').isEmpty ? null : p.description;
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+        ),
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            if (features.isNotEmpty) ...[
+              title('Features'),
+              for (final id in features)
+                SwitchListTile(
+                  secondary: Icon(switch (id) {
+                    'web_search' => Icons.language,
+                    'image_generation' => Icons.image_outlined,
+                    _ => Icons.code,
+                  }),
+                  title: Text(featureLabels[id] ?? id),
+                  value:
+                      state.features[id] ??
+                      model?.defaultFeatureIds.contains(id) ??
+                      false,
+                  onChanged: (v) => chat.setFeature(id, v),
+                ),
+            ],
+            if (terminals.isNotEmpty) ...[
+              title('Terminal'),
+              RadioGroup<String>(
+                groupValue: terminalId,
+                onChanged: (v) => chat.setTerminal(v ?? ''),
+                child: Column(
+                  children: [
+                    const RadioListTile<String>(
+                      value: '',
+                      title: Text('No terminal'),
                     ),
-                ],
+                    for (final t in terminals)
+                      RadioListTile<String>(
+                        value: t.id,
+                        title: Text(t.name),
+                        secondary: const Icon(Icons.terminal),
+                      ),
+                  ],
+                ),
               ),
-            );
-          },
+            ],
+            if (tools.isNotEmpty) ...[
+              title('Tools'),
+              for (final t in tools)
+                SwitchListTile(
+                  title: Text(t.name),
+                  subtitle: describe(t) == null ? null : Text(describe(t)!),
+                  value: activeTools.contains(t.id),
+                  onChanged: (v) => chat.setTool(t.id, v),
+                ),
+            ],
+            if (skills.isNotEmpty) ...[
+              title('Skills'),
+              for (final t in skills)
+                SwitchListTile(
+                  title: Text(t.name),
+                  subtitle: describe(t) == null ? null : Text(describe(t)!),
+                  value: state.skillIds?.contains(t.id) ?? false,
+                  onChanged: (v) => chat.setSkill(t.id, v),
+                ),
+            ],
+            const SizedBox(height: 12),
+          ],
         ),
       ),
     );

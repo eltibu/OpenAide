@@ -99,4 +99,34 @@ void main() {
       expect(features['code_interpreter'], isTrue);
     },
   );
+
+  test('tools, skills and terminal picked in the chat win over the model', () {
+    final m = model({
+      'toolIds': ['a', 'b'],
+      'terminalId': 'mainframe',
+    });
+    final config = {
+      'features': {'enable_tools': true},
+    };
+    var o = requestOptions(m, null, config);
+    expect(o['tool_ids'], ['a', 'b']);
+    expect(o['terminal_id'], 'mainframe');
+    expect(o.containsKey('skill_ids'), isFalse);
+
+    o = requestOptions(
+      m,
+      null,
+      config,
+      toolIds: {'b', 'c'},
+      skillIds: {'haiku'},
+      terminalId: '',
+    );
+    expect(o['tool_ids'], ['b', 'c']);
+    expect(o['skill_ids'], ['haiku']);
+    expect(o.containsKey('terminal_id'), isFalse);
+
+    o = requestOptions(m, null, config, toolIds: {}, terminalId: 'other');
+    expect(o.containsKey('tool_ids'), isFalse);
+    expect(o['terminal_id'], 'other');
+  });
 }
