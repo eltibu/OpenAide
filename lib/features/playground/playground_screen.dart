@@ -36,6 +36,17 @@ String playgroundJson(
   ],
 });
 
+/// The playground's messages as plain text, one block per message.
+String playgroundText(
+  String system,
+  List<({String role, String content})> turns,
+) => [
+  if (system.trim().isNotEmpty) '### SYSTEM\n${system.trim()}',
+  for (final t in turns)
+    if (t.content.trim().isNotEmpty)
+      '### ${t.role.toUpperCase()}\n${t.content.trim()}',
+].join('\n\n');
+
 /// The web's Playground: try a model on hand-written messages, continue a
 /// piece of text, or make images, without making a chat. Nothing here is
 /// saved on the server.
@@ -137,27 +148,30 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
     setState(() => _run = null);
   }
 
-  String get _json => playgroundJson(_model, _system.text, [
+  List<({String role, String content})> get _plain => [
     for (final t in _turns) (role: t.role, content: t.text.text),
-  ]);
+  ];
 
   Future<void> _export(String how) async {
     final messenger = ScaffoldMessenger.of(context);
     try {
+      final json = playgroundJson(_model, _system.text, _plain);
       if (how == 'copy') {
-        await Clipboard.setData(ClipboardData(text: _json));
+        await Clipboard.setData(ClipboardData(text: json));
         messenger.showSnackBar(const SnackBar(content: Text('Copied')));
         return;
       }
+      final text = how == 'txt';
+      final name = 'playground.${text ? 'txt' : 'json'}';
       final saved = await FilePicker.saveFile(
-        fileName: 'playground.json',
-        bytes: Uint8List.fromList(utf8.encode(_json)),
-        mimeType: 'application/json',
+        fileName: name,
+        bytes: Uint8List.fromList(
+          utf8.encode(text ? playgroundText(_system.text, _plain) : json),
+        ),
+        mimeType: text ? 'text/plain' : 'application/json',
       );
       if (saved != null) {
-        messenger.showSnackBar(
-          const SnackBar(content: Text('Saved playground.json')),
-        );
+        messenger.showSnackBar(SnackBar(content: Text('Saved $name')));
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text("Couldn't save: $e")));
@@ -295,10 +309,27 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
                 icon: const Icon(Icons.copy),
                 label: const Text('Copy JSON'),
               ),
-              TextButton.icon(
-                onPressed: () => _export('save'),
-                icon: const Icon(Icons.download_outlined),
-                label: const Text('Export'),
+              PopupMenuButton<String>(
+                tooltip: 'Export',
+                onSelected: _export,
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'json',
+                    child: Text('Export chat (.json)'),
+                  ),
+                  PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
+                ],
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.download_outlined, size: 18),
+                      SizedBox(width: 8),
+                      Text('Export'),
+                    ],
+                  ),
+                ),
               ),
               TextButton.icon(
                 onPressed: _running
@@ -357,6 +388,7 @@ class CompletionPlayground extends ConsumerStatefulWidget {
 
 class _CompletionPlaygroundState extends ConsumerState<CompletionPlayground> {
   String? _model;
+  final _system = TextEditingController();
   final _text = TextEditingController();
   StreamSubscription<String>? _run;
   String? _error;
@@ -364,6 +396,7 @@ class _CompletionPlaygroundState extends ConsumerState<CompletionPlayground> {
   @override
   void dispose() {
     _run?.cancel();
+    _system.dispose();
     _text.dispose();
     super.dispose();
   }
@@ -380,6 +413,8 @@ class _CompletionPlaygroundState extends ConsumerState<CompletionPlayground> {
         .streamCompletion(
           model: model,
           messages: [
+            if (_system.text.trim().isNotEmpty)
+              {'role': 'system', 'content': _system.text.trim()},
             {'role': 'user', 'content': _text.text},
           ],
         )
@@ -425,6 +460,14 @@ class _CompletionPlaygroundState extends ConsumerState<CompletionPlayground> {
             models,
             _model,
             running ? null : (v) => setState(() => _model = v),
+          ),
+          TextField(
+            controller: _system,
+            maxLines: null,
+            decoration: const InputDecoration(
+              labelText: 'System',
+              hintText: 'You\'re a helpful assistant.',
+            ),
           ),
           const SizedBox(height: 12),
           TextField(

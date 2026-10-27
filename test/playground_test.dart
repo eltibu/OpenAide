@@ -77,6 +77,16 @@ void main() {
     });
   });
 
+  test('exports plain text', () {
+    expect(
+      playgroundText('', [
+        (role: 'user', content: 'Hi'),
+        (role: 'assistant', content: 'Hello'),
+      ]),
+      '### USER\nHi\n\n### ASSISTANT\nHello',
+    );
+  });
+
   testWidgets('has chat, completions and images', (tester) async {
     _tall(tester);
     final client = _FakeClient();
