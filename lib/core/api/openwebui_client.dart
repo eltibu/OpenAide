@@ -278,6 +278,10 @@ class OpenWebUiClient {
 
   Future<void> deleteChat(String id) => _send('DELETE', '/api/v1/chats/$id');
 
+  /// Saves a chat's own system prompt and model settings (its Controls).
+  Future<void> saveChatParams(String id, Map<String, dynamic> params) =>
+      _send('PATCH', '/api/v1/chats/$id/params', body: params);
+
   /// Changes only the given top-level parts of a chat; `history` is merged
   /// on the server, so messages saved meanwhile stay.
   Future<void> patchChat(String id, Map<String, dynamic> chat) =>

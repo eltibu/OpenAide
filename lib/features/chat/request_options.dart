@@ -47,7 +47,8 @@ class Pickable {
 
 /// [toolIds] and [skillIds] are what the person picked in this chat (null:
 /// the model's own tools, no extra skills); [terminalId] is the terminal
-/// they picked (null: the model's, '': none).
+/// they picked (null: the model's, '': none). [chatParams] are the chat's
+/// own controls.
 Map<String, dynamic> requestOptions(
   ModelInfo? model,
   Map<String, dynamic>? settings,
@@ -56,6 +57,7 @@ Map<String, dynamic> requestOptions(
   Set<String>? toolIds,
   Set<String>? skillIds,
   String? terminalId,
+  Map<String, dynamic> chatParams = const {},
 }) {
   final ui = (settings?['ui'] as Map?) ?? const {};
   final enabled = (config?['features'] as Map?) ?? const {};
@@ -96,7 +98,13 @@ Map<String, dynamic> requestOptions(
       'filter_ids': model.defaultFilterIds,
     if (terminal != null && terminal.isNotEmpty) 'terminal_id': terminal,
     'features': features,
-    if (ui['params'] is Map) 'params': ui['params'],
+    // Settings > General's model settings, then this chat's own (Controls).
+    if (ui['params'] is Map || chatParams.isNotEmpty)
+      'params': {
+        ...?(ui['params'] as Map?)?.cast<String, dynamic>(),
+        for (final e in chatParams.entries)
+          if (e.key != 'system' && e.value != null) e.key: e.value,
+      },
     // Naming and tagging new chats follow Settings > Chats, as on the web.
     'background_tasks': {
       'title_generation': (ui['title'] as Map?)?['auto'] != false,

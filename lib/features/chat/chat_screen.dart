@@ -17,6 +17,7 @@ import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'attach_more.dart';
+import 'chat_controls.dart';
 import 'emoji.dart';
 import 'embeds_view.dart';
 import 'markdown_extras.dart';
@@ -153,6 +154,16 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   .read(chatControllerProvider.notifier)
                   .newChat(temporary: !state.temporary),
             ),
+          IconButton(
+            tooltip: 'Chat controls',
+            isSelected: state.params.isNotEmpty,
+            icon: const Icon(Icons.settings_suggest_outlined),
+            selectedIcon: const Icon(
+              Icons.settings_suggest,
+              color: NexusColors.accent,
+            ),
+            onPressed: () => showChatControls(context),
+          ),
           const ReadAloudButton(),
           IconButton(
             tooltip: 'New chat',
@@ -917,6 +928,12 @@ class _ComposerState extends ConsumerState<_Composer> {
             selection: TextSelection.collapsed(offset: 1),
           );
         },
+      ),
+      SlashCommand(
+        'controls',
+        "This chat's system prompt and model settings",
+        Icons.settings_suggest_outlined,
+        () => run(() => showChatControls(context)),
       ),
       SlashCommand('web', 'Attach a web page', Icons.language, () {
         run(() => attachWebpage(context, ref));

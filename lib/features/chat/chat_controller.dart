@@ -171,6 +171,7 @@ class ChatState {
     this.temporary = false,
     this.queued = const [],
     this.compareIds = const [],
+    this.params = const {},
     this.revision = 0,
   });
 
@@ -208,6 +209,10 @@ class ChatState {
   /// More models answering each message next to [modelId], to compare.
   final List<String> compareIds;
 
+  /// This chat's own system prompt and model settings (Controls on the
+  /// web), saved with the chat; they win over Settings > General.
+  final Map<String, dynamic> params;
+
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
 
@@ -231,6 +236,7 @@ class ChatState {
     bool? temporary,
     List<String>? queued,
     List<String>? compareIds,
+    Map<String, dynamic>? params,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -246,6 +252,7 @@ class ChatState {
     temporary: temporary ?? this.temporary,
     queued: queued ?? this.queued,
     compareIds: compareIds ?? this.compareIds,
+    params: params ?? this.params,
     revision: revision + 1,
   );
 }
@@ -647,6 +654,7 @@ class ChatController extends Notifier<ChatState> {
       clearStatus: true,
       temporary: false,
       queued: const [],
+      params: const {},
     );
     try {
       final chat = await ref.read(clientProvider).chat(id);
@@ -655,6 +663,10 @@ class ChatController extends Notifier<ChatState> {
         chat: chat,
         modelId: chat.models.firstOrNull ?? state.modelId,
         compareIds: chat.models.skip(1).toList(),
+        params: {
+          for (final e in ((chat.extra['params'] as Map?) ?? const {}).entries)
+            if (e.value != null) '${e.key}': e.value,
+        },
         loading: false,
       );
     } catch (e) {
@@ -731,6 +743,29 @@ class ChatController extends Notifier<ChatState> {
     if (editOf == null) state = state.copyWith(attachments: const []);
     await _reply(chat, user, modelId, also: state.compareIds);
     return true;
+  }
+
+  /// Sets one of this chat's controls ([value] null goes back to the
+  /// default) and saves them with the chat, as the web's Controls panel does.
+  Future<void> setParam(String key, Object? value) async {
+    final params = {...state.params};
+    if (value == null || (value is String && value.trim().isEmpty)) {
+      params.remove(key);
+    } else {
+      params[key] = value;
+    }
+    state = state.copyWith(params: params);
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty) return;
+    chat.extra['params'] = params;
+    try {
+      // The server merges what it gets, so a default goes back as null.
+      await ref.read(clientProvider).saveChatParams(chat.id, {
+        key: params[key],
+      });
+    } catch (e) {
+      state = state.copyWith(error: "Couldn't save the chat's controls: $e");
+    }
   }
 
   /// Has [ids] answer too, next to the chosen model (the web's "+" beside
@@ -1152,7 +1187,10 @@ class ChatController extends Notifier<ChatState> {
       final temporary = state.temporary;
       final models = await ref.read(modelsProvider.future);
       final settings = await _optional(userSettingsProvider);
-      final system = '${(settings?['ui'] as Map?)?['system'] ?? ''}'.trim();
+      final chatParams = state.params;
+      final system =
+          '${chatParams['system'] ?? (settings?['ui'] as Map?)?['system'] ?? ''}'
+              .trim();
       ref
           .read(readAloudProvider)
           .useVoice(
@@ -1199,6 +1237,7 @@ class ChatController extends Notifier<ChatState> {
               toolIds: state.toolIds,
               skillIds: state.skillIds,
               terminalId: state.terminalId,
+              chatParams: chatParams,
             ),
           ),
           'files': ?_documents(chat),
@@ -1214,7 +1253,18 @@ class ChatController extends Notifier<ChatState> {
         },
       );
       // A temporary chat keeps no id: nothing of it is on the server.
-      if (!temporary) chat.id = turn.chatId;
+      if (!temporary) {
+        final isNew = chat.id.isEmpty;
+        chat.id = turn.chatId;
+        // Controls set before the first message are saved with the new
+        // chat, as the web does.
+        if (isNew && chatParams.isNotEmpty) {
+          chat.extra['params'] = chatParams;
+          unawaited(
+            client.saveChatParams(chat.id, chatParams).catchError((_) {}),
+          );
+        }
+      }
       run.taskIds = turn.taskIds;
       started?.complete((replyId: reply.id, taskIds: turn.taskIds));
       // Stop tapped while the request was on its way: stop it now.
