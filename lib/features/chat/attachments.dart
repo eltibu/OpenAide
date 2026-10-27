@@ -10,6 +10,7 @@ import 'package:video_player/video_player.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import 'attach_more.dart';
 import 'chat_controller.dart';
 import 'side_panel.dart';
 import 'voice_note.dart';
@@ -30,35 +31,63 @@ class AttachButton extends ConsumerWidget {
       final choice = await showModalBottomSheet<String>(
         context: context,
         showDragHandle: true,
+        isScrollControlled: true,
         builder: (context) => SafeArea(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_library_outlined),
-                title: const Text('Photos and videos'),
-                onTap: () => Navigator.pop(context, 'gallery'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_camera_outlined),
-                title: const Text('Take a photo'),
-                onTap: () => Navigator.pop(context, 'camera'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.videocam_outlined),
-                title: const Text('Record a video'),
-                onTap: () => Navigator.pop(context, 'video'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.insert_drive_file_outlined),
-                title: const Text('Files'),
-                onTap: () => Navigator.pop(context, 'files'),
-              ),
-            ],
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: const Text('Photos and videos'),
+                  onTap: () => Navigator.pop(context, 'gallery'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: const Text('Take a photo'),
+                  onTap: () => Navigator.pop(context, 'camera'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.videocam_outlined),
+                  title: const Text('Record a video'),
+                  onTap: () => Navigator.pop(context, 'video'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.insert_drive_file_outlined),
+                  title: const Text('Files'),
+                  onTap: () => Navigator.pop(context, 'files'),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.public),
+                  title: const Text('Web page'),
+                  onTap: () => Navigator.pop(context, 'web'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.sticky_note_2_outlined),
+                  title: const Text('Note'),
+                  onTap: () => Navigator.pop(context, 'note'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.menu_book_outlined),
+                  title: const Text('Knowledge'),
+                  onTap: () => Navigator.pop(context, 'collection'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.forum_outlined),
+                  title: const Text('Past chat'),
+                  onTap: () => Navigator.pop(context, 'chat'),
+                ),
+              ],
+            ),
           ),
         ),
       );
-      if (choice == null) return;
+      if (choice == null || !context.mounted) return;
+      if (choice == 'web') return attachWebpage(context, ref);
+      if (const {'note', 'collection', 'chat'}.contains(choice)) {
+        return attachFromServer(context, ref, choice);
+      }
       final controller = ref.read(chatControllerProvider.notifier);
       try {
         await _pick(choice, controller);
@@ -153,7 +182,11 @@ class PendingAttachments extends ConsumerWidget {
                     fit: BoxFit.cover,
                   ),
                 )
-              : _FileTile(name: a.name, error: a.error != null);
+              : _FileTile(
+                  name: a.name,
+                  error: a.error != null,
+                  type: a.uploaded?.type,
+                );
           return Tooltip(
             message: a.error ?? a.warning ?? a.name,
             child: Stack(
@@ -214,9 +247,13 @@ bool isVideoName(String name) => RegExp(
 ).hasMatch(name);
 
 class _FileTile extends StatelessWidget {
-  const _FileTile({required this.name, this.error = false});
+  const _FileTile({required this.name, this.error = false, this.type});
   final String name;
   final bool error;
+
+  /// `note`, `collection`, `chat` or `text` (a web page) for things that
+  /// aren't files.
+  final String? type;
 
   @override
   Widget build(BuildContext context) {
@@ -232,11 +269,18 @@ class _FileTile extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            isVideoName(name)
-                ? Icons.movie_outlined
-                : name.toLowerCase().endsWith('.wav')
-                ? Icons.mic_none
-                : Icons.description_outlined,
+            switch (type) {
+                  'note' => Icons.sticky_note_2_outlined,
+                  'collection' => Icons.menu_book_outlined,
+                  'chat' => Icons.forum_outlined,
+                  'text' => Icons.public,
+                  _ => null,
+                } ??
+                (isVideoName(name)
+                    ? Icons.movie_outlined
+                    : name.toLowerCase().endsWith('.wav')
+                    ? Icons.mic_none
+                    : Icons.description_outlined),
             size: 20,
           ),
           const SizedBox(width: 6),
@@ -297,7 +341,7 @@ class MessageAttachments extends ConsumerWidget {
                 name: a.name,
               )
             else
-              _FileTile(name: a.name),
+              _FileTile(name: a.name, type: a.type),
         ],
       ),
     );

@@ -489,6 +489,97 @@ class ChatController extends Notifier<ChatState> {
     await send(text);
   }
 
+  /// Adds something already on the server to the next message, as the web
+  /// UI's + menu does: a note, a knowledge base or a past chat, by its id;
+  /// the server reads it when the message is answered.
+  void attachReference(Map<String, dynamic> entry) {
+    if (state.attachments.any(
+      (a) => a.uploaded?.id == entry['id'] && a.uploaded?.type == entry['type'],
+    )) {
+      return;
+    }
+    state = state.copyWith(
+      attachments: [
+        ...state.attachments,
+        PendingAttachment(
+          key: _uuid.v4(),
+          name: '${entry['name']}',
+          isImage: false,
+          uploaded: Attachment.fromJson(entry),
+        ),
+      ],
+    );
+  }
+
+  /// Reads a web page on the server and adds it to the next message.
+  Future<void> attachWebpage(String url) async {
+    final key = _uuid.v4();
+    state = state.copyWith(
+      attachments: [
+        ...state.attachments,
+        PendingAttachment(key: key, name: url, isImage: false),
+      ],
+    );
+    PendingAttachment done;
+    try {
+      final res = await ref
+          .read(clientProvider)
+          .send('POST', '/api/v1/retrieval/process/url', body: {'url': url});
+      final r = (res as Map).cast<String, dynamic>();
+      final file = r['file'];
+      final name = '${r['name'] ?? url}';
+      final Map<String, dynamic> entry;
+      if (file is Map && file['id'] is String) {
+        final meta = (file['meta'] as Map?) ?? const {};
+        entry = {
+          'type': r['type'] == 'image' ? 'image' : 'file',
+          'file': file,
+          'id': file['id'],
+          'url': file['id'],
+          'name': name,
+          'collection_name':
+              r['collection_name'] ?? meta['collection_name'] ?? '',
+          'status': 'uploaded',
+          'content_type': ?meta['content_type'],
+          'size': ?meta['size'],
+          'error': '',
+        };
+      } else {
+        entry = {
+          'type': 'text',
+          'name': name,
+          'url': url,
+          'collection_name': r['collection_name'] ?? '',
+          'status': 'uploaded',
+          'context': 'full',
+          'file': {
+            'data': {'content': r['content'] ?? ''},
+            'meta': {'name': name, 'source': r['url'] ?? url},
+          },
+          'error': '',
+        };
+      }
+      done = PendingAttachment(
+        key: key,
+        name: name,
+        isImage: false,
+        uploaded: Attachment.fromJson(entry),
+      );
+    } catch (e) {
+      done = PendingAttachment(
+        key: key,
+        name: url,
+        isImage: false,
+        error: '$e',
+      );
+    }
+    if (!state.attachments.any((a) => a.key == key)) return;
+    state = state.copyWith(
+      attachments: [for (final a in state.attachments) a.key == key ? done : a],
+      error: done.error == null ? null : "Couldn't read $url: ${done.error}",
+    );
+  }
+
   void removeAttachment(String key) => state = state.copyWith(
     attachments: [
       for (final a in state.attachments)
