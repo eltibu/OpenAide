@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
@@ -533,6 +534,23 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
   /// Newest first.
   final _images = <String>[];
 
+  /// Pictures to change instead of starting fresh, as data URLs.
+  final _inputs = <String>[];
+
+  Future<void> _addImage() async {
+    final picked = await ImagePicker().pickMultiImage(
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: 90,
+    );
+    for (final f in picked) {
+      final bytes = await f.readAsBytes();
+      final type = f.name.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+      _inputs.add('data:image/$type;base64,${base64Encode(bytes)}');
+    }
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     _prompt.dispose();
@@ -554,8 +572,13 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
           .read(clientProvider)
           .send(
             'POST',
-            '/api/v1/images/generations',
+            // With pictures added, the server changes them instead.
+            _inputs.isEmpty
+                ? '/api/v1/images/generations'
+                : '/api/v1/images/edit',
             body: {
+              if (_inputs.isNotEmpty)
+                'image': _inputs.length == 1 ? _inputs.first : _inputs,
               'prompt': _prompt.text.trim(),
               'model': ?_model,
               if (_size.text.trim().isNotEmpty) 'size': _size.text.trim(),
@@ -666,11 +689,57 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
             controller: _prompt,
             minLines: 3,
             maxLines: null,
-            decoration: const InputDecoration(
-              labelText: 'Describe the picture',
+            decoration: InputDecoration(
+              labelText: _inputs.isEmpty
+                  ? 'Describe the picture'
+                  : 'Describe the change',
               alignLabelWithHint: true,
               border: OutlineInputBorder(),
             ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              for (final (i, data) in _inputs.indexed)
+                Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.memory(
+                        base64Decode(data.substring(data.indexOf(',') + 1)),
+                        width: 72,
+                        height: 72,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      right: 0,
+                      top: 0,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _inputs.removeAt(i)),
+                        child: const CircleAvatar(
+                          radius: 11,
+                          child: Icon(
+                            Icons.close,
+                            size: 14,
+                            semanticLabel: 'Remove image',
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              TextButton.icon(
+                onPressed: _busy ? null : _addImage,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text(
+                  _inputs.isEmpty ? 'Add an image to change' : 'Add image',
+                ),
+              ),
+            ],
           ),
           if (_error != null)
             Padding(
