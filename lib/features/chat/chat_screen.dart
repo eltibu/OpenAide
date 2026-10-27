@@ -17,7 +17,9 @@ import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'embeds_view.dart';
+import 'markdown_extras.dart';
 import 'read_aloud.dart';
+import 'reply_actions.dart';
 import 'reply_parts.dart';
 import 'reply_steps.dart';
 import 'side_panel.dart';
@@ -219,6 +221,54 @@ class _EmptyState extends ConsumerWidget {
               textAlign: TextAlign.center,
               style: style,
             ),
+            const _Suggestions(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Starter prompts under the greeting, as the web UI shows them.
+class _Suggestions extends ConsumerWidget {
+  const _Suggestions();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final modelId = ref.watch(chatControllerProvider.select((s) => s.modelId));
+    final models = ref.watch(modelsProvider).value ?? const [];
+    final config = ref.watch(serverConfigProvider).value;
+    final list = promptSuggestions(
+      models.where((m) => m.id == modelId).firstOrNull?.meta,
+      config,
+    ).take(4).toList();
+    if (list.isEmpty) return const SizedBox.shrink();
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: Column(
+          children: [
+            for (final p in list)
+              Card(
+                elevation: 0,
+                margin: const EdgeInsets.only(bottom: 8),
+                color: scheme.surfaceContainerLow,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: scheme.outlineVariant),
+                ),
+                child: ListTile(
+                  title: Text(p.title, maxLines: 2),
+                  subtitle: p.subtitle.isEmpty
+                      ? null
+                      : Text(p.subtitle, maxLines: 1),
+                  trailing: const Icon(Icons.arrow_upward, size: 18),
+                  onTap: () =>
+                      ref.read(chatControllerProvider.notifier).send(p.content),
+                ),
+              ),
           ],
         ),
       ),
@@ -245,10 +295,13 @@ class _MessageList extends ConsumerWidget {
       builder: (url, attributes) =>
           MarkdownImage(url: url, alt: attributes['alt'] ?? ''),
     );
-    final mdConfig =
-        (dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig).copy(
-          configs: [images],
-        );
+    final mdConfig = withReplyCode(
+      (dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig).copy(
+        configs: [images],
+      ),
+      dark,
+    );
+    final generator = replyMarkdownGenerator();
     final body = Theme.of(context).textTheme.bodyLarge;
     final artifacts = artifactsOfChat(messages);
     return ListView.builder(
@@ -313,6 +366,7 @@ class _MessageList extends ConsumerWidget {
                   final TextPart t => MarkdownBlock(
                     data: t.text,
                     config: mdConfig,
+                    generator: generator,
                   ),
                   final steps => ReplySteps(
                     steps: steps as List<StepPart>,
@@ -346,7 +400,9 @@ class _MessageList extends ConsumerWidget {
                 ),
               if (!live) ArtifactCard(all: artifacts, messageId: m.id),
               if (m.sources.isNotEmpty) _Sources(sources: m.sources),
-              if (!live && !streaming) _MessageActions(message: m),
+              if (!live && !streaming)
+                _MessageActions(message: m, isLast: i == 0),
+              if (i == 0 && !streaming) FollowUps(reply: m),
             ],
           ),
         );
@@ -378,7 +434,9 @@ class _Sources extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 200),
               child: Text(s.name, overflow: TextOverflow.ellipsis),
             ),
-            onPressed: s.url == null
+            onPressed: s.passages.isNotEmpty
+                ? () => showSource(context, s)
+                : s.url == null
                 ? null
                 : () => launchUrl(
                     Uri.parse(s.url!),
@@ -392,8 +450,15 @@ class _Sources extends StatelessWidget {
 
 /// Copy, edit or regenerate, and switching between versions of a message.
 class _MessageActions extends ConsumerWidget {
-  const _MessageActions({required this.message, this.compact = false});
+  const _MessageActions({
+    required this.message,
+    this.compact = false,
+    this.isLast = false,
+  });
   final ChatMessage message;
+
+  /// The newest reply in the chat (it can be continued).
+  final bool isLast;
 
   /// Only the version arrows (user messages: copy and edit are on
   /// long-press, as in the Claude app).
@@ -406,6 +471,7 @@ class _MessageActions extends ConsumerWidget {
     final siblings = chat?.siblingsOf(message) ?? const <String>[];
     final index = siblings.indexOf(message.id);
     final isUser = message.role == 'user';
+    final rating = ratingOf(message);
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     if (compact && siblings.length < 2) return const SizedBox.shrink();
 
@@ -418,48 +484,58 @@ class _MessageActions extends ConsumerWidget {
       icon: Icon(icon),
     );
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (siblings.length > 1) ...[
-          action(
-            Icons.chevron_left,
-            'Previous version',
-            index > 0 ? () => controller.switchBranch(message, -1) : null,
-          ),
-          Text(
-            '${index + 1}/${siblings.length}',
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
-          action(
-            Icons.chevron_right,
-            'Next version',
-            index < siblings.length - 1
-                ? () => controller.switchBranch(message, 1)
-                : null,
-          ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (siblings.length > 1) ...[
+            action(
+              Icons.chevron_left,
+              'Previous version',
+              index > 0 ? () => controller.switchBranch(message, -1) : null,
+            ),
+            Text(
+              '${index + 1}/${siblings.length}',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+            action(
+              Icons.chevron_right,
+              'Next version',
+              index < siblings.length - 1
+                  ? () => controller.switchBranch(message, 1)
+                  : null,
+            ),
+          ],
+          if (!compact && message.content.isNotEmpty)
+            action(Icons.copy_outlined, 'Copy', () {
+              Clipboard.setData(ClipboardData(text: message.content));
+              ScaffoldMessenger.of(context)
+                  .showSnackBar(const SnackBar(content: Text('Copied')));
+            }),
+          if (!isUser && !compact) ...[
+            if (message.content.isNotEmpty)
+              SpeakButton(reply: message, color: muted),
+            action(
+              rating == 1 ? Icons.thumb_up : Icons.thumb_up_outlined,
+              'Good reply',
+              () => rateReply(context, ref, message, 1),
+            ),
+            action(
+              rating == -1 ? Icons.thumb_down : Icons.thumb_down_outlined,
+              'Bad reply',
+              () => rateReply(context, ref, message, -1),
+            ),
+            RegenerateButton(reply: message, color: muted),
+            action(
+              Icons.call_split,
+              'Fork from here',
+              () => controller.fork(message),
+            ),
+            ReplyMoreButton(reply: message, color: muted, isLast: isLast),
+          ],
         ],
-        if (!compact && message.content.isNotEmpty)
-          action(Icons.copy_outlined, 'Copy', () {
-            Clipboard.setData(ClipboardData(text: message.content));
-            ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Copied')));
-          }),
-        if (isUser || compact)
-          const SizedBox.shrink()
-        else
-          action(
-            Icons.refresh,
-            'Regenerate',
-            () => controller.regenerate(message),
-          ),
-        if (!isUser && !compact)
-          action(
-            Icons.call_split,
-            'Fork from here',
-            () => controller.fork(message),
-          ),
-      ],
+      ),
     );
   }
 
@@ -907,6 +983,12 @@ Future<void> _userMessageMenu(
             subtitle: const Text('A new chat with the conversation so far'),
             onTap: () => Navigator.pop(context, 'fork'),
           ),
+          ListTile(
+            leading: const Icon(Icons.delete_outline),
+            title: const Text('Delete'),
+            subtitle: const Text('This message and the reply to it'),
+            onTap: () => Navigator.pop(context, 'delete'),
+          ),
         ],
       ),
     ),
@@ -922,6 +1004,15 @@ Future<void> _userMessageMenu(
     await _MessageActions.edit(context, ref, m);
   } else if (choice == 'fork') {
     await ref.read(chatControllerProvider.notifier).fork(m);
+  } else if (choice == 'delete') {
+    if (await confirm(
+      context,
+      'Delete this message?',
+      'The message and the reply to it are removed from the chat on the '
+          'server too.',
+    )) {
+      await ref.read(chatControllerProvider.notifier).deleteMessage(m);
+    }
   }
 }
 

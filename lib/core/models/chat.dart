@@ -217,15 +217,34 @@ class ChatMessage {
     if (raw is! List) return const [];
     final out = <Source>[];
     final seen = <String>{};
+    final byKey = <String, Source>{};
     for (final s in raw.whereType<Map>()) {
       final src = (s['source'] as Map?) ?? const {};
-      final metas = (s['metadata'] as List?)?.whereType<Map>() ?? const [];
-      final entries = metas.isEmpty ? [src] : metas;
-      for (final m in entries) {
+      final metas = (s['metadata'] as List?)?.toList() ?? const [];
+      final docs = (s['document'] as List?)?.toList() ?? const [];
+      final scores = (s['distances'] as List?)?.toList() ?? const [];
+      final count = metas.isEmpty ? 1 : metas.length;
+      for (var i = 0; i < count; i++) {
+        final m = metas.isEmpty ? src : (metas[i] as Map? ?? const {});
         final url = '${m['source'] ?? src['url'] ?? ''}';
         final name = '${m['name'] ?? m['title'] ?? src['name'] ?? url}';
-        if (name.isEmpty || !seen.add('$name|$url')) continue;
-        out.add(Source(name: name, url: url.startsWith('http') ? url : null));
+        if (name.isEmpty) continue;
+        final key = '$name|$url';
+        final source = byKey[key] ??= Source(
+          name: name,
+          url: url.startsWith('http') ? url : null,
+        );
+        if (seen.add(key)) out.add(source);
+        final text = i < docs.length ? '${docs[i] ?? ''}'.trim() : '';
+        if (text.isNotEmpty) {
+          final score = i < scores.length ? scores[i] : null;
+          source.passages.add((
+            text: text,
+            relevance: score is num && score >= 0 && score <= 1
+                ? score.toDouble()
+                : null,
+          ));
+        }
       }
     }
     return out;
@@ -412,9 +431,12 @@ class ToolCall {
 }
 
 class Source {
-  const Source({required this.name, this.url});
+  Source({required this.name, this.url});
   final String name;
   final String? url;
+
+  /// The text the model read from it, with how relevant the server found it.
+  final List<({String text, double? relevance})> passages = [];
 }
 
 /// A photo or file on a message, in the web UI's shape: `id` and `url` are

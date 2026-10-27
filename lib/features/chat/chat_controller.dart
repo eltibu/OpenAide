@@ -289,10 +289,12 @@ class ChatController extends Notifier<ChatState> {
       _view++;
       _run?.finish();
     });
-    // Connect early so the first reply streams live.
+    // Connect early so the first reply streams live, and pick up what the
+    // server adds after a reply is done (follow-up suggestions).
     Future.microtask(() {
       try {
-        ref.read(chatSocketProvider);
+        final sub = ref.read(chatSocketProvider).events.listen(_afterReply);
+        ref.onDispose(sub.cancel);
       } catch (_) {}
     });
     return const ChatState();
@@ -579,8 +581,11 @@ class ChatController extends Notifier<ChatState> {
     }
   }
 
-  /// A new answer to the same question, next to [reply] (Regenerate).
-  Future<void> regenerate(ChatMessage reply) async {
+  /// A new answer to the same question, next to [reply] (Regenerate). A
+  /// [hint] ("Add details", "More concise", or the person's own words) asks
+  /// for a different answer than the old one, as the web's regenerate menu
+  /// does.
+  Future<void> regenerate(ChatMessage reply, {String? hint}) async {
     final chat = state.chat;
     final modelId = state.modelId;
     final user = chat?.messages[reply.parentId];
@@ -588,7 +593,137 @@ class ChatController extends Notifier<ChatState> {
       return;
     }
     chat.currentId = user.id;
-    await _reply(chat, user, modelId);
+    final h = hint?.trim();
+    await _reply(
+      chat,
+      user,
+      reply.model ?? modelId,
+      redoOf: h == null || h.isEmpty ? null : reply,
+      hint: h == null || h.isEmpty ? null : h,
+    );
+  }
+
+  /// Has the model keep writing [reply] where it stopped (Continue
+  /// Response).
+  Future<void> continueReply(ChatMessage reply) async {
+    final chat = state.chat;
+    final modelId = reply.model ?? state.modelId;
+    final user = chat?.messages[reply.parentId];
+    if (state.streaming || chat == null || modelId == null || user == null) {
+      return;
+    }
+    await _reply(chat, user, modelId, continuing: reply);
+  }
+
+  /// Changes a reply's text in place, or with [asCopy] keeps the original
+  /// and adds the edited text as another version next to it.
+  Future<void> editReply(
+    ChatMessage reply,
+    String text, {
+    bool asCopy = false,
+  }) async {
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty || state.streaming) return;
+    final client = ref.read(clientProvider);
+    try {
+      if (!asCopy) {
+        reply.content = text;
+        reply.extra.remove('output');
+        state = state.copyWith(chat: chat);
+        await client.saveMessageText(chat.id, reply.id, text);
+        return;
+      }
+      final copy =
+          ChatMessage.fromJson({
+              ...reply.toJson(),
+              'id': _uuid.v4(),
+              'content': text,
+              'childrenIds': <String>[],
+              'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            })
+            ..extra.remove('output')
+            ..extra.remove('annotation')
+            ..extra.remove('feedbackId')
+            ..extra.remove('files');
+      chat.append(copy);
+      state = state.copyWith(chat: chat);
+      await client.saveChat(chat);
+    } catch (e) {
+      state = state.copyWith(error: "Couldn't save the change: $e");
+    }
+  }
+
+  /// Deletes [message] and the answers right under it, as the web does.
+  Future<void> deleteMessage(ChatMessage message) async {
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty || state.streaming) return;
+    try {
+      final saved = await ref
+          .read(clientProvider)
+          .deleteMessage(chat.id, message.id);
+      state = state.copyWith(chat: saved);
+      refreshChatLists(ref.invalidate);
+    } catch (e) {
+      state = state.copyWith(error: "Couldn't delete the message: $e");
+    }
+  }
+
+  /// Thumbs up (1) or down (-1) on a reply, with an optional reason and
+  /// comment, saved on the message and in Admin > Evaluations like the web.
+  /// The same rating again takes it back.
+  Future<void> rate(
+    ChatMessage reply,
+    int rating, {
+    String? reason,
+    String? comment,
+  }) async {
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty) return;
+    final before = (reply.extra['annotation'] as Map?)?.cast<String, dynamic>();
+    final undo =
+        reason == null && comment == null && before?['rating'] == rating;
+    final annotation = <String, dynamic>{...?before};
+    annotation['rating'] = undo ? null : rating;
+    if (before?['rating'] != rating) {
+      annotation
+        ..['reason'] = null
+        ..['comment'] = null;
+    }
+    if (reason != null) annotation['reason'] = reason;
+    if (comment != null) annotation['comment'] = comment;
+    reply.extra['annotation'] = annotation;
+    state = state.copyWith(chat: chat);
+    final client = ref.read(clientProvider);
+    try {
+      if (!undo) {
+        final siblings = chat.siblingsOf(reply).where((id) => id != reply.id);
+        final id = await client.saveFeedback({
+          'type': 'rating',
+          'data': {
+            ...annotation,
+            'model_id': reply.model,
+            if (siblings.isNotEmpty)
+              'sibling_model_ids': [
+                for (final s in siblings) chat.messages[s]?.model,
+              ],
+          },
+          'meta': {
+            'model_id': reply.model,
+            'message_id': reply.id,
+            'message_index':
+                chat.thread.indexWhere((m) => m.id == reply.id) + 1,
+            'chat_id': chat.id,
+          },
+          'snapshot': {
+            'chat': {'id': chat.id, 'chat': chat.toServerBody()},
+          },
+        }, id: reply.extra['feedbackId'] as String?);
+        if (id != null) reply.extra['feedbackId'] = id;
+      }
+      await client.saveChat(chat);
+    } catch (e) {
+      state = state.copyWith(error: "Couldn't save the rating: $e");
+    }
   }
 
   /// Shows the previous ([step] -1) or next (+1) version of [message], and
@@ -640,17 +775,32 @@ class ChatController extends Notifier<ChatState> {
     ChatMessage user,
     String modelId, {
     Completer<({String replyId, List<String> taskIds})>? started,
+    ChatMessage? continuing,
+    ChatMessage? redoOf,
+    String? hint,
   }) async {
     final client = ref.read(clientProvider);
     final socket = ref.read(chatSocketProvider);
-    final reply = ChatMessage(
-      id: _uuid.v4(),
-      role: 'assistant',
-      content: '',
-      parentId: user.id,
-      model: modelId,
-    );
-    chat.append(reply);
+    // What the model reads: the conversation up to the new reply; when
+    // continuing, the reply so far; with a hint, the old answer too.
+    final history = [
+      ...chat.thread,
+      if (hint != null && redoOf != null) redoOf,
+    ];
+    final ChatMessage reply;
+    if (continuing != null) {
+      reply = continuing..extra.remove('done');
+      chat.currentId = reply.id;
+    } else {
+      reply = ChatMessage(
+        id: _uuid.v4(),
+        role: 'assistant',
+        content: '',
+        parentId: user.id,
+        model: modelId,
+      );
+      chat.append(reply);
+    }
     unawaited(ref.read(readAloudProvider).stop());
     final run = _run = _Run(reply);
     final view = _view;
@@ -696,8 +846,9 @@ class ChatController extends Notifier<ChatState> {
                 userEmail: me?['email'] as String?,
               ),
             },
-          for (final m in chat.thread)
-            if (m.id != reply.id) {'role': m.role, 'content': m.content},
+          for (final m in history)
+            if (m.id != reply.id || continuing != null)
+              {'role': m.role, 'content': m.content},
         ],
         sessionId: sessionId,
         options: {
@@ -713,6 +864,10 @@ class ChatController extends Notifier<ChatState> {
             ),
           ),
           'files': ?_documents(chat),
+          if (continuing != null) 'assistant_message_id': reply.id,
+          'regeneration_prompt': ?hint,
+          if (hint != null && redoOf != null)
+            'regeneration_message_id': redoOf.id,
         },
       );
       chat.id = turn.chatId;
@@ -845,6 +1000,38 @@ class ChatController extends Notifier<ChatState> {
     }
     _speak(run, reply.content);
     state = state.copyWith();
+  }
+
+  /// Reads one reply out loud in the model's voice (the speaker under a
+  /// reply), whether or not read aloud is switched on.
+  Future<void> readOut(ChatMessage reply) async {
+    final speaker = ref.read(readAloudProvider);
+    await speaker.stop();
+    final models = await ref.read(modelsProvider.future);
+    final id = reply.model ?? state.modelId;
+    speaker
+      ..useVoice(
+        speechVoice(
+          await _optional(userSettingsProvider),
+          await _optional(serverConfigProvider),
+          models.where((m) => m.id == id).firstOrNull?.meta,
+        ),
+      )
+      ..say(reply.content);
+  }
+
+  /// Follow-up suggestions arrive after the reply itself is finished.
+  void _afterReply(Map<String, dynamic> event) {
+    final outer = event['data'];
+    if (outer is! Map || outer['type'] != 'chat:message:follow_ups') return;
+    final chat = state.chat;
+    final message = chat?.messages[event['message_id']];
+    if (chat == null || message == null || event['chat_id'] != chat.id) return;
+    final list = ((outer['data'] as Map?)?['follow_ups'] as List? ?? const [])
+        .whereType<String>()
+        .toList();
+    message.extra['followUps'] = list;
+    state = state.copyWith(chat: chat);
   }
 
   /// Hands read aloud what is newly ready to say, when it is on.

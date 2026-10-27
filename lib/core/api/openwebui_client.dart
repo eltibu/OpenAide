@@ -283,6 +283,50 @@ class OpenWebUiClient {
   Future<void> patchChat(String id, Map<String, dynamic> chat) =>
       _send('POST', '/api/v1/chats/$id', body: {'chat': chat});
 
+  /// Changes one message's text (editing a reply in place, as on the web).
+  Future<void> saveMessageText(String chatId, String messageId, String text) =>
+      _send(
+        'POST',
+        '/api/v1/chats/$chatId/messages/$messageId',
+        body: {'content': text},
+      );
+
+  /// Deletes a message and its direct answers; their answers move up a
+  /// level. Returns the chat as the server now has it.
+  Future<Chat> deleteMessage(String chatId, String messageId) async {
+    final res = await _send(
+      'DELETE',
+      '/api/v1/chats/$chatId/messages/$messageId',
+    );
+    return Chat.fromServer((res as Map).cast<String, dynamic>());
+  }
+
+  /// Records a thumbs up/down (and its reason) for Admin > Evaluations, the
+  /// same record the web UI keeps. Returns the feedback id.
+  Future<String?> saveFeedback(
+    Map<String, dynamic> feedback, {
+    String? id,
+  }) async {
+    if (id != null) {
+      try {
+        final res = await _send(
+          'POST',
+          '/api/v1/evaluations/feedback/$id',
+          body: feedback,
+        );
+        if (res is Map && res['id'] is String) return res['id'] as String;
+      } on ApiException {
+        // Gone or not ours any more: make a new one.
+      }
+    }
+    final res = await _send(
+      'POST',
+      '/api/v1/evaluations/feedback',
+      body: feedback,
+    );
+    return res is Map ? res['id'] as String? : null;
+  }
+
   /// Saves a message's voice-call details (`meta.voice`).
   Future<void> saveMessageVoice(
     String chatId,

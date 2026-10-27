@@ -101,6 +101,7 @@ Map<String, dynamic> requestOptions(
     'background_tasks': {
       'title_generation': (ui['title'] as Map?)?['auto'] != false,
       'tags_generation': ui['autoTags'] != false,
+      'follow_up_generation': ui['autoFollowUps'] != false,
     },
   };
 }

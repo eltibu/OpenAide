@@ -146,6 +146,7 @@ void main() {
     expect(o['background_tasks'], {
       'title_generation': false,
       'tags_generation': false,
+      'follow_up_generation': true,
     });
     // Switched off in the chat wins over "always".
     expect(
@@ -169,6 +170,7 @@ void main() {
     expect(requestOptions(m, null, null)['background_tasks'], {
       'title_generation': true,
       'tags_generation': true,
+      'follow_up_generation': true,
     });
   });
 }
