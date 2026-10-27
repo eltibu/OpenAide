@@ -23,4 +23,38 @@ void main() {
     const closed = 'Here:\n```\nprint(1);\n```\nDone. And';
     expect(closed.substring(0, readyUpTo(closed, 0)), endsWith('Done.'));
   });
+
+  test('replies are read in the model\'s call voice', () {
+    final config = {
+      'audio': {
+        'tts': {'voice': 'Alfred'},
+        'realtime': {'voice': 'marin'},
+      },
+    };
+    expect(speechVoice(null, config, null), (
+      voice: 'marin',
+      fallback: 'Alfred',
+    ));
+    expect(
+      speechVoice(null, config, {
+        'voice': {'voice': 'cedar'},
+      }).voice,
+      'cedar',
+    );
+    expect(
+      speechVoice(null, config, {
+        'tts': {'voice': 'Nova'},
+        'voice': {'voice': 'cedar'},
+      }).voice,
+      'Nova',
+    );
+    expect(
+      speechVoice(null, {
+        'audio': {
+          'tts': {'voice': 'Alfred'},
+        },
+      }, null).voice,
+      'Alfred',
+    );
+  });
 }

@@ -70,6 +70,15 @@ class ReadAloud {
   /// The voice to ask for; the server's own when null.
   String? voice;
 
+  /// Asked for when the server's text to speech doesn't know [voice] (the
+  /// call voice may belong to another engine).
+  String? fallbackVoice;
+
+  void useVoice(({String? voice, String? fallback}) v) {
+    voice = v.voice;
+    fallbackVoice = v.fallback;
+  }
+
   static const _channel = MethodChannel('nexus/speech');
 
   final _queue = <String>[];
@@ -112,10 +121,20 @@ class ReadAloud {
     return out;
   }
 
-  Future<List<int>> _fetch(String text) => client.postForBytes(
-    '/api/v1/audio/speech',
-    {'input': text, if (voice != null && voice!.isNotEmpty) 'voice': voice},
-  );
+  Future<List<int>> _fetch(String text) async {
+    Future<List<int>> get(String? v) => client.postForBytes(
+      '/api/v1/audio/speech',
+      {'input': text, if (v != null && v.isNotEmpty) 'voice': v},
+    );
+    try {
+      return await get(voice);
+    } on ApiException catch (e) {
+      if (e.statusCode < 400 || voice == fallbackVoice) rethrow;
+      // Not a voice this engine has: use the usual one from now on.
+      voice = fallbackVoice;
+      return get(voice);
+    }
+  }
 
   Future<void> _run(int gen) async {
     _running = true;
@@ -199,19 +218,30 @@ final readAloudOnProvider = NotifierProvider<ReadAloudToggle, bool>(
   ReadAloudToggle.new,
 );
 
-/// The voice the web would use: yours from Settings > Audio, else the
-/// server's.
-String? speechVoice(
+String? _voiceIn(Object? holder, String key) {
+  final part = holder is Map ? holder[key] : null;
+  final v = part is Map ? part['voice'] : null;
+  return v is String && v.isNotEmpty ? v : null;
+}
+
+/// The voice replies are read in: the model's own speaking voice if it has
+/// one, else the voice it talks with in calls (so it sounds the same), else
+/// yours from Settings > Audio, else the server's.
+({String? voice, String? fallback}) speechVoice(
   Map<String, dynamic>? settings,
   Map<String, dynamic>? config,
+  Map<String, dynamic>? modelMeta,
 ) {
-  String? pick(Object? audio) {
-    final tts = audio is Map ? audio['tts'] : null;
-    final v = tts is Map ? tts['voice'] : null;
-    return v is String && v.isNotEmpty ? v : null;
-  }
-
-  return pick(settings?['audio']) ?? pick(config?['audio']);
+  final fallback =
+      _voiceIn(settings?['audio'], 'tts') ?? _voiceIn(config?['audio'], 'tts');
+  return (
+    voice:
+        _voiceIn(modelMeta, 'tts') ??
+        _voiceIn(modelMeta, 'voice') ??
+        _voiceIn(config?['audio'], 'realtime') ??
+        fallback,
+    fallback: fallback,
+  );
 }
 
 /// The read-aloud toggle for the chat's top bar: on, every reply is spoken

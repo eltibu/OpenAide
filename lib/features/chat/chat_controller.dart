@@ -669,10 +669,15 @@ class ChatController extends Notifier<ChatState> {
       final models = await ref.read(modelsProvider.future);
       final settings = await _optional(userSettingsProvider);
       final system = '${(settings?['ui'] as Map?)?['system'] ?? ''}'.trim();
-      ref.read(readAloudProvider).voice = speechVoice(
-        settings,
-        await _optional(serverConfigProvider),
-      );
+      ref
+          .read(readAloudProvider)
+          .useVoice(
+            speechVoice(
+              settings,
+              await _optional(serverConfigProvider),
+              models.where((m) => m.id == modelId).firstOrNull?.meta,
+            ),
+          );
       final me = ref.read(sessionProvider).value?.user;
       final turn = await client.startTurn(
         model: modelId,
