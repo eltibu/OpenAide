@@ -16,6 +16,7 @@ import '../workspace/prompts_api.dart' show Prompt;
 import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
+import 'attach_more.dart';
 import 'embeds_view.dart';
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
@@ -631,6 +632,9 @@ class _ComposerState extends ConsumerState<_Composer> {
       // "@" picks the model for this chat, as on the web.
       final at = RegExp(r'(?:^|\s)@(\S*)$').firstMatch(_text.text)?.group(1);
       if (at != _at) setState(() => _at = at);
+      // "#" attaches knowledge, a note or a web page, as on the web.
+      final hash = RegExp(r'(?:^|\s)#(\S*)$').firstMatch(_text.text)?.group(1);
+      if (hash != _hash) setState(() => _hash = hash);
     });
   }
 
@@ -638,6 +642,15 @@ class _ComposerState extends ConsumerState<_Composer> {
   bool _recording = false;
   String? _slash;
   String? _at;
+  String? _hash;
+
+  void _dropHash() {
+    final text = _text.text.replaceFirst(RegExp(r'#\S*$'), '');
+    _text.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 
   /// The app's own "/" commands, listed above your saved prompts.
   List<SlashCommand> _commands() {
@@ -652,6 +665,18 @@ class _ComposerState extends ConsumerState<_Composer> {
       _text.clear();
       action();
     }
+
+    final model = ref
+        .read(modelsProvider)
+        .value
+        ?.where((m) => m.id == state.modelId)
+        .firstOrNull;
+    final features = availableFeatures(
+      model,
+      ref.read(serverConfigProvider).value,
+    );
+    bool featureOn(String id) =>
+        state.features[id] ?? model?.defaultFeatureIds.contains(id) ?? false;
 
     return [
       if (state.streaming)
@@ -699,6 +724,47 @@ class _ComposerState extends ConsumerState<_Composer> {
           );
         },
       ),
+      // The text box's switches and + menu, without leaving the keyboard.
+      for (final id in features)
+        SlashCommand(
+          switch (id) {
+            'web_search' => 'search',
+            'image_generation' => 'image',
+            _ => 'code',
+          },
+          '${featureOn(id) ? 'Turn off' : 'Turn on'} ${switch (id) {
+            'web_search' => 'web search',
+            'image_generation' => 'image generation',
+            _ => 'the code interpreter',
+          }} for this chat',
+          _featureIcon(id),
+          () => run(() => controller.setFeature(id, !featureOn(id))),
+        ),
+      SlashCommand(
+        'knowledge',
+        'Attach knowledge or a note (or type #)',
+        Icons.library_books_outlined,
+        () {
+          _text.value = const TextEditingValue(
+            text: '#',
+            selection: TextSelection.collapsed(offset: 1),
+          );
+        },
+      ),
+      SlashCommand('web', 'Attach a web page', Icons.language, () {
+        run(() => attachWebpage(context, ref));
+      }),
+      SlashCommand(
+        'note',
+        'Attach one of your notes',
+        Icons.sticky_note_2_outlined,
+        () {
+          run(() => attachFromServer(context, ref, 'note'));
+        },
+      ),
+      SlashCommand('chat', 'Attach a past chat', Icons.forum_outlined, () {
+        run(() => attachFromServer(context, ref, 'chat'));
+      }),
       SlashCommand('new', 'Start a new chat', Icons.add_comment_outlined, () {
         run(controller.newChat);
       }),
@@ -844,6 +910,7 @@ class _ComposerState extends ConsumerState<_Composer> {
               )
             else ...[
               if (_at != null) _ModelMentions(query: _at!, onPick: _pickModel),
+              if (_hash != null) HashMentions(query: _hash!, onDone: _dropHash),
               if (_slash != null)
                 PromptSuggestions(
                   query: _slash!,

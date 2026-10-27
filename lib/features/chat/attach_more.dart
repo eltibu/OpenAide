@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../notes/notes_api.dart';
 import '../workspace/knowledge_api.dart';
+import '../workspace/knowledge_screen.dart' show knowledgeListProvider;
 import 'chat_controller.dart';
 
 /// One thing to pick.
@@ -102,6 +103,101 @@ Future<void> attachFromServer(
     if (kind == 'collection') 'description': picked.subtitle,
     'status': 'uploaded',
   });
+}
+
+/// Your notes, for "#" in the chat box.
+final hashNotesProvider = FutureProvider.autoDispose<List<Note>>(
+  (ref) => NotesApi(ref.watch(clientProvider)).list(),
+);
+
+/// What "#" offers, as on the web: a web address to attach, then your
+/// knowledge bases and notes matching what follows it.
+class HashMentions extends ConsumerWidget {
+  const HashMentions({super.key, required this.query, required this.onDone});
+  final String query;
+
+  /// Something was attached; take the "#…" out of the text box.
+  final VoidCallback onDone;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(chatControllerProvider.notifier);
+    final q = query.toLowerCase();
+    bool match(String a, String b) =>
+        a.toLowerCase().contains(q) || b.toLowerCase().contains(q);
+    final url = RegExp(r'^(https?://)?[\w-]+(\.[\w-]+)+(/\S*)?$')
+        .hasMatch(query);
+    final knowledge = ref.watch(knowledgeListProvider);
+    final notes = ref.watch(hashNotesProvider);
+    final tiles = <Widget>[
+      if (url)
+        ListTile(
+          dense: true,
+          leading: const Icon(Icons.language),
+          title: Text('Attach $query'),
+          subtitle: const Text('Web page'),
+          onTap: () {
+            onDone();
+            controller.attachWebpage(
+              query.startsWith(RegExp('https?://')) ? query : 'https://$query',
+            );
+          },
+        ),
+      for (final k in knowledge.value ?? const <Knowledge>[])
+        if (match(k.name, k.description))
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.library_books_outlined),
+            title: Text(k.name),
+            subtitle: Text(
+              k.description.isEmpty ? 'Knowledge' : k.description,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            onTap: () {
+              onDone();
+              controller.attachReference({
+                'type': 'collection',
+                'id': k.id,
+                'name': k.name,
+                'description': k.description,
+                'status': 'uploaded',
+              });
+            },
+          ),
+      for (final n in notes.value ?? const <Note>[])
+        if (match(n.title, ''))
+          ListTile(
+            dense: true,
+            leading: const Icon(Icons.sticky_note_2_outlined),
+            title: Text(n.title.isEmpty ? 'Untitled note' : n.title),
+            subtitle: const Text('Note'),
+            onTap: () {
+              onDone();
+              controller.attachReference({
+                'type': 'note',
+                'id': n.id,
+                'name': n.title,
+                'status': 'uploaded',
+              });
+            },
+          ),
+    ];
+    if (tiles.isEmpty) {
+      if (knowledge.isLoading || notes.isLoading) {
+        return const LinearProgressIndicator(minHeight: 2);
+      }
+      return const SizedBox.shrink();
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 220),
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(top: 6),
+        children: tiles,
+      ),
+    );
+  }
 }
 
 String _firstLine(String text) {
