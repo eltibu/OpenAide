@@ -35,8 +35,13 @@ class TerminalScreen extends ConsumerStatefulWidget {
     this.startInFiles,
     this.openPath,
     this.openIsDir = false,
+    this.embedded = false,
   });
   final TerminalServer server;
+
+  /// Inside the chat's side drawer: only the Terminal / Files switch on
+  /// top, no title bar of its own.
+  final bool embedded;
   final bool? startInFiles;
 
   /// A file (opened, in its folder) or folder to show in Files at once.
@@ -75,17 +80,25 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
 
   @override
   Widget build(BuildContext context) {
+    final tabs = TabBar(
+      controller: _tabs,
+      tabs: widget.embedded
+          ? const [
+              Tab(height: 36, text: 'Terminal'),
+              Tab(height: 36, text: 'Files'),
+            ]
+          : const [
+              Tab(icon: Icon(Icons.terminal), text: 'Terminal'),
+              Tab(icon: Icon(Icons.folder_outlined), text: 'Files'),
+            ],
+    );
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.server.name),
-        bottom: TabBar(
-          controller: _tabs,
-          tabs: const [
-            Tab(icon: Icon(Icons.terminal), text: 'Terminal'),
-            Tab(icon: Icon(Icons.folder_outlined), text: 'Files'),
-          ],
-        ),
-      ),
+      appBar: widget.embedded
+          ? PreferredSize(
+              preferredSize: const Size.fromHeight(37),
+              child: Material(child: tabs),
+            )
+          : AppBar(title: Text(widget.server.name), bottom: tabs),
       body: TabBarView(
         controller: _tabs,
         physics: const NeverScrollableScrollPhysics(),

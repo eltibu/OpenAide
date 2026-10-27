@@ -13,6 +13,7 @@ import '../../core/widgets/nexus_logo.dart';
 import '../update/update_screen.dart';
 import '../terminal/file_links.dart' show FileRef;
 import '../terminal/file_open.dart';
+import '../terminal/terminal_api.dart' show TerminalServer;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'artifacts_view.dart';
 import '../workspace/prompts_api.dart' show Prompt;
@@ -189,6 +190,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         ],
       ),
       drawer: wide ? null : const ChatDrawer(),
+      // Controls, Files (terminal and files) and Overview slide in from the
+      // right, over the chat, as a drawer.
+      endDrawer: wide
+          ? null
+          : Drawer(
+              width: math.min(MediaQuery.sizeOf(context).width * 0.92, 460),
+              child: const ChatPanel(),
+            ),
+      endDrawerEnableOpenDragGesture: false,
       body: Column(
         children: [
           const UpdateBanner(),
@@ -1667,21 +1677,159 @@ class _FeaturesButton extends ConsumerWidget {
             padding: const EdgeInsets.only(left: 6),
             child: Icon(Icons.image_outlined, size: 20, color: accent),
           ),
-        if (on('code_interpreter'))
+        // Where code runs, as the web's terminal chip: a terminal, the
+        // sandbox, or nothing. Tap to switch or open its files.
+        if (terminals.isNotEmpty || features.contains('code_interpreter'))
+          _TerminalChip(
+            terminals: terminals,
+            terminal: terminal,
+            sandbox: on('code_interpreter'),
+            canSandbox: features.contains('code_interpreter'),
+          )
+        else if (on('code_interpreter'))
           Padding(
             padding: const EdgeInsets.only(left: 6),
             child: Icon(Icons.code, size: 20, color: accent),
           ),
-        if (terminal != null)
-          Padding(
-            padding: const EdgeInsets.only(left: 6),
-            child: Tooltip(
-              message: terminal.name,
-              child: Icon(Icons.terminal, size: 20, color: accent),
-            ),
-          ),
       ],
     );
+  }
+}
+
+/// The terminal chip in the text box: shows where code runs and opens a
+/// picker for the sandbox or a terminal, with shortcuts to its shell and
+/// files in the side drawer.
+class _TerminalChip extends ConsumerWidget {
+  const _TerminalChip({
+    required this.terminals,
+    required this.terminal,
+    required this.sandbox,
+    required this.canSandbox,
+  });
+  final List<TerminalServer> terminals;
+  final TerminalServer? terminal;
+  final bool sandbox;
+  final bool canSandbox;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final active = terminal != null || sandbox;
+    final color = active ? NexusColors.accent : context.nexus.muted;
+    final label = terminal?.name ?? (sandbox ? 'Sandbox' : 'Terminal');
+    return Padding(
+      padding: const EdgeInsets.only(left: 2),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 150),
+        child: TextButton.icon(
+          style: TextButton.styleFrom(
+            foregroundColor: color,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            minimumSize: const Size(0, 32),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            textStyle: Theme.of(context).textTheme.labelMedium,
+          ),
+          icon: Icon(
+            terminal != null
+                ? Icons.cloud_outlined
+                : sandbox
+                ? Icons.code
+                : Icons.terminal,
+            size: 16,
+          ),
+          label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+          onPressed: () => _pick(context, ref),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pick(BuildContext context, WidgetRef ref) async {
+    final chat = ref.read(chatControllerProvider.notifier);
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final current = terminal?.id ?? (sandbox ? 'sandbox' : '');
+        Widget option(String id, IconData icon, String title, String sub) =>
+            ListTile(
+              leading: Icon(icon),
+              title: Text(title),
+              subtitle: Text(sub),
+              trailing: id == current
+                  ? const Icon(Icons.check, color: NexusColors.accent)
+                  : null,
+              onTap: () => Navigator.pop(context, id),
+            );
+        return SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text('Where code runs in this chat'),
+                  ),
+                ),
+                option('', Icons.block, 'Off', 'No sandbox or terminal'),
+                if (canSandbox)
+                  option(
+                    'sandbox',
+                    Icons.code,
+                    'Sandbox',
+                    'The code interpreter runs code safely on the server',
+                  ),
+                for (final t in terminals)
+                  option(
+                    t.id,
+                    Icons.cloud_outlined,
+                    t.name,
+                    'A real terminal: commands and files on that machine',
+                  ),
+                if (terminals.isNotEmpty) ...[
+                  const Divider(),
+                  ListTile(
+                    leading: const Icon(Icons.folder_outlined),
+                    title: const Text('Open files'),
+                    onTap: () => Navigator.pop(context, ':files'),
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.terminal),
+                    title: const Text('Open terminal'),
+                    onTap: () => Navigator.pop(context, ':shell'),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (choice == null || !context.mounted) return;
+    final server = terminal ?? terminals.firstOrNull;
+    switch (choice) {
+      case ':files' || ':shell':
+        showChatPanel(
+          context,
+          tab: 1,
+          serverId: server?.id,
+          files: choice == ':files',
+        );
+      case 'sandbox':
+        chat
+          ..setTerminal('')
+          ..setFeature('code_interpreter', true);
+      case '':
+        chat
+          ..setTerminal('')
+          ..setFeature('code_interpreter', false);
+      default:
+        chat
+          ..setTerminal(choice)
+          ..setFeature('code_interpreter', false);
+    }
   }
 }
 

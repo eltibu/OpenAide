@@ -1,5 +1,5 @@
 /// The web UI's chat panel: Controls, Files and Overview tabs beside the
-/// chat on a wide screen, or as its own page on a phone.
+/// chat on a wide screen, or as a drawer from the right on a phone.
 library;
 
 import 'package:flutter/material.dart';
@@ -9,67 +9,171 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/theme.dart';
 import '../settings/settings_screen.dart' show Avatar, meProvider;
-import '../terminal/terminal_api.dart';
+import '../terminal/terminal_api.dart' show TerminalServer;
 import '../terminal/terminal_screen.dart'
-    show FileBrowser, TerminalScreen, terminalServersProvider;
+    show TerminalScreen, terminalServersProvider;
 import 'chat_controller.dart';
 import 'chat_controls.dart';
 import 'side_panel.dart';
 
-/// Opens the panel on [tab] (0 Controls, 1 Files, 2 Overview).
-void showChatPanel(BuildContext context, {int tab = 0}) =>
-    showBeside(context, 'chatPanel', (_) => ChatPanel(initialTab: tab));
+/// What the chat's drawer should show: a tab, and for Files which terminal,
+/// whether the shell or the files, and a file to open. [nonce] changes on
+/// each request, so asking again (another file) refreshes it.
+class PanelRequest {
+  const PanelRequest({
+    this.tab = 0,
+    this.serverId,
+    this.files = true,
+    this.openPath,
+    this.openIsDir = false,
+    this.nonce = 0,
+  });
+  final int tab;
+  final String? serverId;
+  final bool files;
+  final String? openPath;
+  final bool openIsDir;
+  final int nonce;
+}
 
-class ChatPanel extends ConsumerWidget {
-  const ChatPanel({super.key, this.initialTab = 0});
-  final int initialTab;
+class _PanelRequests extends Notifier<PanelRequest> {
+  @override
+  PanelRequest build() => const PanelRequest();
+
+  void set(PanelRequest r) => state = PanelRequest(
+    tab: r.tab,
+    serverId: r.serverId,
+    files: r.files,
+    openPath: r.openPath,
+    openIsDir: r.openIsDir,
+    nonce: state.nonce + 1,
+  );
+}
+
+final panelRequestProvider = NotifierProvider<_PanelRequests, PanelRequest>(
+  _PanelRequests.new,
+);
+
+/// Opens the chat's drawer on [tab] (0 Controls, 1 Files, 2 Overview):
+/// beside the chat on a wide screen, sliding in from the right on a phone.
+/// For Files, [serverId] picks the terminal (else the chat's, else the
+/// first), [files] false shows its shell, and [openPath] a file to open.
+void showChatPanel(
+  BuildContext context, {
+  int tab = 0,
+  String? serverId,
+  bool files = true,
+  String? openPath,
+  bool openIsDir = false,
+}) {
+  ProviderScope.containerOf(context, listen: false)
+      .read(panelRequestProvider.notifier)
+      .set(
+        PanelRequest(
+          tab: tab,
+          serverId: serverId,
+          files: files,
+          openPath: openPath,
+          openIsDir: openIsDir,
+        ),
+      );
+  final host = SidePanelHost.maybeOf(context);
+  if (host != null) {
+    host.open(SidePanelContent('chatPanel', (_) => const ChatPanel()));
+    return;
+  }
+  final scaffold = Scaffold.maybeOf(context);
+  if (scaffold != null && scaffold.hasEndDrawer) {
+    scaffold.openEndDrawer();
+    return;
+  }
+  Navigator.push(
+    context,
+    MaterialPageRoute<void>(builder: (_) => const ChatPanel()),
+  );
+}
+
+class ChatPanel extends ConsumerStatefulWidget {
+  const ChatPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final close = InSidePanel.maybeOf(context)?.close;
-    return DefaultTabController(
-      length: 3,
-      initialIndex: initialTab,
-      child: Scaffold(
-        appBar: AppBar(
-          automaticallyImplyLeading: false,
-          titleSpacing: 8,
-          centerTitle: false,
-          title: const TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            dividerHeight: 0,
-            labelPadding: EdgeInsets.symmetric(horizontal: 12),
-            tabs: [
-              Tab(text: 'Controls', height: 36),
-              Tab(text: 'Files', height: 36),
-              Tab(text: 'Overview', height: 36),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Close',
-              icon: const Icon(Icons.close),
-              onPressed: close ?? () => Navigator.maybePop(context),
-            ),
+  ConsumerState<ChatPanel> createState() => _ChatPanelState();
+}
+
+class _ChatPanelState extends ConsumerState<ChatPanel>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabs = TabController(
+    length: 3,
+    vsync: this,
+    initialIndex: ref.read(panelRequestProvider).tab,
+  );
+
+  @override
+  void dispose() {
+    _tabs.dispose();
+    super.dispose();
+  }
+
+  void _close() {
+    final panel = InSidePanel.maybeOf(context);
+    if (panel != null) return panel.close();
+    final scaffold = Scaffold.maybeOf(context);
+    if (scaffold != null && scaffold.isEndDrawerOpen) {
+      return scaffold.closeEndDrawer();
+    }
+    Navigator.maybePop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(panelRequestProvider, (_, r) => _tabs.animateTo(r.tab));
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        titleSpacing: 8,
+        centerTitle: false,
+        title: TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          dividerHeight: 0,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 12),
+          tabs: const [
+            Tab(text: 'Controls', height: 36),
+            Tab(text: 'Files', height: 36),
+            Tab(text: 'Overview', height: 36),
           ],
         ),
-        body: const TabBarView(
-          physics: NeverScrollableScrollPhysics(),
-          children: [ChatControlsView(inPanel: true), _Files(), _Overview()],
-        ),
+        actions: [
+          IconButton(
+            tooltip: 'Close',
+            icon: const Icon(Icons.close),
+            onPressed: _close,
+          ),
+        ],
+      ),
+      body: TabBarView(
+        controller: _tabs,
+        physics: const NeverScrollableScrollPhysics(),
+        children: const [
+          ChatControlsView(inPanel: true),
+          _Files(),
+          _Overview(),
+        ],
       ),
     );
   }
 }
 
-/// The terminal's files: the one this chat uses, or the first there is.
+/// The terminal's shell and files, as the web's Files tab: the one picked,
+/// the chat's, or the first there is, with a switch when there are several.
 class _Files extends ConsumerWidget {
   const _Files();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final servers = ref.watch(terminalServersProvider);
+    final request = ref.watch(panelRequestProvider);
     final chosen = ref.watch(
       chatControllerProvider.select((s) => s.terminalId),
     );
@@ -83,34 +187,51 @@ class _Files extends ConsumerWidget {
         text: 'No terminal on this server, so there are no files to show.',
       );
     }
-    final server = list.where((s) => s.id == chosen).firstOrNull ?? list.first;
+    final server =
+        list.where((s) => s.id == request.serverId).firstOrNull ??
+        list.where((s) => s.id == chosen).firstOrNull ??
+        list.first;
     return Column(
       children: [
         if (list.length > 1)
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-            child: Row(
-              children: [
-                Icon(Icons.terminal, size: 16, color: context.nexus.muted),
-                const SizedBox(width: 6),
-                Text(
-                  server.name,
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 0),
+            child: DropdownButton<String>(
+              value: server.id,
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              items: [
+                for (final s in list)
+                  DropdownMenuItem(
+                    value: s.id,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.cloud_outlined,
+                          size: 18,
+                          color: context.nexus.muted,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(s.name),
+                      ],
+                    ),
+                  ),
               ],
+              onChanged: (id) => ref
+                  .read(panelRequestProvider.notifier)
+                  .set(PanelRequest(tab: 1, serverId: id)),
             ),
           ),
         Expanded(
-          child: FileBrowser(
-            key: ValueKey(server.id),
-            api: TerminalApi(ref.read(clientProvider), server),
-            onOpenInTerminal: (_) => Navigator.push(
-              context,
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    TerminalScreen(server: server, startInFiles: false),
-              ),
-            ),
+          child: TerminalScreen(
+            key: ValueKey((server.id, request.nonce)),
+            server: server,
+            startInFiles: request.files,
+            openPath: request.serverId == null || request.serverId == server.id
+                ? request.openPath
+                : null,
+            openIsDir: request.openIsDir,
+            embedded: true,
           ),
         ),
       ],

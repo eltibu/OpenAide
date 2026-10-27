@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/chat_panel.dart' show showChatPanel;
 import 'file_links.dart';
 import 'terminal_api.dart';
 import 'terminal_screen.dart';
@@ -55,12 +56,13 @@ Future<void> openFileRef(
   void open(String path, {bool isDir = false}) {
     messenger.hideCurrentSnackBar();
     if (!context.mounted) return;
-    Navigator.push(
+    // In the chat's side drawer, so the chat stays in view.
+    showChatPanel(
       context,
-      MaterialPageRoute<void>(
-        builder: (_) =>
-            TerminalScreen(server: server, openPath: path, openIsDir: isDir),
-      ),
+      tab: 1,
+      serverId: server.id,
+      openPath: path,
+      openIsDir: isDir,
     );
   }
 

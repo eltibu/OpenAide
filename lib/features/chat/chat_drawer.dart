@@ -25,6 +25,7 @@ import '../../core/widgets/nexus_logo.dart';
 import '../settings/settings_screen.dart';
 import 'chat_controller.dart';
 import 'chat_extras.dart';
+import 'chat_panel.dart' show showChatPanel;
 import 'folder_settings.dart';
 
 /// The web UI's sidebar: a short list of places at the top (new chat,
@@ -1071,16 +1072,25 @@ class _Account extends ConsumerWidget {
         item(Icons.edit_document, 'Studio', (_) => const StudioScreen()),
         item(Icons.mic_none, 'Record notes', (_) => const RecordNotesScreen()),
         item(Icons.mail_outline, 'Email', (_) => const EmailScreen()),
+        // In the chat's side drawer, as on the web, not a page of its own.
         for (final server in servers) ...[
-          item(
-            Icons.terminal,
-            server.name,
-            (_) => TerminalScreen(server: server, startInFiles: false),
+          MenuItemButton(
+            style: _menuItem,
+            leadingIcon: const Icon(Icons.terminal, size: 20),
+            onPressed: () => showChatPanel(
+              context,
+              tab: 1,
+              serverId: server.id,
+              files: false,
+            ),
+            child: Text(server.name),
           ),
-          item(
-            Icons.folder_outlined,
-            servers.length > 1 ? 'Files: ${server.name}' : 'Files',
-            (_) => TerminalScreen(server: server, startInFiles: true),
+          MenuItemButton(
+            style: _menuItem,
+            leadingIcon: const Icon(Icons.folder_outlined, size: 20),
+            onPressed: () =>
+                showChatPanel(context, tab: 1, serverId: server.id),
+            child: Text(servers.length > 1 ? 'Files: ${server.name}' : 'Files'),
           ),
         ],
         if (admin) ...[
