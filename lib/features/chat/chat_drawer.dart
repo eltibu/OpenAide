@@ -23,6 +23,7 @@ import '../../core/theme.dart';
 import '../settings/settings_screen.dart';
 import 'chat_controller.dart';
 import 'chat_extras.dart';
+import 'folder_settings.dart';
 
 /// The web UI's sidebar: search, pinned chats, folders, then the rest.
 /// Long-press a chat to rename, pin, move, archive or delete it.
@@ -58,29 +59,33 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider).value;
+    final picking = ref.watch(chatSelectionProvider);
     final small = Theme.of(context).textTheme.titleSmall;
     final content = SafeArea(
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Nexus',
-                    style: Theme.of(context).textTheme.headlineSmall
-                        ?.copyWith(fontFamily: 'serif'),
+          if (picking != null)
+            _SelectionBar(ids: picking)
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 8, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Nexus',
+                      style: Theme.of(context).textTheme.headlineSmall
+                          ?.copyWith(fontFamily: 'serif'),
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: 'New folder',
-                  icon: const Icon(Icons.create_new_folder_outlined),
-                  onPressed: () => _newFolder(context, ref),
-                ),
-              ],
+                  IconButton(
+                    tooltip: 'New folder',
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                    onPressed: () => _newFolder(context, ref),
+                  ),
+                ],
+              ),
             ),
-          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
             child: TextField(
@@ -269,6 +274,7 @@ class _FolderTileState extends ConsumerState<FolderTile> {
         icon: const Icon(Icons.more_vert, size: 20),
         onSelected: (action) => _folderAction(context, action),
         itemBuilder: (_) => const [
+          PopupMenuItem(value: 'edit', child: Text('Folder settings')),
           PopupMenuItem(value: 'rename', child: Text('Rename')),
           PopupMenuItem(value: 'sub', child: Text('New folder inside')),
           PopupMenuItem(value: 'delete', child: Text('Delete folder')),
@@ -303,6 +309,9 @@ class _FolderTileState extends ConsumerState<FolderTile> {
     final f = widget.folder;
     try {
       switch (action) {
+        case 'edit':
+          await editFolder(context, f.id);
+          return;
         case 'rename':
           final name = await _askText(context, 'Rename folder', f.name);
           if (name == null) return;
@@ -327,6 +336,26 @@ class _FolderTileState extends ConsumerState<FolderTile> {
   }
 }
 
+/// Chats picked to archive, move or delete together; null when not picking.
+class ChatSelection extends Notifier<Set<String>?> {
+  @override
+  Set<String>? build() => null;
+
+  void start(String id) => state = {id};
+
+  void toggle(String id) {
+    final now = {...?state};
+    now.contains(id) ? now.remove(id) : now.add(id);
+    state = now.isEmpty ? null : now;
+  }
+
+  void clear() => state = null;
+}
+
+final chatSelectionProvider = NotifierProvider<ChatSelection, Set<String>?>(
+  ChatSelection.new,
+);
+
 /// One chat in the list. Long-press for rename, pin, move, archive, delete.
 class ChatTile extends ConsumerWidget {
   const ChatTile({super.key, required this.chat, this.pinned});
@@ -338,7 +367,21 @@ class ChatTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(chatControllerProvider.select((s) => s.chat?.id));
+    final picking = ref.watch(chatSelectionProvider);
     final scheme = Theme.of(context).colorScheme;
+    if (picking != null) {
+      final on = picking.contains(chat.id);
+      return ListTile(
+        visualDensity: VisualDensity.compact,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        leading: Icon(
+          on ? Icons.check_circle : Icons.radio_button_unchecked,
+          color: on ? NexusColors.accent : scheme.onSurfaceVariant,
+        ),
+        title: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+        onTap: () => ref.read(chatSelectionProvider.notifier).toggle(chat.id),
+      );
+    }
     return ListTile(
       visualDensity: VisualDensity.compact,
       selected: chat.id == current,
@@ -389,6 +432,7 @@ class ChatTile extends ConsumerWidget {
               ('share', Icons.ios_share, 'Share'),
               ('export', Icons.download_outlined, 'Export'),
               ('clone', Icons.copy_all_outlined, 'Clone'),
+              ('select', Icons.checklist, 'Select chats'),
               ('archive', Icons.archive_outlined, 'Archive'),
               ('delete', Icons.delete_outline, 'Delete'),
             ])
@@ -445,6 +489,8 @@ class ChatTile extends ConsumerWidget {
           if (kind != null && context.mounted) {
             await exportChat(context, ref, chat.id, kind);
           }
+        case 'select':
+          ref.read(chatSelectionProvider.notifier).start(chat.id);
         case 'clone':
           closeDrawer(context);
           await cloneChat(ref, chat.id, chat.title);
@@ -461,6 +507,77 @@ class ChatTile extends ConsumerWidget {
     } catch (e) {
       if (context.mounted) _showError(context, e);
     }
+  }
+}
+
+/// What to do with the picked chats, in place of the drawer's title.
+class _SelectionBar extends ConsumerWidget {
+  const _SelectionBar({required this.ids});
+  final Set<String> ids;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(chatControllerProvider.notifier);
+    final selection = ref.read(chatSelectionProvider.notifier);
+    Future<void> each(Future<void> Function(String id) action) async {
+      try {
+        for (final id in ids.toList()) {
+          await action(id);
+        }
+        selection.clear();
+      } catch (e) {
+        if (context.mounted) _showError(context, e);
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 8, 8, 0),
+      child: Row(
+        children: [
+          IconButton(
+            tooltip: 'Done',
+            icon: const Icon(Icons.close),
+            onPressed: selection.clear,
+          ),
+          Expanded(
+            child: Text(
+              '${ids.length} selected',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Move to folder',
+            icon: const Icon(Icons.drive_file_move_outline),
+            onPressed: () async {
+              final folders = await ref.read(foldersProvider.future);
+              if (!context.mounted) return;
+              final target = await _pickFolder(context, folders);
+              if (target == null) return;
+              await each(
+                (id) => controller.moveChat(id, target.isEmpty ? null : target),
+              );
+            },
+          ),
+          IconButton(
+            tooltip: 'Archive',
+            icon: const Icon(Icons.archive_outlined),
+            onPressed: () => each(controller.archiveChat),
+          ),
+          IconButton(
+            tooltip: 'Delete',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () async {
+              final ok = await _confirm(
+                context,
+                'Delete ${ids.length} chats?',
+                'They are deleted from the server for good.',
+              );
+              if (ok) await each(controller.deleteChat);
+            },
+          ),
+        ],
+      ),
+    );
   }
 }
 
