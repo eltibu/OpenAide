@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/nexus_logo.dart';
 import '../update/update_screen.dart';
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'artifacts_view.dart';
@@ -288,7 +289,7 @@ class _EmptyState extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.auto_awesome, color: NexusColors.accent, size: 28),
+            const NexusLogo(size: 56),
             const SizedBox(height: 12),
             Text(
               name == null || name.isEmpty

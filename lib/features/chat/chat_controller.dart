@@ -15,6 +15,7 @@ import '../workspace/prompts_api.dart' show fillSystemVariables;
 import 'read_aloud.dart';
 import 'reply_parts.dart';
 import 'request_options.dart';
+import 'speech_prefs.dart';
 import 'tool_approval.dart';
 
 const _uuid = Uuid();
@@ -527,7 +528,12 @@ class ChatController extends Notifier<ChatState> {
         // The app sends the words itself; the server needn't index them.
         process: false,
       );
-      final words = transcribe(client, wav, name);
+      final words = transcribe(
+        client,
+        wav,
+        name,
+        language: speechLanguage(await _optional(userSettingsProvider)),
+      );
       final uploaded = await upload;
       done = PendingAttachment(
         key: key,
@@ -1216,6 +1222,7 @@ class ChatController extends Notifier<ChatState> {
               await _optional(serverConfigProvider),
               models.where((m) => m.id == modelId).firstOrNull?.meta,
             ),
+            rate: speechRate(settings),
           );
       final me = ref.read(sessionProvider).value?.user;
       final turn = await client.startTurn(
@@ -1506,13 +1513,15 @@ class ChatController extends Notifier<ChatState> {
     await speaker.stop();
     final models = await ref.read(modelsProvider.future);
     final id = reply.model ?? state.modelId;
+    final settings = await _optional(userSettingsProvider);
     speaker
       ..useVoice(
         speechVoice(
-          await _optional(userSettingsProvider),
+          settings,
           await _optional(serverConfigProvider),
           models.where((m) => m.id == id).firstOrNull?.meta,
         ),
+        rate: speechRate(settings),
       )
       ..say(reply.content);
   }

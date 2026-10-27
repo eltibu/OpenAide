@@ -74,9 +74,13 @@ class ReadAloud {
   /// call voice may belong to another engine).
   String? fallbackVoice;
 
-  void useVoice(({String? voice, String? fallback}) v) {
+  /// How fast to play, from Settings > Audio.
+  double rate = 1;
+
+  void useVoice(({String? voice, String? fallback}) v, {double rate = 1}) {
     voice = v.voice;
     fallbackVoice = v.fallback;
+    this.rate = rate;
   }
 
   static const _channel = MethodChannel('nexus/speech');
@@ -161,7 +165,10 @@ class ReadAloud {
           final file = File('$dir/piece${_piece++ % 3}.${wav ? 'wav' : 'mp3'}');
           await file.writeAsBytes(audio, flush: true);
           if (gen != _gen) return;
-          await _channel.invokeMethod('play', {'path': file.path});
+          await _channel.invokeMethod('play', {
+            'path': file.path,
+            'rate': rate,
+          });
         }
         if (next == null && _queue.isNotEmpty && gen == _gen) {
           next = _fetch(_take());

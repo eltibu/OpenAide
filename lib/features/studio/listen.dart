@@ -47,8 +47,9 @@ Uint8List wavFile(List<int> pcm, {int rate = micRate}) {
 Future<String> transcribe(
   OpenWebUiClient client,
   List<int> bytes,
-  String filename,
-) async {
+  String filename, {
+  String? language,
+}) async {
   final ext = filename.split('.').last.toLowerCase();
   final type = switch (ext) {
     'wav' => MediaType('audio', 'wav'),
@@ -67,6 +68,7 @@ Future<String> transcribe(
     bytes,
     filename,
     contentType: type,
+    fields: {'language': ?language},
   );
   return res is Map ? '${res['text'] ?? ''}'.trim() : '';
 }
