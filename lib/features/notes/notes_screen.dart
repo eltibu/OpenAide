@@ -1,11 +1,16 @@
 import 'dart:async';
+import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/chat_controller.dart';
+import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import 'notes_api.dart';
 
 /// The server's notes, native: search, pin, write in Markdown.
@@ -221,18 +226,20 @@ class _Heading extends StatelessWidget {
 }
 
 /// One note, written in Markdown and saved as you type, with a preview.
-class NoteEditorScreen extends StatefulWidget {
+class NoteEditorScreen extends ConsumerStatefulWidget {
   const NoteEditorScreen({super.key, required this.api, required this.id});
   final NotesApi api;
   final String id;
 
   @override
-  State<NoteEditorScreen> createState() => _NoteEditorScreenState();
+  ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
 }
 
-class _NoteEditorScreenState extends State<NoteEditorScreen> {
+class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   final _title = TextEditingController();
   final _body = TextEditingController();
+  final _history = UndoHistoryController();
+  bool _enhancing = false;
   bool _loaded = false;
   bool _preview = false;
   bool _dirty = false;
@@ -287,9 +294,139 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     if (mounted) setState(() => _saving = false);
   }
 
+  void _say(String text) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+  String get _name =>
+      _title.text.trim().isEmpty ? 'Untitled' : _title.text.trim();
+
+  /// Saves the note to the phone as Markdown, plain text or PDF.
+  Future<void> _download(String kind) async {
+    try {
+      final (Uint8List bytes, String type) = switch (kind) {
+        'pdf' => (
+          await toPdf(
+            _name,
+            _body.text,
+            theme: await pdfTheme(rootBundle.load),
+          ),
+          'application/pdf',
+        ),
+        'md' => (
+          Uint8List.fromList(utf8.encode('# $_name\n\n${_body.text}')),
+          'text/markdown',
+        ),
+        _ => (
+          Uint8List.fromList(utf8.encode('$_name\n\n${_body.text}')),
+          'text/plain',
+        ),
+      };
+      final file = '${_name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}.$kind';
+      final saved = await FilePicker.saveFile(
+        fileName: file,
+        bytes: bytes,
+        mimeType: type,
+      );
+      if (saved != null && mounted) _say('Saved $file');
+    } catch (e) {
+      if (mounted) _say("Couldn't save: $e");
+    }
+  }
+
+  /// Opens a new chat with this note attached, as the web's Chat button.
+  Future<void> _chat() async {
+    await _save();
+    if (!mounted) return;
+    ref.read(chatControllerProvider.notifier)
+      ..newChat()
+      ..attachReference({
+        'type': 'note',
+        'id': widget.id,
+        'name': _name,
+        'status': 'uploaded',
+      });
+    Navigator.of(context).popUntil((r) => r.isFirst);
+  }
+
+  /// Rewrites the note with the chat's model (the web's Enhance); Undo
+  /// brings the old text back.
+  Future<void> _enhance() async {
+    final model = ref.read(chatControllerProvider).modelId;
+    if (model == null || _body.text.trim().isEmpty) {
+      _say(
+        model == null
+            ? 'Pick a model in a chat first'
+            : 'Write something first',
+      );
+      return;
+    }
+    setState(() {
+      _enhancing = true;
+      _preview = false;
+    });
+    final before = _body.text;
+    var out = '';
+    try {
+      await for (final piece
+          in ref
+              .read(clientProvider)
+              .streamCompletion(
+                model: model,
+                messages: [
+                  {
+                    'role': 'system',
+                    'content':
+                        'Enhance this note and update it: fix spelling and grammar, '
+                        'organise it with Markdown headings and lists, keep every '
+                        'fact. Reply with only the new note in Markdown.',
+                  },
+                  {'role': 'user', 'content': before},
+                ],
+              )) {
+        out += piece;
+        if (!mounted) return;
+        _body.value = TextEditingValue(
+          text: out,
+          selection: TextSelection.collapsed(offset: out.length),
+        );
+      }
+      if (out.trim().isEmpty) {
+        _body.text = before;
+      } else {
+        _changed();
+      }
+    } catch (e) {
+      _body.text = before;
+      if (mounted) _say("Couldn't enhance: $e");
+    }
+    if (mounted) setState(() => _enhancing = false);
+  }
+
+  Future<void> _menu(String v) async {
+    switch (v) {
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: _body.text));
+        _say('Note copied');
+      case 'link':
+        await Clipboard.setData(
+          ClipboardData(
+            text: '${ref.read(clientProvider).baseUrl}/notes/${widget.id}',
+          ),
+        );
+        _say('Link copied');
+      case 'chat':
+        await _chat();
+      case 'enhance':
+        await _enhance();
+      default:
+        await _download(v);
+    }
+  }
+
   @override
   void dispose() {
     _save();
+    _history.dispose();
     _title.dispose();
     _body.dispose();
     super.dispose();
@@ -310,6 +447,32 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
           style: TextStyle(color: muted, fontSize: 14),
         ),
         actions: [
+          if (_enhancing)
+            const Padding(
+              padding: EdgeInsets.all(14),
+              child: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          if (!_preview && _loaded) ...[
+            ValueListenableBuilder(
+              valueListenable: _history,
+              builder: (context, v, _) => IconButton(
+                tooltip: 'Undo',
+                icon: const Icon(Icons.undo),
+                onPressed: v.canUndo ? _history.undo : null,
+              ),
+            ),
+            ValueListenableBuilder(
+              valueListenable: _history,
+              builder: (context, v, _) => IconButton(
+                tooltip: 'Redo',
+                icon: const Icon(Icons.redo),
+                onPressed: v.canRedo ? _history.redo : null,
+              ),
+            ),
+          ],
           IconButton(
             tooltip: _preview ? 'Edit' : 'Preview',
             isSelected: _preview,
@@ -320,6 +483,62 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
               _preview ? Icons.edit_outlined : Icons.visibility_outlined,
             ),
           ),
+          if (_loaded)
+            PopupMenuButton<String>(
+              onSelected: _menu,
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'enhance',
+                  child: ListTile(
+                    leading: Icon(Icons.auto_awesome),
+                    title: Text('Enhance with AI'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'chat',
+                  child: ListTile(
+                    leading: Icon(Icons.chat_bubble_outline),
+                    title: Text('Chat about this note'),
+                  ),
+                ),
+                PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'copy',
+                  child: ListTile(
+                    leading: Icon(Icons.copy),
+                    title: Text('Copy text'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'link',
+                  child: ListTile(
+                    leading: Icon(Icons.link),
+                    title: Text('Copy link'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'md',
+                  child: ListTile(
+                    leading: Icon(Icons.download_outlined),
+                    title: Text('Download Markdown (.md)'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'txt',
+                  child: ListTile(
+                    leading: Icon(Icons.download_outlined),
+                    title: Text('Download text (.txt)'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'pdf',
+                  child: ListTile(
+                    leading: Icon(Icons.picture_as_pdf_outlined),
+                    title: Text('Download PDF'),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
       body: _error != null
@@ -355,6 +574,8 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                 else
                   TextField(
                     controller: _body,
+                    undoController: _history,
+                    readOnly: _enhancing,
                     onChanged: (_) => _changed(),
                     autofocus: _body.text.isEmpty,
                     maxLines: null,
