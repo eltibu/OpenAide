@@ -7,6 +7,7 @@ import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'admin_api.dart';
+import 'config_editor.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -20,12 +21,22 @@ final functionsProvider = FutureProvider<List<ServerFunction>>(
   (ref) => ref.watch(adminApiProvider).functions(),
 );
 
+const _sectionIcons = {
+  'Documents': Icons.description_outlined,
+  'Web Search': Icons.travel_explore,
+  'Audio': Icons.graphic_eq,
+  'Images': Icons.image_outlined,
+  'Code Execution': Icons.code,
+  'Interface and tasks': Icons.view_quilt_outlined,
+  'Connections': Icons.cable,
+  'Evaluations': Icons.leaderboard_outlined,
+};
+
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
 
-/// The Admin Panel: people, site switches and functions are native; the
-/// server's deeper settings (connections, documents, web search, audio,
-/// images...) open as the server's own page for now.
+/// The Admin Panel: people, site switches, functions and the server's
+/// settings pages are native; what isn't yet opens as the server's page.
 class AdminScreen extends StatelessWidget {
   const AdminScreen({super.key});
 
@@ -56,11 +67,19 @@ class AdminScreen extends StatelessWidget {
             onTap: () => open(const FunctionsScreen()),
           ),
           const Divider(),
+          for (final section in adminConfigSections)
+            ListTile(
+              leading: Icon(_sectionIcons[section.title] ?? Icons.tune),
+              title: Text(section.title),
+              subtitle: section.help == null ? null : Text(section.help!),
+              onTap: () => open(ConfigEditorScreen(section: section)),
+            ),
+          const Divider(),
           ListTile(
             leading: const Icon(Icons.settings_applications_outlined),
             title: const Text('More server settings'),
             subtitle: const Text(
-              'Connections, documents, web search, audio, images',
+              'Model connections, models, database and the rest, on the web page',
             ),
             trailing: const Icon(Icons.open_in_new, size: 18),
             onTap: () => open(
