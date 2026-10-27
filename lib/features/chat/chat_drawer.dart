@@ -22,6 +22,7 @@ import '../workspace/tools_skills.dart';
 import '../../core/theme.dart';
 import '../settings/settings_screen.dart';
 import 'chat_controller.dart';
+import 'chat_extras.dart';
 
 /// The web UI's sidebar: search, pinned chats, folders, then the rest.
 /// Long-press a chat to rename, pin, move, archive or delete it.
@@ -362,6 +363,7 @@ class ChatTile extends ConsumerWidget {
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (context) => SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -383,6 +385,10 @@ class ChatTile extends ConsumerWidget {
                 isPinned ? 'Unstar' : 'Star',
               ),
               ('move', Icons.drive_file_move_outline, 'Move to folder'),
+              ('tags', Icons.sell_outlined, 'Tags'),
+              ('share', Icons.ios_share, 'Share'),
+              ('export', Icons.download_outlined, 'Export'),
+              ('clone', Icons.copy_all_outlined, 'Clone'),
               ('archive', Icons.archive_outlined, 'Archive'),
               ('delete', Icons.delete_outline, 'Delete'),
             ])
@@ -411,6 +417,37 @@ class ChatTile extends ConsumerWidget {
           if (target != null) {
             await controller.moveChat(chat.id, target.isEmpty ? null : target);
           }
+        case 'tags':
+          await editTags(context, chat.id);
+        case 'share':
+          await shareChat(context, chat.id);
+        case 'export':
+          final kind = await showModalBottomSheet<String>(
+            context: context,
+            showDragHandle: true,
+            builder: (context) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (value, label) in [
+                    ('json', 'Chat file (.json), to import again'),
+                    ('txt', 'Plain text (.txt)'),
+                    ('pdf', 'PDF document (.pdf)'),
+                  ])
+                    ListTile(
+                      title: Text(label),
+                      onTap: () => Navigator.pop(context, value),
+                    ),
+                ],
+              ),
+            ),
+          );
+          if (kind != null && context.mounted) {
+            await exportChat(context, ref, chat.id, kind);
+          }
+        case 'clone':
+          closeDrawer(context);
+          await cloneChat(ref, chat.id, chat.title);
         case 'archive':
           await controller.archiveChat(chat.id);
         case 'delete':
