@@ -169,6 +169,7 @@ class ChatState {
     this.terminalId,
     this.attachments = const [],
     this.temporary = false,
+    this.queued = const [],
     this.revision = 0,
   });
 
@@ -199,6 +200,10 @@ class ChatState {
   /// saved, so it isn't in the chat list and is gone once you leave it.
   final bool temporary;
 
+  /// Messages written while a reply was running, sent together when it's
+  /// done, as the web's message queue does.
+  final List<String> queued;
+
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
 
@@ -220,6 +225,7 @@ class ChatState {
     String? terminalId,
     List<PendingAttachment>? attachments,
     bool? temporary,
+    List<String>? queued,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -233,6 +239,7 @@ class ChatState {
     terminalId: terminalId ?? this.terminalId,
     attachments: attachments ?? this.attachments,
     temporary: temporary ?? this.temporary,
+    queued: queued ?? this.queued,
     revision: revision + 1,
   );
 }
@@ -621,6 +628,7 @@ class ChatController extends Notifier<ChatState> {
       clearError: true,
       clearStatus: true,
       temporary: false,
+      queued: const [],
     );
     try {
       final chat = await ref.read(clientProvider).chat(id);
@@ -704,6 +712,34 @@ class ChatController extends Notifier<ChatState> {
     if (editOf == null) state = state.copyWith(attachments: const []);
     await _reply(chat, user, modelId);
     return true;
+  }
+
+  /// Holds [text] until the running reply is done, then sends it.
+  void queue(String text) {
+    if (text.trim().isEmpty) return;
+    state = state.copyWith(queued: [...state.queued, text.trim()]);
+  }
+
+  /// Takes queued message [i] out of the queue and returns it.
+  String unqueue(int i) {
+    final list = [...state.queued];
+    final text = list.removeAt(i);
+    state = state.copyWith(queued: list);
+    return text;
+  }
+
+  /// Sends what's queued as one message, once nothing is running.
+  Future<void> sendQueued() async {
+    if (state.queued.isEmpty) return;
+    final text = state.queued.join('\n\n');
+    if (state.streaming) {
+      state = state.copyWith(queued: const []);
+      await steer(text);
+      return;
+    }
+    if (!canSend) return;
+    state = state.copyWith(queued: const []);
+    await send(text);
   }
 
   /// Steers a running reply: stops it where it is (what it wrote stays in
@@ -1111,6 +1147,11 @@ class ChatController extends Notifier<ChatState> {
               ? 'No reply came back. Tap Retry to ask again.'
               : null),
     );
+    // Then what was queued meanwhile; a stopped, failed or paused reply
+    // leaves the queue for the person to send.
+    if (!run.stopped && state.error == null && pendingCall(saved) == null) {
+      unawaited(sendQueued());
+    }
   }
 
   void _onEvent(Chat chat, _Run run, Map<String, dynamic> event) {

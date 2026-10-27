@@ -17,6 +17,7 @@ import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'attach_more.dart';
+import 'emoji.dart';
 import 'embeds_view.dart';
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
@@ -674,6 +675,13 @@ class _ComposerState extends ConsumerState<_Composer> {
     controller.send(value);
   }
 
+  void _queue() {
+    final value = _text.text;
+    if (value.trim().isEmpty) return;
+    _text.clear();
+    ref.read(chatControllerProvider.notifier).queue(value);
+  }
+
   void _steer() {
     final value = _text.text;
     if (value.trim().isEmpty) return;
@@ -696,6 +704,11 @@ class _ComposerState extends ConsumerState<_Composer> {
       // "#" attaches knowledge, a note or a web page, as on the web.
       final hash = RegExp(r'(?:^|\s)#(\S*)$').firstMatch(_text.text)?.group(1);
       if (hash != _hash) setState(() => _hash = hash);
+      // ":" and two letters suggests emoji, as on the web.
+      final colon = RegExp(r'(?:^|\s):([a-z0-9_+\-]{2,})$')
+          .firstMatch(_text.text)
+          ?.group(1);
+      if (colon != _colon) setState(() => _colon = colon);
     });
   }
 
@@ -704,6 +717,15 @@ class _ComposerState extends ConsumerState<_Composer> {
   String? _slash;
   String? _at;
   String? _hash;
+  String? _colon;
+
+  void _pickEmoji(String emoji) {
+    final text = _text.text.replaceFirst(RegExp(r':[a-z0-9_+\-]*$'), emoji);
+    _text.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 
   void _dropHash() {
     final text = _text.text.replaceFirst(RegExp(r'#\S*$'), '');
@@ -907,10 +929,15 @@ class _ComposerState extends ConsumerState<_Composer> {
             icon: const Icon(Icons.stop_rounded),
             onPressed: controller.stop,
           ),
-          IconButton.filled(
+          IconButton(
             tooltip: 'Steer: stop the reply and send this now',
             icon: const Icon(Icons.turn_right),
             onPressed: _steer,
+          ),
+          IconButton.filled(
+            tooltip: 'Queue: send this when the reply is done',
+            icon: const Icon(Icons.arrow_upward),
+            onPressed: _queue,
           ),
         ],
       );
@@ -973,6 +1000,12 @@ class _ComposerState extends ConsumerState<_Composer> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const PendingAttachments(),
+            _QueuedMessages(
+              onEdit: (text) => _text.value = TextEditingValue(
+                text: text,
+                selection: TextSelection.collapsed(offset: text.length),
+              ),
+            ),
             if (_recording)
               VoiceNoteBar(
                 onDone: () => setState(() => _recording = false),
@@ -987,6 +1020,8 @@ class _ComposerState extends ConsumerState<_Composer> {
               )
             else ...[
               if (_at != null) _ModelMentions(query: _at!, onPick: _pickModel),
+              if (_colon != null)
+                EmojiSuggestions(query: _colon!, onPick: _pickEmoji),
               if (_hash != null) HashMentions(query: _hash!, onDone: _dropHash),
               if (_slash != null)
                 PromptSuggestions(
@@ -1026,6 +1061,73 @@ class _ComposerState extends ConsumerState<_Composer> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Messages waiting for the running reply to finish.
+class _QueuedMessages extends ConsumerWidget {
+  const _QueuedMessages({required this.onEdit});
+  final ValueChanged<String> onEdit;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final queued = ref.watch(chatControllerProvider.select((s) => s.queued));
+    if (queued.isEmpty) return const SizedBox.shrink();
+    final controller = ref.read(chatControllerProvider.notifier);
+    final muted = context.nexus.muted;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule, size: 16, color: muted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  queued.length == 1
+                      ? 'Queued: sends when the reply is done'
+                      : '${queued.length} queued: sent together when the '
+                            'reply is done',
+                  style: Theme.of(context).textTheme.labelMedium
+                      ?.copyWith(color: muted),
+                ),
+              ),
+              TextButton(
+                onPressed: controller.sendQueued,
+                child: const Text('Send now'),
+              ),
+            ],
+          ),
+          for (final (i, text) in queued.indexed)
+            Row(
+              children: [
+                const SizedBox(width: 22),
+                Expanded(
+                  child: Text(
+                    text,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Edit',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  onPressed: () => onEdit(controller.unqueue(i)),
+                ),
+                IconButton(
+                  tooltip: 'Remove',
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.close, size: 18),
+                  onPressed: () => controller.unqueue(i),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }
