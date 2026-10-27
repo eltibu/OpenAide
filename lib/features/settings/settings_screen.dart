@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
+import 'data_controls.dart';
 import 'settings_api.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
@@ -143,6 +144,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Audio'),
             subtitle: const Text('Voice, speed, dictation and read aloud'),
             onTap: () => open(const AudioSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.storage_outlined),
+            title: const Text('Data controls'),
+            subtitle: const Text('Import, export, shared chats, your files'),
+            onTap: () => open(const DataControls()),
           ),
           ListTile(
             leading: const Icon(Icons.psychology_alt_outlined),
