@@ -305,6 +305,25 @@ class _EmptyState extends ConsumerWidget {
   }
 }
 
+/// Text handed to the chat box from elsewhere on the screen.
+class ComposerDraft extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void put(String text) => state = text;
+
+  void clear() => state = null;
+}
+
+final composerDraftProvider = NotifierProvider<ComposerDraft, String?>(
+  ComposerDraft.new,
+);
+
+bool insertSuggestion(WidgetRef ref) =>
+    (ref.read(userSettingsProvider).value?['ui']
+        as Map?)?['insertSuggestionPrompt'] ==
+    true;
+
 /// Starter prompts under the greeting, as the web UI shows them.
 class _Suggestions extends ConsumerWidget {
   const _Suggestions();
@@ -341,8 +360,12 @@ class _Suggestions extends ConsumerWidget {
                       ? null
                       : Text(p.subtitle, maxLines: 1),
                   trailing: const Icon(Icons.arrow_upward, size: 18),
-                  onTap: () =>
-                      ref.read(chatControllerProvider.notifier).send(p.content),
+                  // Settings > Interface can put it in the box to edit first.
+                  onTap: () => insertSuggestion(ref)
+                      ? ref.read(composerDraftProvider.notifier).put(p.content)
+                      : ref
+                            .read(chatControllerProvider.notifier)
+                            .send(p.content),
                 ),
               ),
           ],
@@ -784,9 +807,19 @@ class _ComposerState extends ConsumerState<_Composer> {
     ref.read(chatControllerProvider.notifier).steer(value);
   }
 
+  void _fill(String text) => _text.value = TextEditingValue(
+    text: text,
+    selection: TextSelection.collapsed(offset: text.length),
+  );
+
   @override
   void initState() {
     super.initState();
+    ref.listenManual(composerDraftProvider, (_, text) {
+      if (text == null) return;
+      _fill(text);
+      ref.read(composerDraftProvider.notifier).clear();
+    });
     _text.addListener(() {
       final has = _text.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
@@ -1101,12 +1134,7 @@ class _ComposerState extends ConsumerState<_Composer> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const PendingAttachments(),
-            _QueuedMessages(
-              onEdit: (text) => _text.value = TextEditingValue(
-                text: text,
-                selection: TextSelection.collapsed(offset: text.length),
-              ),
-            ),
+            _QueuedMessages(onEdit: _fill),
             if (_recording)
               VoiceNoteBar(
                 onDone: () => setState(() => _recording = false),

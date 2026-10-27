@@ -517,6 +517,42 @@ class ChatSettings extends ConsumerWidget {
                 value: ui['memory'] != false,
                 onChanged: (on) => set({'memory': on}),
               ),
+              SwitchListTile(
+                title: const Text('Suggest follow-ups'),
+                subtitle: const Text('Offer follow-up questions after replies'),
+                value: ui['autoFollowUps'] != false,
+                onChanged: (on) => set({'autoFollowUps': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Temporary chat by default'),
+                subtitle: const Text(
+                  'New chats aren\'t saved unless you keep them',
+                ),
+                value: ui['temporaryChatByDefault'] == true,
+                onChanged: (on) => set({'temporaryChatByDefault': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Edit suggestions first'),
+                subtitle: const Text(
+                  'Tapping a suggested prompt puts it in the chat box',
+                ),
+                value: ui['insertSuggestionPrompt'] == true,
+                onChanged: (on) => set({'insertSuggestionPrompt': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Copy replies'),
+                subtitle: const Text(
+                  'Copy each finished reply to the clipboard',
+                ),
+                value: ui['responseAutoCopy'] == true,
+                onChanged: (on) => set({'responseAutoCopy': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Vibrate when done'),
+                subtitle: const Text('A light tap when a reply finishes'),
+                value: ui['hapticFeedback'] == true,
+                onChanged: (on) => set({'hapticFeedback': on}),
+              ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.archive_outlined),

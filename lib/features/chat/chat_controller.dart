@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:uuid/uuid.dart';
@@ -337,6 +338,16 @@ class ChatController extends Notifier<ChatState> {
         ref.onDispose(sub.cancel);
       } catch (_) {}
     });
+    // Settings > Interface can start every new chat as a temporary one.
+    final view = _view;
+    unawaited(
+      _optional(userSettingsProvider).then((s) {
+        final fresh = state.chat == null && state.messages.isEmpty;
+        if (view == _view && fresh && _uiFlag(s, 'temporaryChatByDefault')) {
+          state = state.copyWith(temporary: true);
+        }
+      }),
+    );
     return const ChatState();
   }
 
@@ -366,7 +377,13 @@ class ChatController extends Notifier<ChatState> {
   /// '' switches the terminal off for this chat.
   void setTerminal(String id) => state = state.copyWith(terminalId: id);
 
-  void newChat({bool temporary = false}) {
+  /// A new chat; temporary unless asked otherwise when Settings > Interface
+  /// says to start chats that way.
+  void newChat({bool? temporary}) {
+    temporary ??= _uiFlag(
+      ref.read(userSettingsProvider).value,
+      'temporaryChatByDefault',
+    );
     _view++;
     _run?.cancel();
     unawaited(ref.read(readAloudProvider).stop());
@@ -1471,7 +1488,10 @@ class ChatController extends Notifier<ChatState> {
       refreshChatLists(ref.invalidate);
     } catch (_) {}
     final saved = state.chat?.messages[reply.id] ?? reply;
-    if (!run.stopped) _speak(run, saved.content, done: true);
+    if (!run.stopped) {
+      _speak(run, saved.content, done: true);
+      unawaited(_afterDone(saved.content));
+    }
     state = state.copyWith(
       streaming: false,
       clearStatus: true,
@@ -1705,6 +1725,22 @@ class ChatController extends Notifier<ChatState> {
 
   /// Settings that only refine a message; a failure to read them must not
   /// stop it from being sent.
+  static bool _uiFlag(Map<String, dynamic>? settings, String key) =>
+      (settings?['ui'] as Map?)?[key] == true;
+
+  /// Settings > Interface: a tap when a reply is done, and copying it.
+  Future<void> _afterDone(String text) async {
+    final settings = await _optional(userSettingsProvider);
+    try {
+      if (_uiFlag(settings, 'hapticFeedback')) {
+        await HapticFeedback.lightImpact();
+      }
+      if (_uiFlag(settings, 'responseAutoCopy') && text.trim().isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: text));
+      }
+    } catch (_) {}
+  }
+
   Future<Map<String, dynamic>?> _optional(
     FutureProvider<Map<String, dynamic>> provider,
   ) async {
