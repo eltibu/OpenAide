@@ -206,4 +206,21 @@ Done.''';
     expect(qs.first.allowOther, isFalse);
     expect(qs.last.allowOther, isTrue);
   });
+
+  test('voice notes are sound, not documents', () {
+    final note = Attachment.fromJson({
+      'type': 'file',
+      'id': 'f1',
+      'name': 'Voice note 2026-10-27T12-00-00.wav',
+      'content_type': 'audio/wav',
+    });
+    expect(note.isAudio, isTrue);
+    expect(note.isImage, isFalse);
+    expect(note.isVideo, isFalse);
+    expect(
+      Attachment.fromJson({'type': 'file', 'id': 'f2', 'name': 'a.pdf'})
+          .isAudio,
+      isFalse,
+    );
+  });
 }

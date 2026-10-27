@@ -515,6 +515,16 @@ class Attachment {
     ).hasMatch(name);
   }
 
+  /// Sound, such as a voice note: played in the app.
+  bool get isAudio {
+    final base = (contentType ?? '').split(';').first.trim().toLowerCase();
+    if (base.startsWith('audio/')) return true;
+    return RegExp(
+      r'\.(wav|mp3|m4a|aac|ogg|oga|opus|flac)$',
+      caseSensitive: false,
+    ).hasMatch(name);
+  }
+
   /// A data: URL to show directly, when the image is inline.
   String? get dataUrl => url != null && url!.startsWith('data:') ? url : null;
 

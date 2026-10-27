@@ -27,6 +27,7 @@ import 'chat_controller.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
 import 'tool_approval.dart';
+import 'voice_note.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -631,6 +632,7 @@ class _ComposerState extends ConsumerState<_Composer> {
   }
 
   bool _hasText = false;
+  bool _recording = false;
   String? _slash;
 
   /// The app's own "/" commands, listed above your saved prompts.
@@ -758,15 +760,25 @@ class _ComposerState extends ConsumerState<_Composer> {
         onPressed: ready ? _send : null,
       );
     } else {
-      action = IconButton.filled(
-        tooltip: 'Voice call',
-        icon: const Icon(Icons.graphic_eq),
-        onPressed: ready
-            ? () => Navigator.push(
-                context,
-                MaterialPageRoute<void>(builder: (_) => const CallScreen()),
-              )
-            : null,
+      action = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            tooltip: 'Record a voice note',
+            icon: const Icon(Icons.mic_none),
+            onPressed: ready ? () => setState(() => _recording = true) : null,
+          ),
+          IconButton.filled(
+            tooltip: 'Voice call',
+            icon: const Icon(Icons.graphic_eq),
+            onPressed: ready
+                ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(builder: (_) => const CallScreen()),
+                  )
+                : null,
+          ),
+        ],
       );
     }
     return SafeArea(
@@ -794,41 +806,55 @@ class _ComposerState extends ConsumerState<_Composer> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const PendingAttachments(),
-            if (_slash != null)
-              PromptSuggestions(
-                query: _slash!,
-                onPick: _usePrompt,
-                commands: _commands(),
+            if (_recording)
+              VoiceNoteBar(
+                onDone: () => setState(() => _recording = false),
+                onWords: (words) {
+                  final before = _text.text.trimRight();
+                  final text = before.isEmpty ? words : '$before $words';
+                  _text.value = TextEditingValue(
+                    text: text,
+                    selection: TextSelection.collapsed(offset: text.length),
+                  );
+                },
+              )
+            else ...[
+              if (_slash != null)
+                PromptSuggestions(
+                  query: _slash!,
+                  onPick: _usePrompt,
+                  commands: _commands(),
+                ),
+              TextField(
+                controller: _text,
+                minLines: 1,
+                maxLines: 6,
+                textCapitalization: TextCapitalization.sentences,
+                textInputAction: TextInputAction.newline,
+                decoration: InputDecoration(
+                  hintText: empty ? 'Chat with Nexus' : 'Reply to Nexus',
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
+                ),
               ),
-            TextField(
-              controller: _text,
-              minLines: 1,
-              maxLines: 6,
-              textCapitalization: TextCapitalization.sentences,
-              textInputAction: TextInputAction.newline,
-              decoration: InputDecoration(
-                hintText: empty ? 'Chat with Nexus' : 'Reply to Nexus',
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Row(
-                children: [
-                  const AttachButton(),
-                  const _FeaturesButton(),
-                  const SizedBox(width: 4),
-                  const Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _ModelChip(),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                child: Row(
+                  children: [
+                    const AttachButton(),
+                    const _FeaturesButton(),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _ModelChip(),
+                      ),
                     ),
-                  ),
-                  action,
-                ],
+                    action,
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -1096,12 +1122,23 @@ class _FeaturesButton extends ConsumerWidget {
   }
 }
 
-/// The web UI's tools menu: features, tools, skills and the terminal.
-class _ToolsSheet extends ConsumerWidget {
+/// The web UI's tools menu: features, tools, skills and the terminal, in
+/// groups that fold away, with what's on listed first and a search when
+/// the lists are long.
+class _ToolsSheet extends ConsumerStatefulWidget {
   const _ToolsSheet();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ToolsSheet> createState() => _ToolsSheetState();
+}
+
+class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
+  /// Which groups are open; kept while the app runs.
+  static final _open = <String>{'features'};
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(chatControllerProvider);
     final chat = ref.read(chatControllerProvider.notifier);
     final model = ref
@@ -1111,85 +1148,262 @@ class _ToolsSheet extends ConsumerWidget {
         .firstOrNull;
     final config = ref.watch(serverConfigProvider).value;
     final features = availableFeatures(model, config);
-    final tools = ref.watch(toolsProvider).value ?? const [];
-    final skills = ref.watch(skillsProvider).value ?? const [];
+    final tools = ref.watch(toolsProvider).value ?? const <Pickable>[];
+    final skills = ref.watch(skillsProvider).value ?? const <Pickable>[];
     final terminals = ref.watch(terminalServersProvider).value ?? const [];
     final activeTools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
+    final activeSkills = state.skillIds ?? const <String>{};
     final terminalId = state.terminalId ?? model?.terminalId ?? '';
-    final heading = Theme.of(context).textTheme.labelLarge
-        ?.copyWith(color: context.nexus.muted);
-    Widget title(String text) => Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-      child: Text(text, style: heading),
-    );
-    String? describe(Pickable p) =>
-        (p.description ?? '').isEmpty ? null : p.description;
+    final terminal = terminals.where((t) => t.id == terminalId).firstOrNull;
+    bool featureOn(String id) =>
+        state.features[id] ?? model?.defaultFeatureIds.contains(id) ?? false;
+    final muted = context.nexus.muted;
+    final query = _query.trim().toLowerCase();
+    bool matches(Pickable p) =>
+        query.isEmpty ||
+        p.name.toLowerCase().contains(query) ||
+        (p.description ?? '').toLowerCase().contains(query);
+    final searchable = tools.length + skills.length > 8;
+
+    final onChips = [
+      for (final id in features)
+        if (featureOn(id))
+          InputChip(
+            avatar: Icon(_featureIcon(id), size: 16),
+            label: Text(featureLabels[id] ?? id),
+            onDeleted: () => chat.setFeature(id, false),
+          ),
+      if (terminal != null)
+        InputChip(
+          avatar: const Icon(Icons.terminal, size: 16),
+          label: Text(terminal.name),
+          onDeleted: () => chat.setTerminal(''),
+        ),
+      for (final t in tools)
+        if (activeTools.contains(t.id))
+          InputChip(
+            avatar: const Icon(Icons.build_outlined, size: 16),
+            label: Text(t.name),
+            onDeleted: () => chat.setTool(t.id, false),
+          ),
+      for (final t in skills)
+        if (activeSkills.contains(t.id))
+          InputChip(
+            avatar: const Icon(Icons.auto_awesome_outlined, size: 16),
+            label: Text(t.name),
+            onDeleted: () => chat.setSkill(t.id, false),
+          ),
+    ];
+
+    Widget group({
+      required String key,
+      required IconData icon,
+      required String title,
+      required String summary,
+      required List<Widget> children,
+      Widget? action,
+    }) {
+      final open = query.isNotEmpty || _open.contains(key);
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: Icon(icon),
+            title: Text(title),
+            subtitle: Text(summary),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ?action,
+                Icon(open ? Icons.expand_less : Icons.expand_more),
+              ],
+            ),
+            onTap: () => setState(
+              () => _open.contains(key) ? _open.remove(key) : _open.add(key),
+            ),
+          ),
+          if (open)
+            Padding(
+              padding: const EdgeInsets.only(left: 16),
+              child: Column(children: children),
+            ),
+          const Divider(height: 1, indent: 16, endIndent: 16),
+        ],
+      );
+    }
+
+    Widget item(Pickable p, bool value, ValueChanged<bool> onChanged) =>
+        SwitchListTile(
+          dense: true,
+          title: Text(p.name),
+          subtitle: (p.description ?? '').isEmpty
+              ? null
+              : Text(
+                  p.description!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+          value: value,
+          onChanged: onChanged,
+        );
+
+    final shownTools = tools.where(matches).toList();
+    final shownSkills = skills.where(matches).toList();
+    final toolsOn = tools.where((t) => activeTools.contains(t.id)).length;
+    final skillsOn = skills.where((t) => activeSkills.contains(t.id)).length;
+
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
         ),
         child: ListView(
           shrinkWrap: true,
           children: [
-            if (features.isNotEmpty) ...[
-              title('Features'),
-              for (final id in features)
-                SwitchListTile(
-                  secondary: Icon(switch (id) {
-                    'web_search' => Icons.language,
-                    'image_generation' => Icons.image_outlined,
-                    _ => Icons.code,
-                  }),
-                  title: Text(featureLabels[id] ?? id),
-                  value:
-                      state.features[id] ??
-                      model?.defaultFeatureIds.contains(id) ??
-                      false,
-                  onChanged: (v) => chat.setFeature(id, v),
-                ),
-            ],
-            if (terminals.isNotEmpty) ...[
-              title('Terminal'),
-              RadioGroup<String>(
-                groupValue: terminalId,
-                onChanged: (v) => chat.setTerminal(v ?? ''),
-                child: Column(
-                  children: [
-                    const RadioListTile<String>(
-                      value: '',
-                      title: Text('No terminal'),
-                    ),
-                    for (final t in terminals)
-                      RadioListTile<String>(
-                        value: t.id,
-                        title: Text(t.name),
-                        secondary: const Icon(Icons.terminal),
-                      ),
-                  ],
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text(
+                'Tools for this chat',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            if (onChips.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Wrap(spacing: 6, runSpacing: 6, children: onChips),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: Text(
+                  'Nothing extra is on.',
+                  style: TextStyle(color: muted),
                 ),
               ),
-            ],
-            if (tools.isNotEmpty) ...[
-              title('Tools'),
-              for (final t in tools)
-                SwitchListTile(
-                  title: Text(t.name),
-                  subtitle: describe(t) == null ? null : Text(describe(t)!),
-                  value: activeTools.contains(t.id),
-                  onChanged: (v) => chat.setTool(t.id, v),
+            if (searchable)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  decoration: const InputDecoration(
+                    hintText: 'Search tools and skills',
+                    prefixIcon: Icon(Icons.search),
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) => setState(() => _query = v),
                 ),
-            ],
-            if (skills.isNotEmpty) ...[
-              title('Skills'),
-              for (final t in skills)
-                SwitchListTile(
-                  title: Text(t.name),
-                  subtitle: describe(t) == null ? null : Text(describe(t)!),
-                  value: state.skillIds?.contains(t.id) ?? false,
-                  onChanged: (v) => chat.setSkill(t.id, v),
+              ),
+            const Divider(height: 1, indent: 16, endIndent: 16),
+            if (features.isNotEmpty && query.isEmpty)
+              group(
+                key: 'features',
+                icon: Icons.tune,
+                title: 'Features',
+                summary: _onOf(
+                  features.where(featureOn).length,
+                  features.length,
                 ),
-            ],
+                children: [
+                  for (final id in features)
+                    SwitchListTile(
+                      dense: true,
+                      secondary: Icon(_featureIcon(id)),
+                      title: Text(featureLabels[id] ?? id),
+                      value: featureOn(id),
+                      onChanged: (v) => chat.setFeature(id, v),
+                    ),
+                ],
+              ),
+            if (terminals.isNotEmpty && query.isEmpty)
+              group(
+                key: 'terminal',
+                icon: Icons.terminal,
+                title: 'Terminal',
+                summary: terminal?.name ?? 'None',
+                children: [
+                  RadioGroup<String>(
+                    groupValue: terminalId,
+                    onChanged: (v) => chat.setTerminal(v ?? ''),
+                    child: Column(
+                      children: [
+                        const RadioListTile<String>(
+                          dense: true,
+                          value: '',
+                          title: Text('No terminal'),
+                        ),
+                        for (final t in terminals)
+                          RadioListTile<String>(
+                            dense: true,
+                            value: t.id,
+                            title: Text(t.name),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            if (shownTools.isNotEmpty)
+              group(
+                key: 'tools',
+                icon: Icons.build_outlined,
+                title: 'Tools',
+                summary: _onOf(toolsOn, tools.length),
+                action: toolsOn == 0
+                    ? null
+                    : TextButton(
+                        onPressed: () {
+                          for (final t in tools) {
+                            if (activeTools.contains(t.id)) {
+                              chat.setTool(t.id, false);
+                            }
+                          }
+                        },
+                        child: const Text('All off'),
+                      ),
+                children: [
+                  for (final t in shownTools)
+                    item(
+                      t,
+                      activeTools.contains(t.id),
+                      (v) => chat.setTool(t.id, v),
+                    ),
+                ],
+              ),
+            if (shownSkills.isNotEmpty)
+              group(
+                key: 'skills',
+                icon: Icons.auto_awesome_outlined,
+                title: 'Skills',
+                summary: _onOf(skillsOn, skills.length),
+                action: skillsOn == 0
+                    ? null
+                    : TextButton(
+                        onPressed: () {
+                          for (final t in skills) {
+                            if (activeSkills.contains(t.id)) {
+                              chat.setSkill(t.id, false);
+                            }
+                          }
+                        },
+                        child: const Text('All off'),
+                      ),
+                children: [
+                  for (final t in shownSkills)
+                    item(
+                      t,
+                      activeSkills.contains(t.id),
+                      (v) => chat.setSkill(t.id, v),
+                    ),
+                ],
+              ),
+            if (query.isNotEmpty && shownTools.isEmpty && shownSkills.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  'Nothing matches "$_query".',
+                  style: TextStyle(color: muted),
+                ),
+              ),
             const SizedBox(height: 12),
           ],
         ),
@@ -1197,3 +1411,11 @@ class _ToolsSheet extends ConsumerWidget {
     );
   }
 }
+
+IconData _featureIcon(String id) => switch (id) {
+  'web_search' => Icons.language,
+  'image_generation' => Icons.image_outlined,
+  _ => Icons.code,
+};
+
+String _onOf(int on, int all) => on == 0 ? '$all available' : '$on of $all on';

@@ -12,6 +12,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import 'chat_controller.dart';
 import 'side_panel.dart';
+import 'voice_note.dart';
 
 /// The paperclip: photos and videos from the gallery or camera, or any file.
 class AttachButton extends ConsumerWidget {
@@ -233,6 +234,8 @@ class _FileTile extends StatelessWidget {
           Icon(
             isVideoName(name)
                 ? Icons.movie_outlined
+                : name.toLowerCase().endsWith('.wav')
+                ? Icons.mic_none
                 : Icons.description_outlined,
             size: 20,
           ),
@@ -280,6 +283,12 @@ class MessageAttachments extends ConsumerWidget {
                 name: a.name,
                 // A lone generated picture shows large, as on the web.
                 size: !alignEnd && single ? 280 : 160,
+              )
+            else if (a.isAudio && attachmentUri(a, client) != null)
+              AudioTile(
+                uri: attachmentUri(a, client)!,
+                headers: client.authHeaders,
+                name: a.name,
               )
             else if (a.isVideo && attachmentUri(a, client) != null)
               _VideoTile(

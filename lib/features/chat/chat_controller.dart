@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
+import '../studio/listen.dart' show transcribe;
 import '../voice/realtime_call.dart' show BridgeSubmission;
 import '../workspace/prompts_api.dart' show fillSystemVariables;
 import 'read_aloud.dart';
@@ -425,6 +426,67 @@ class ChatController extends Notifier<ChatState> {
       // Say why, not just a red mark on the tile.
       error: done.error == null ? null : "Couldn't attach $name: ${done.error}",
     );
+  }
+
+  /// Sends a recorded voice note: the recording goes with the message so it
+  /// can be played back, and the server's transcription is the text the
+  /// model reads. If no words come back the note stays in the composer.
+  Future<void> sendVoiceNote(List<int> wav) async {
+    final key = _uuid.v4();
+    final stamp = DateTime.now()
+        .toIso8601String()
+        .substring(0, 19)
+        .replaceAll(':', '-');
+    final name = 'Voice note $stamp.wav';
+    state = state.copyWith(
+      attachments: [
+        ...state.attachments,
+        PendingAttachment(key: key, name: name, isImage: false),
+      ],
+    );
+    final client = ref.read(clientProvider);
+    PendingAttachment done;
+    var text = '';
+    try {
+      final upload = client.uploadFile(
+        wav,
+        name,
+        contentType: 'audio/wav',
+        // The app sends the words itself; the server needn't index them.
+        process: false,
+      );
+      final words = transcribe(client, wav, name);
+      final uploaded = await upload;
+      done = PendingAttachment(
+        key: key,
+        name: name,
+        isImage: false,
+        uploaded: Attachment.uploaded(uploaded, size: wav.length),
+      );
+      text = await words;
+    } catch (e) {
+      done = PendingAttachment(
+        key: key,
+        name: name,
+        isImage: false,
+        error: '$e',
+      );
+    }
+    if (!state.attachments.any((a) => a.key == key)) return;
+    state = state.copyWith(
+      attachments: [for (final a in state.attachments) a.key == key ? done : a],
+      error: done.error != null
+          ? "Couldn't send the voice note: ${done.error}"
+          : text.isEmpty
+          ? 'No words came through in the voice note. It is attached; '
+                'type a message to send it, or record again.'
+          : null,
+    );
+    if (done.error != null || text.isEmpty) return;
+    for (var i = 0; i < 100 && !canSend; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    await send(text);
   }
 
   void removeAttachment(String key) => state = state.copyWith(
@@ -1293,7 +1355,8 @@ class ChatController extends Notifier<ChatState> {
     final docs = [
       for (final m in chat.thread)
         for (final f in m.attachments)
-          if (!f.isImage && seen.add(f.id ?? f.url ?? f.name)) f.toJson(),
+          if (!f.isImage && !f.isAudio && seen.add(f.id ?? f.url ?? f.name))
+            f.toJson(),
     ];
     return docs.isEmpty ? null : docs;
   }
