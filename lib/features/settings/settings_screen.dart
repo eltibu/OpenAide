@@ -10,7 +10,9 @@ import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
 import 'data_controls.dart';
+import 'notification_settings.dart';
 import 'settings_api.dart';
+import 'usage_screen.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
   (ref) => SettingsApi(ref.watch(clientProvider)),
@@ -146,10 +148,22 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const AudioSettings()),
           ),
           ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('Notifications'),
+            subtitle: const Text('When a reply is ready, and webhooks'),
+            onTap: () => open(const NotificationSettings()),
+          ),
+          ListTile(
             leading: const Icon(Icons.storage_outlined),
             title: const Text('Data controls'),
             subtitle: const Text('Import, export, shared chats, your files'),
             onTap: () => open(const DataControls()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text('Usage'),
+            subtitle: const Text('Tokens, streaks and your top models'),
+            onTap: () => open(const UsageScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.psychology_alt_outlined),

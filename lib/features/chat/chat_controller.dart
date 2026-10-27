@@ -14,6 +14,7 @@ import '../voice/realtime_call.dart' show BridgeSubmission;
 import '../workspace/prompts_api.dart' show fillSystemVariables;
 import 'read_aloud.dart';
 import 'reply_parts.dart';
+import 'reply_notify.dart';
 import 'request_options.dart';
 import 'speech_prefs.dart';
 import 'tool_approval.dart';
@@ -1328,6 +1329,9 @@ class ChatController extends Notifier<ChatState> {
             : reply.content,
         done: true,
       );
+      unawaited(
+        _afterDone(saved.content, chat.id, state.chat?.title ?? chat.title),
+      );
     }
     state = state.copyWith(
       streaming: false,
@@ -1497,7 +1501,9 @@ class ChatController extends Notifier<ChatState> {
     final saved = state.chat?.messages[reply.id] ?? reply;
     if (!run.stopped) {
       _speak(run, saved.content, done: true);
-      unawaited(_afterDone(saved.content));
+      unawaited(
+        _afterDone(saved.content, chat.id, state.chat?.title ?? chat.title),
+      );
     }
     state = state.copyWith(
       streaming: false,
@@ -1738,8 +1744,19 @@ class ChatController extends Notifier<ChatState> {
       (settings?['ui'] as Map?)?[key] == true;
 
   /// Settings > Interface: a tap when a reply is done, and copying it.
-  Future<void> _afterDone(String text) async {
+  Future<void> _afterDone(String text, String chatId, String title) async {
     final settings = await _optional(userSettingsProvider);
+    // Settings > Notifications: tell the phone when nobody's looking.
+    if (_uiFlag(settings, 'notificationEnabled') &&
+        appInBackground &&
+        chatId.isNotEmpty) {
+      await notifyReply(
+        title: title.isEmpty ? 'Reply ready' : title,
+        reply: text,
+        chatId: chatId,
+        sound: (settings?['ui'] as Map?)?['notificationSound'] != false,
+      );
+    }
     try {
       if (_uiFlag(settings, 'hapticFeedback')) {
         await HapticFeedback.lightImpact();
