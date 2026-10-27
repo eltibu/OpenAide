@@ -8,6 +8,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
+import 'channel_manage.dart';
 import 'channels_api.dart';
 
 final channelsApiProvider = Provider<ChannelsApi>(
@@ -48,6 +49,11 @@ class ChannelsScreen extends ConsumerWidget {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(title: const Text('Channels')),
+      floatingActionButton: FloatingActionButton(
+        tooltip: 'New',
+        onPressed: () => _startNew(context, ref),
+        child: const Icon(Icons.add_comment_outlined),
+      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(channelListProvider.future),
         child: channels.when(
@@ -110,6 +116,81 @@ class ChannelsScreen extends ConsumerWidget {
   }
 }
 
+/// Starts a channel, a group or a direct message, then opens it.
+Future<void> _startNew(BuildContext context, WidgetRef ref) async {
+  final api = ref.read(channelsApiProvider);
+  final admin = ref.read(sessionProvider).value?.user?['role'] == 'admin';
+  final kind = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (sheet) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.person_outline),
+            title: const Text('Direct message'),
+            onTap: () => Navigator.pop(sheet, 'dm'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.group_outlined),
+            title: const Text('Group'),
+            subtitle: const Text('Private, for the people you add'),
+            onTap: () => Navigator.pop(sheet, 'group'),
+          ),
+          if (admin)
+            ListTile(
+              leading: const Icon(Icons.tag),
+              title: const Text('Channel'),
+              subtitle: const Text('Everyone with access joins'),
+              onTap: () => Navigator.pop(sheet, ''),
+            ),
+        ],
+      ),
+    ),
+  );
+  if (kind == null || !context.mounted) return;
+  try {
+    Channel? made;
+    if (kind == 'dm') {
+      final me = ref.read(sessionProvider).value?.user?['id'] as String?;
+      final who = await pickPerson(
+        context,
+        api,
+        title: 'Message someone',
+        skip: {?me},
+      );
+      if (who == null) return;
+      made = await api.directMessage(who.id);
+    } else {
+      final details = await askChannelDetails(
+        context,
+        title: kind == 'group' ? 'New group' : 'New channel',
+      );
+      if (details == null) return;
+      made = await api.create(
+        details.name,
+        description: details.description.isEmpty ? null : details.description,
+        type: kind,
+      );
+    }
+    ref.invalidate(channelListProvider);
+    if (!context.mounted) return;
+    // A fresh read names a direct message by the person in it.
+    final full = await api.get(made.id).catchError((_) => made!);
+    if (!context.mounted) return;
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => ChannelScreen(channel: full)),
+    );
+    ref.invalidate(channelListProvider);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+}
+
 /// A channel's messages, live, or one thread in it when [parent] is set.
 class ChannelScreen extends ConsumerStatefulWidget {
   const ChannelScreen({super.key, required this.channel, this.parent});
@@ -128,6 +209,9 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
   /// Newest first.
   List<ChannelMessage> _messages = const [];
   late ChannelMessage? _parent = widget.parent;
+
+  /// The channel as last read, with its mute and member count.
+  late Channel _channel = widget.channel;
   Object? _error;
   bool _loading = true;
   bool _more = true;
@@ -160,6 +244,13 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
       _messages = _isThread
           ? await _api.thread(_id, widget.parent!.id)
           : await _api.messages(_id);
+      if (!_isThread) {
+        try {
+          _channel = await _api.get(_id);
+        } catch (_) {
+          // The list's copy will do.
+        }
+      }
       _more = !_isThread && _messages.length >= 50;
       _error = null;
       // Opening a channel joins it; listen to it live from now on.
@@ -326,6 +417,14 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                 title: const Text('Reply in thread'),
                 onTap: () => Navigator.pop(sheet, 'thread'),
               ),
+            if (_channel.raw['write_access'] != false)
+              ListTile(
+                leading: Icon(
+                  m.pinned ? Icons.push_pin : Icons.push_pin_outlined,
+                ),
+                title: Text(m.pinned ? 'Unpin' : 'Pin'),
+                onTap: () => Navigator.pop(sheet, 'pin'),
+              ),
             ListTile(
               leading: const Icon(Icons.copy),
               title: const Text('Copy text'),
@@ -354,6 +453,16 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
         await _toggleReaction(m, action.substring(6));
       } else if (action == 'thread') {
         _openThread(m);
+      } else if (action == 'pin') {
+        await _api.pin(_id, m.id, !m.pinned);
+        setState(() {
+          if (_parent?.id == m.id) _parent = m.copyWith(pinned: !m.pinned);
+          _messages = [
+            for (final x in _messages)
+              x.id == m.id ? x.copyWith(pinned: !m.pinned) : x,
+          ];
+        });
+        _say(m.pinned ? 'Unpinned' : 'Pinned');
       } else if (action == 'copy') {
         await Clipboard.setData(ClipboardData(text: showMentions(m.content)));
       } else if (action == 'edit') {
@@ -411,6 +520,121 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
     await _refreshOne(m.id);
   }
 
+  Future<void> _openPinned() async {
+    final m = await showPinned(context, _api, _id);
+    if (m == null || !mounted) return;
+    if (m.parentId != null) {
+      // A pinned reply: open its thread.
+      try {
+        _openThread(await _api.message(_id, m.parentId!));
+      } catch (e) {
+        _say('$e');
+      }
+    } else {
+      _openThread(m);
+    }
+  }
+
+  Future<void> _channelAction(String action) async {
+    final nav = Navigator.of(context);
+    try {
+      switch (action) {
+        case 'mute':
+          final muted = await showModalBottomSheet<bool>(
+            context: context,
+            showDragHandle: true,
+            builder: (sheet) => SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (on, label) in [
+                    (false, 'All messages'),
+                    (true, 'Mentions only'),
+                  ])
+                    ListTile(
+                      leading: Icon(
+                        _channel.muted == on
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_unchecked,
+                      ),
+                      title: Text(label),
+                      onTap: () => Navigator.pop(sheet, on),
+                    ),
+                ],
+              ),
+            ),
+          );
+          if (muted == null || muted == _channel.muted) return;
+          await _api.setMuted(_id, muted);
+          _channel = await _api.get(_id);
+          if (mounted) setState(() {});
+        case 'members':
+          await nav.push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  ChannelMembersScreen(api: _api, channel: _channel),
+            ),
+          );
+          _channel = await _api.get(_id);
+          if (mounted) setState(() {});
+        case 'webhooks':
+          await nav.push(
+            MaterialPageRoute<void>(
+              builder: (_) =>
+                  ChannelWebhooksScreen(api: _api, channel: _channel),
+            ),
+          );
+        case 'edit':
+          final details = await askChannelDetails(
+            context,
+            title: 'Edit channel',
+            name: _channel.name,
+            description: _channel.description ?? '',
+            action: 'Save',
+          );
+          if (details == null) return;
+          await _api.update(
+            _channel,
+            name: details.name,
+            description: details.description,
+          );
+          _channel = await _api.get(_id);
+          if (mounted) setState(() {});
+          ref.invalidate(channelListProvider);
+        case 'delete':
+          final ok = await showDialog<bool>(
+            context: context,
+            builder: (d) => AlertDialog(
+              title: Text('Delete #${_channel.name}?'),
+              content: const Text(
+                'Its messages are deleted for everyone. This can\'t be undone.',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(d, false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(d, true),
+                  child: const Text('Delete'),
+                ),
+              ],
+            ),
+          );
+          if (ok != true) return;
+          await _api.deleteChannel(_id);
+          ref.invalidate(channelListProvider);
+          nav.pop();
+        case 'hide':
+          await _api.setActive(_id, false);
+          ref.invalidate(channelListProvider);
+          nav.pop();
+      }
+    } catch (e) {
+      _say('$e');
+    }
+  }
+
   void _openThread(ChannelMessage m) => Navigator.push(
     context,
     MaterialPageRoute<void>(
@@ -420,13 +644,89 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final title = widget.channel.title(_myName(ref));
+    final title = _channel.title(_myName(ref));
     final scheme = Theme.of(context).colorScheme;
+    final count = _channel.userCount;
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          _isThread ? 'Thread' : (widget.channel.isDm ? title : '# $title'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_isThread ? 'Thread' : (_channel.isDm ? title : '# $title')),
+            if (!_isThread && !_channel.isDm && count != null)
+              Text(
+                count == 1 ? '1 member' : '$count members',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+          ],
         ),
+        actions: _isThread
+            ? null
+            : [
+                IconButton(
+                  tooltip: 'Pinned messages',
+                  icon: const Icon(Icons.push_pin_outlined),
+                  onPressed: _openPinned,
+                ),
+                PopupMenuButton<String>(
+                  onSelected: _channelAction,
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'mute',
+                      child: ListTile(
+                        leading: Icon(
+                          _channel.muted
+                              ? Icons.notifications_off_outlined
+                              : Icons.notifications_outlined,
+                        ),
+                        title: const Text('Notifications'),
+                        subtitle: Text(
+                          _channel.muted ? 'Mentions only' : 'All messages',
+                        ),
+                      ),
+                    ),
+                    if (!_channel.isDm)
+                      const PopupMenuItem(
+                        value: 'members',
+                        child: ListTile(
+                          leading: Icon(Icons.group_outlined),
+                          title: Text('Members'),
+                        ),
+                      ),
+                    if (!_channel.isDm && canManage(ref, _channel)) ...[
+                      const PopupMenuItem(
+                        value: 'webhooks',
+                        child: ListTile(
+                          leading: Icon(Icons.webhook_outlined),
+                          title: Text('Webhooks'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Edit channel'),
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: ListTile(
+                          leading: Icon(Icons.delete_outline),
+                          title: Text('Delete channel'),
+                        ),
+                      ),
+                    ],
+                    if (_channel.isDm)
+                      const PopupMenuItem(
+                        value: 'hide',
+                        child: ListTile(
+                          leading: Icon(Icons.visibility_off_outlined),
+                          title: Text('Hide conversation'),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
       ),
       body: SafeArea(
         top: false,
@@ -598,6 +898,10 @@ class _MessageTile extends StatelessWidget {
                           _clock(context, m.at),
                           style: TextStyle(color: muted, fontSize: 12),
                         ),
+                        if (m.pinned) ...[
+                          const SizedBox(width: 6),
+                          Icon(Icons.push_pin, size: 13, color: muted),
+                        ],
                       ],
                     ),
                   if (m.content.isEmpty && !m.done)

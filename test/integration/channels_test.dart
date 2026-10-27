@@ -78,4 +78,91 @@ void main() {
       socket.dispose();
     }
   }, skip: skip);
+
+  test('pins, mutes, manages members, webhooks, groups and DMs', () async {
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    final api = ChannelsApi(client);
+
+    // Someone else to add.
+    var others = [
+      for (final u in await api.searchUsers(''))
+        if (u.email != email) u,
+    ];
+    if (others.isEmpty) {
+      await client.send(
+        'POST',
+        '/api/v1/auths/add',
+        body: {
+          'name': 'Friend',
+          'email': 'friend@t.io',
+          'password': 'Passw0rd!x',
+          'role': 'user',
+        },
+      );
+      others = [
+        for (final u in await api.searchUsers('friend'))
+          if (u.email != email) u,
+      ];
+    }
+    final friend = others.first;
+
+    final group = await api.create('nexus test', type: 'group');
+    try {
+      var c = await api.get(group.id);
+      expect(c.isGroup, isTrue);
+      expect(c.muted, isFalse);
+
+      final m = await api.post(c.id, 'pin me');
+      await api.pin(c.id, m.id, true);
+      expect((await api.message(c.id, m.id)).pinned, isTrue);
+      expect((await api.pinned(c.id)).map((x) => x.id), contains(m.id));
+      await api.pin(c.id, m.id, false);
+      expect(await api.pinned(c.id), isEmpty);
+
+      await api.setMuted(c.id, true);
+      expect((await api.get(c.id)).muted, isTrue);
+      await api.setMuted(c.id, false);
+
+      await api.addMembers(c.id, [friend.id]);
+      expect((await api.members(c.id)).map((u) => u.id), contains(friend.id));
+      expect((await api.get(c.id)).userCount, 2);
+      await api.removeMembers(c.id, [friend.id]);
+      expect(
+        (await api.members(c.id)).map((u) => u.id),
+        isNot(contains(friend.id)),
+      );
+
+      await api.update(c, name: 'renamed', description: 'about');
+      c = await api.get(c.id);
+      expect(c.name, 'renamed');
+      expect(c.description, 'about');
+      expect(c.isGroup, isTrue);
+
+      final hook = await api.createWebhook(c.id, 'CI');
+      expect(
+        hook.url(url),
+        '$url/api/v1/channels/webhooks/${hook.id}/'
+        '${hook.token}',
+      );
+      expect((await api.webhooks(c.id)).single.name, 'CI');
+      // Posting to the address puts a message in the channel.
+      await OpenWebUiClient(baseUrl: url).send(
+        'POST',
+        '/api/v1/channels/webhooks/${hook.id}/${hook.token}',
+        body: {'content': 'from a webhook'},
+      );
+      expect((await api.messages(c.id)).first.content, 'from a webhook');
+      await api.deleteWebhook(c.id, hook.id);
+      expect(await api.webhooks(c.id), isEmpty);
+
+      final dm = await api.directMessage(friend.id);
+      expect(dm.isDm, isTrue);
+      expect((await api.directMessage(friend.id)).id, dm.id);
+      await api.setActive(dm.id, false);
+    } finally {
+      await api.deleteChannel(group.id);
+    }
+    expect((await api.list()).map((x) => x.id), isNot(contains(group.id)));
+  }, skip: skip);
 }
