@@ -11,6 +11,7 @@ import '../update/update_screen.dart';
 import 'audio_settings.dart';
 import 'data_controls.dart';
 import 'settings_api.dart';
+import 'usage_screen.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
   (ref) => SettingsApi(ref.watch(clientProvider)),
@@ -150,6 +151,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Data controls'),
             subtitle: const Text('Import, export, shared chats, your files'),
             onTap: () => open(const DataControls()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text('Usage'),
+            subtitle: const Text('Tokens, streaks and your top models'),
+            onTap: () => open(const UsageScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.psychology_alt_outlined),
