@@ -57,7 +57,11 @@ class MainActivity : FlutterActivity() {
                     "dir" -> result.success(
                         File(cacheDir, "speech").apply { mkdirs() }.absolutePath,
                     )
-                    "play" -> play(call.argument<String>("path")!!, result)
+                    "play" -> play(
+                        call.argument<String>("path")!!,
+                        call.argument<Double>("rate") ?: 1.0,
+                        result,
+                    )
                     "stop" -> {
                         stopSpeech()
                         result.success(null)
@@ -99,7 +103,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun play(path: String, result: MethodChannel.Result) {
+    private fun play(path: String, rate: Double, result: MethodChannel.Result) {
         stopSpeech()
         val player = MediaPlayer()
         speech = player
@@ -125,7 +129,12 @@ class MainActivity : FlutterActivity() {
                 finish("error $what")
                 true
             }
-            player.setOnPreparedListener { it.start() }
+            player.setOnPreparedListener {
+                if (rate != 1.0 && android.os.Build.VERSION.SDK_INT >= 23) {
+                    it.playbackParams = it.playbackParams.setSpeed(rate.toFloat())
+                }
+                it.start()
+            }
             player.prepareAsync()
         } catch (e: Exception) {
             finish(e.message ?: "error")

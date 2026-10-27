@@ -14,6 +14,7 @@ import 'package:video_player/video_player.dart';
 import '../../core/auth/session.dart';
 import '../studio/listen.dart';
 import 'chat_controller.dart';
+import 'speech_prefs.dart';
 
 /// The whole recording, kept in memory until it is sent.
 class VoiceNoteRecorder {
@@ -162,12 +163,19 @@ class _VoiceNoteBarState extends ConsumerState<VoiceNoteBar> {
     if (wav == null) return;
     setState(() => _problem = null);
     try {
+      final settings = ref.read(userSettingsProvider).value;
       final text = await transcribe(
         ref.read(clientProvider),
         wav,
         'dictation.wav',
+        language: speechLanguage(settings),
       );
-      if (text.isNotEmpty) widget.onWords(text);
+      // Settings > Audio can send the words straight away, as on the web.
+      if (text.isNotEmpty && speechAutoSend(settings)) {
+        unawaited(ref.read(chatControllerProvider.notifier).send(text));
+      } else if (text.isNotEmpty) {
+        widget.onWords(text);
+      }
       widget.onDone();
     } catch (e) {
       if (mounted) setState(() => _problem = "Couldn't turn it into text: $e");
