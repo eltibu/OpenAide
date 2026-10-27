@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
 import 'package:nexus_assistant/features/admin/config_editor.dart';
+import 'package:nexus_assistant/features/admin/groups_screen.dart';
 
 void main() {
   final url = Platform.environment['OWUI_URL'];
@@ -48,5 +49,72 @@ void main() {
       !was,
     );
     await client.send('POST', tasks.save, body: before);
+  }, skip: skip);
+
+  test('groups give permissions to their members', () async {
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    final base = await client.send(
+      'GET',
+      '/api/v1/users/default/permissions/defaults',
+    ) as Map;
+    final group = await client.send(
+      'POST',
+      '/api/v1/groups/create',
+      body: {'name': 'nexus test group', 'description': ''},
+    ) as Map;
+    final at = '/api/v1/groups/id/${group['id']}';
+    try {
+      final perms = permissionsFor(base, null, fill: true);
+      (perms['features'] as Map)['notes'] = true;
+      await client.send(
+        'POST',
+        '$at/update',
+        body: {
+          'name': 'renamed group',
+          'description': 'd',
+          'permissions': perms,
+          'data': group['data'],
+          'parent_group_id': null,
+        },
+      );
+      final fresh = await client.send('GET', at) as Map;
+      expect(fresh['name'], 'renamed group');
+      expect((fresh['permissions'] as Map)['features']['notes'], isTrue);
+      expect((fresh['permissions'] as Map)['chat']['delete'], isFalse);
+
+      final me = await client.send('GET', '/api/v1/auths/') as Map;
+      await client.send(
+        'POST',
+        '$at/users/add',
+        body: {
+          'user_ids': [me['id']],
+        },
+      );
+      final members = await client.send(
+        'GET',
+        '$at/members',
+        query: {'membership': 'direct'},
+      ) as Map;
+      expect((members['items'] as List).single['id'], me['id']);
+      await client.send(
+        'POST',
+        '$at/users/remove',
+        body: {
+          'user_ids': [me['id']],
+        },
+      );
+
+      // Default permissions save and come back.
+      final defaults =
+          await client.send('GET', '/api/v1/users/default/permissions') as Map;
+      await client.send(
+        'POST',
+        '/api/v1/users/default/permissions',
+        body: defaults,
+      );
+    } finally {
+      await client.send('DELETE', '$at/delete');
+    }
   }, skip: skip);
 }

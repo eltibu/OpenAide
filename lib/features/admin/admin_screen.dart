@@ -8,6 +8,7 @@ import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'admin_api.dart';
 import 'config_editor.dart';
+import 'groups_screen.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -53,6 +54,14 @@ class AdminScreen extends StatelessWidget {
             title: const Text('Users'),
             subtitle: const Text('Accounts, roles and passwords'),
             onTap: () => open(const UsersScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.groups_outlined),
+            title: const Text('Groups and permissions'),
+            subtitle: const Text(
+              'What everyone may do, and groups that give more',
+            ),
+            onTap: () => open(const GroupsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.toggle_on_outlined),
