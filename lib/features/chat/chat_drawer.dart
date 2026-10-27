@@ -11,6 +11,7 @@ import '../calendar/calendar_screen.dart';
 import '../channels/channels_screen.dart';
 import '../notes/notes_screen.dart';
 import '../playground/playground_screen.dart';
+import '../email/email_screen.dart';
 import '../studio/record_notes.dart';
 import '../studio/studio_screen.dart';
 import '../terminal/terminal_screen.dart';
@@ -651,6 +652,7 @@ class _Places extends ConsumerWidget {
           'Record notes',
           () => const RecordNotesScreen(),
         ),
+        _tile(context, Icons.mail_outline, 'Email', () => const EmailScreen()),
         if (admin) ...[
           _tile(
             context,
