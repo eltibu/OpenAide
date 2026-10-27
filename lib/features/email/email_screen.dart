@@ -40,14 +40,16 @@ final emailAgentProvider = FutureProvider<EmailAgent>((ref) async {
   );
 });
 
-/// A folder's emails: the ones kept on the server show at once, then
-/// Nexus checks for new ones and they are added. A check that fails
-/// leaves the list as it was.
+/// A folder's emails: the phone's copy shows at once, then the one kept
+/// on the server, and Nexus checks for new ones only when the last check
+/// is old (pulling down always checks). A check that fails leaves the
+/// list as it was.
 class EmailFolder {
   const EmailFolder({
     this.emails = const [],
     this.loaded = false,
     this.checking = false,
+    this.checkedAt,
     this.error,
   });
   final List<Email> emails;
@@ -55,7 +57,22 @@ class EmailFolder {
   /// The kept emails have been read (an empty list means none yet).
   final bool loaded;
   final bool checking;
+  final DateTime? checkedAt;
   final String? error;
+
+  EmailFolder copyWith({
+    List<Email>? emails,
+    bool? loaded,
+    bool? checking,
+    DateTime? checkedAt,
+    String? error,
+  }) => EmailFolder(
+    emails: emails ?? this.emails,
+    loaded: loaded ?? this.loaded,
+    checking: checking ?? this.checking,
+    checkedAt: checkedAt ?? this.checkedAt,
+    error: error,
+  );
 }
 
 class EmailFolderNotifier extends Notifier<EmailFolder> {
@@ -69,31 +86,57 @@ class EmailFolderNotifier extends Notifier<EmailFolder> {
   }
 
   Future<void> _start() async {
+    final phone = await const EmailCache().read();
+    if (!state.loaded && (phone[folder] as List? ?? const []).isNotEmpty) {
+      state = EmailFolder(
+        emails: keptIn(phone, folder),
+        loaded: true,
+        checkedAt: checkedIn(phone, folder),
+      );
+    }
     try {
       final agent = await ref.read(emailAgentProvider.future);
       final kept = await agent.kept(folder);
-      state = EmailFolder(emails: kept, loaded: true);
+      final checked = await agent.checkedAt(folder);
+      if (!state.checking) {
+        state = EmailFolder(
+          emails: kept.isEmpty ? state.emails : kept,
+          loaded: true,
+          checkedAt: checked ?? state.checkedAt,
+        );
+      }
     } catch (_) {
-      state = const EmailFolder(loaded: true);
+      state = state.copyWith(loaded: true);
     }
-    await check();
+    if (needsCheck(state.checkedAt)) await check();
   }
 
   /// Asks Nexus for new mail and adds it to the list.
   Future<void> check() async {
     if (state.checking) return;
-    state = EmailFolder(
-      emails: state.emails,
-      loaded: state.loaded,
-      checking: true,
-    );
+    state = state.copyWith(checking: true);
     try {
       final agent = await ref.read(emailAgentProvider.future);
       final emails = await agent.check(folder);
-      state = EmailFolder(emails: emails, loaded: true);
+      state = EmailFolder(
+        emails: emails,
+        loaded: true,
+        checkedAt: DateTime.now(),
+      );
     } catch (e) {
-      state = EmailFolder(emails: state.emails, loaded: true, error: '$e');
+      state = state.copyWith(loaded: true, checking: false, error: '$e');
     }
+  }
+
+  /// Shows [id] as read or unread right away.
+  void showRead(String id, bool read) {
+    state = state.copyWith(
+      emails: [
+        for (final e in state.emails)
+          e.id == id ? e.copyWith(unread: !read) : e,
+      ],
+      error: state.error,
+    );
   }
 }
 
@@ -101,6 +144,28 @@ final emailFolderProvider =
     NotifierProvider.family<EmailFolderNotifier, EmailFolder, String>(
       EmailFolderNotifier.new,
     );
+
+/// Marks [e] read (or unread) in every list and keeps it on the server.
+Future<void> markRead(WidgetRef ref, Email e, {bool read = true}) async {
+  for (final folder in ['inbox', 'sent']) {
+    if (ref.exists(emailFolderProvider(folder))) {
+      ref.read(emailFolderProvider(folder).notifier).showRead(e.id, read);
+    }
+  }
+  try {
+    await (await ref.read(emailAgentProvider.future)).setRead(e, read: read);
+  } catch (_) {
+    // Shown now; kept on the phone until the server can be reached.
+  }
+}
+
+String _ago(DateTime t) {
+  final d = DateTime.now().difference(t);
+  if (d.inMinutes < 1) return 'just now';
+  if (d.inHours < 1) return '${d.inMinutes} min ago';
+  if (d.inDays < 1) return '${d.inHours} h ago';
+  return '${d.inDays} d ago';
+}
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -233,7 +298,15 @@ class _EmailList extends ConsumerWidget {
         ),
         children: [
           if (box.checking && emails.isNotEmpty)
-            const LinearProgressIndicator(minHeight: 2),
+            const LinearProgressIndicator(minHeight: 2)
+          else if (box.checkedAt != null && emails.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+              child: Text(
+                'Checked ${_ago(box.checkedAt!)}. Pull down to check again.',
+                style: TextStyle(color: muted, fontSize: 12),
+              ),
+            ),
           if (box.error != null)
             MaterialBanner(
               content: Text(
@@ -266,13 +339,13 @@ class _EmailList extends ConsumerWidget {
   }
 }
 
-class EmailTile extends StatelessWidget {
+class EmailTile extends ConsumerWidget {
   const EmailTile({super.key, required this.email, this.sent = false});
   final Email email;
   final bool sent;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final muted = context.nexus.muted;
     final scheme = Theme.of(context).colorScheme;
     final who = sent ? 'To: ${email.to}' : email.fromName;
@@ -282,6 +355,10 @@ class EmailTile extends StatelessWidget {
         context,
         MaterialPageRoute<void>(builder: (_) => EmailView(email: email)),
       ),
+      onLongPress: () {
+        unawaited(markRead(ref, email, read: email.unread));
+        _say(context, email.unread ? 'Marked read' : 'Marked unread');
+      },
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Column(
@@ -365,7 +442,12 @@ class _SearchScreenState extends ConsumerState<_SearchScreen> {
     setState(() {
       _found = ref
           .read(emailAgentProvider.future)
-          .then((a) => a.list(query: q.trim()));
+          .then(
+            (a) async => withReadState(
+              await a.list(query: q.trim()),
+              await a.readMarks(),
+            ),
+          );
     });
   }
 
@@ -425,6 +507,15 @@ class EmailView extends ConsumerStatefulWidget {
 class _EmailViewState extends ConsumerState<EmailView> {
   late Future<OpenedEmail> _opened = _open();
 
+  @override
+  void initState() {
+    super.initState();
+    // Opening it reads it; kept on the server so it stays read everywhere.
+    if (widget.email.unread) {
+      Future.microtask(() => markRead(ref, widget.email));
+    }
+  }
+
   /// Shows what Nexus said when it was opened before; [fresh] asks again.
   Future<OpenedEmail> _open({bool fresh = false}) async {
     final agent = await ref.read(emailAgentProvider.future);
@@ -460,6 +551,14 @@ class _EmailViewState extends ConsumerState<EmailView> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          IconButton(
+            tooltip: 'Mark as unread',
+            icon: const Icon(Icons.mark_email_unread_outlined),
+            onPressed: () {
+              unawaited(markRead(ref, e, read: false));
+              Navigator.pop(context);
+            },
+          ),
           IconButton(
             tooltip: 'Ask Nexus to open it again',
             icon: const Icon(Icons.refresh),

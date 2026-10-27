@@ -8,6 +8,7 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/api/openwebui_client.dart';
@@ -45,6 +46,18 @@ class Email {
     snippet: '${j['snippet'] ?? ''}',
     unread: j['unread'] == true,
     note: '${j['note'] ?? ''}',
+  );
+
+  Email copyWith({bool? unread}) => Email(
+    id: id,
+    thread: thread,
+    from: from,
+    to: to,
+    subject: subject,
+    date: date,
+    snippet: snippet,
+    unread: unread ?? this.unread,
+    note: note,
   );
 
   Map<String, dynamic> toJson() => {
@@ -154,6 +167,113 @@ List<Email> mergeEmails(List<Email> fresh, List<Email> kept, {int max = 300}) {
   return all.length > max ? all.sublist(0, max) : all;
 }
 
+/// [emails] with what was marked read or unread in the app (`read` in
+/// the store: id to true for read) over what Gmail said.
+List<Email> withReadState(List<Email> emails, Map read) => [
+  for (final e in emails)
+    read[e.id] is bool ? e.copyWith(unread: read[e.id] != true) : e,
+];
+
+/// The emails kept for [folder] in [store], newest first, with the read
+/// state from the app.
+List<Email> keptIn(Map store, String folder) => withReadState([
+  for (final e in (store[folder] as List? ?? const []).whereType<Map>())
+    Email.fromJson(e),
+], store['read'] as Map? ?? const {});
+
+/// When Nexus last checked [folder], as kept in [store].
+DateTime? checkedIn(Map store, String folder) {
+  final checked = store['checked'];
+  return checked is Map
+      ? DateTime.tryParse('${checked[folder] ?? ''}')?.toLocal()
+      : null;
+}
+
+/// How long a check stays fresh: opening Email again within it shows the
+/// kept list without asking Nexus (pulling down still checks).
+const checkEvery = Duration(minutes: 15);
+
+bool needsCheck(DateTime? checked, {DateTime? now}) =>
+    checked == null || (now ?? DateTime.now()).difference(checked) > checkEvery;
+
+/// The server's store with the phone's copy: the server's is the real one,
+/// but what the phone changed while the server couldn't be reached
+/// (`synced` false) is kept on top of it.
+Map<String, dynamic> mergeStores(Map server, Map local) {
+  final out = Map<String, dynamic>.from(server);
+  if (local['synced'] != false) return out..remove('synced');
+  for (final folder in ['inbox', 'sent']) {
+    final merged = mergeEmails(
+      [
+        for (final e in (local[folder] as List? ?? const []).whereType<Map>())
+          Email.fromJson(e),
+      ],
+      [
+        for (final e in (server[folder] as List? ?? const []).whereType<Map>())
+          Email.fromJson(e),
+      ],
+    );
+    if (merged.isNotEmpty) out[folder] = [for (final e in merged) e.toJson()];
+  }
+  out['read'] = {...?server['read'] as Map?, ...?local['read'] as Map?};
+  out['checked'] = {
+    ...?server['checked'] as Map?,
+    ...?local['checked'] as Map?,
+  };
+  return out..remove('synced');
+}
+
+/// Drops read marks for emails no longer kept, so the store stays small.
+Map<String, dynamic> pruneRead(Map<String, dynamic> store) {
+  final ids = {
+    for (final folder in ['inbox', 'sent'])
+      for (final e in (store[folder] as List? ?? const []).whereType<Map>())
+        '${e['id']}',
+  };
+  final read = store['read'];
+  if (read is Map) {
+    store['read'] = {
+      for (final e in read.entries)
+        if (ids.contains('${e.key}')) '${e.key}': e.value,
+    };
+  }
+  return store;
+}
+
+/// The phone's copy of the kept lists, read marks and check times, so
+/// Email shows at once when opened, before anything is fetched. The copy
+/// on the server is the real one; opened emails stay there only.
+class EmailCache {
+  const EmailCache();
+  static const _key = 'nexusEmailCache';
+  static const _storage = FlutterSecureStorage();
+
+  Future<Map<String, dynamic>> read() async {
+    try {
+      final text = await _storage.read(key: _key);
+      final j = text == null ? null : jsonDecode(text);
+      return j is Map ? j.cast<String, dynamic>() : {};
+    } catch (_) {
+      return {};
+    }
+  }
+
+  Future<void> write(Map<String, dynamic> store, {required bool synced}) async {
+    try {
+      await _storage.write(
+        key: _key,
+        value: jsonEncode({
+          for (final e in store.entries)
+            if (e.key != 'opened') e.key: e.value,
+          'synced': synced,
+        }),
+      );
+    } catch (_) {
+      // Only a copy: the server still has the lists.
+    }
+  }
+}
+
 /// The JSON in a model's answer, with any words or fences around it
 /// left out.
 Object? answerJson(String text) {
@@ -228,7 +348,12 @@ String composeRequest({
 
 /// Runs requests as turns in the email chat and waits for the answers.
 class EmailAgent {
-  EmailAgent(this.client, {required this.model, required this.options});
+  EmailAgent(
+    this.client, {
+    required this.model,
+    required this.options,
+    this.cache = const EmailCache(),
+  });
 
   final OpenWebUiClient client;
   final String model;
@@ -236,6 +361,8 @@ class EmailAgent {
   /// What a chat with [model] sends (its tools, features...), so Nexus
   /// works here as it does in any chat.
   final Map<String, dynamic> options;
+
+  final EmailCache cache;
 
   String? _chatId;
 
@@ -250,31 +377,59 @@ class EmailAgent {
   }
 
   /// Emails kept on the server, in the email chat (`nexusEmails`): each
-  /// folder's list and the emails already opened, so nothing disappears
-  /// between checks and an opened email shows at once.
+  /// folder's list, the emails already opened, which ones were read in the
+  /// app and when each folder was last checked, so nothing disappears
+  /// between checks, an opened email shows at once and read stays read on
+  /// every phone.
   Map<String, dynamic>? _kept;
+  Future<Map<String, dynamic>>? _loading;
+
+  /// [_kept] is only the phone's copy: the server couldn't be read yet.
+  bool _fromPhone = false;
 
   Future<Map<String, dynamic>> _store() async {
     if (_kept != null) return _kept!;
+    return _loading ??= _load().whenComplete(() => _loading = null);
+  }
+
+  /// The store on the server, or null when it can't be read now.
+  Future<Map<String, dynamic>?> _serverStore() async {
     _chatId ??= await _savedChatId();
-    Map<String, dynamic> kept = {};
-    if (_chatId != null) {
-      try {
-        final saved = (await client.chat(_chatId!)).extra[emailStoreKey];
-        if (saved is Map) kept = saved.cast<String, dynamic>();
-      } catch (_) {
-        // A new chat is made on the first request.
-      }
+    if (_chatId == null) return {};
+    try {
+      final saved = (await client.chat(_chatId!)).extra[emailStoreKey];
+      return saved is Map ? saved.cast<String, dynamic>() : {};
+    } catch (_) {
+      return null;
     }
-    return _kept ??= kept;
+  }
+
+  Future<Map<String, dynamic>> _load() async {
+    final local = await cache.read();
+    final server = await _serverStore();
+    if (server == null) {
+      _fromPhone = true;
+      return _kept = Map<String, dynamic>.of(local)..remove('synced');
+    }
+    _kept = mergeStores(server, local);
+    if (local['synced'] == false) {
+      await _save((_) {});
+    } else {
+      unawaited(cache.write(_kept!, synced: true));
+    }
+    return _kept!;
   }
 
   /// The emails kept for [folder], newest first.
-  Future<List<Email>> kept(String folder) async => [
-    for (final e
-        in ((await _store())[folder] as List? ?? const []).whereType<Map>())
-      Email.fromJson(e),
-  ];
+  Future<List<Email>> kept(String folder) async =>
+      keptIn(await _store(), folder);
+
+  /// When Nexus last checked [folder].
+  Future<DateTime?> checkedAt(String folder) async =>
+      checkedIn(await _store(), folder);
+
+  /// What was marked read or unread in the app, by email id.
+  Future<Map> readMarks() async => (await _store())['read'] as Map? ?? {};
 
   /// An email opened before, as Nexus showed it then.
   Future<OpenedEmail?> keptOpen(Email e) async {
@@ -284,29 +439,57 @@ class EmailAgent {
   }
 
   Future<void> _save(void Function(Map<String, dynamic> store) change) async {
-    final store = await _store();
-    change(store);
-    final id = _chatId;
-    if (id == null) return;
-    try {
-      await client.send(
-        'POST',
-        '/api/v1/chats/$id',
-        body: {
-          'chat': {emailStoreKey: store},
-        },
-      );
-    } catch (_) {
-      // Kept in the app until the next save gets through.
+    var store = await _store();
+    if (_fromPhone) {
+      // Never write the phone's copy over what only the server has (the
+      // opened emails): read the server's first and put the changes on it.
+      final server = await _serverStore();
+      if (server != null) {
+        _fromPhone = false;
+        store = _kept = mergeStores(server, {...store, 'synced': false});
+      }
     }
+    change(store);
+    pruneRead(store);
+    final id = _chatId;
+    var synced = false;
+    if (id != null && !_fromPhone) {
+      try {
+        await client.send(
+          'POST',
+          '/api/v1/chats/$id',
+          body: {
+            'chat': {emailStoreKey: store},
+          },
+        );
+        synced = true;
+      } catch (_) {
+        // Kept on the phone until the next save gets through.
+      }
+    }
+    await cache.write(store, synced: synced);
   }
+
+  /// Marks [e] read (or unread again) in the app, kept on the server.
+  Future<void> setRead(Email e, {bool read = true}) => _save((s) {
+    s['read'] = {...?s['read'] as Map?, e.id: read};
+  });
 
   /// Checks [folder] with Nexus and keeps the result with what was there.
   Future<List<Email>> check(String folder) async {
     final fresh = await list(folder: folder);
-    final merged = mergeEmails(fresh, await kept(folder));
-    await _save((s) => s[folder] = [for (final e in merged) e.toJson()]);
-    return merged;
+    await _save((s) {
+      final merged = mergeEmails(fresh, [
+        for (final e in (s[folder] as List? ?? const []).whereType<Map>())
+          Email.fromJson(e),
+      ]);
+      s[folder] = [for (final e in merged) e.toJson()];
+      s['checked'] = {
+        ...?s['checked'] as Map?,
+        folder: DateTime.now().toUtc().toIso8601String(),
+      };
+    });
+    return keptIn(await _store(), folder);
   }
 
   /// Opens [e] with Nexus and keeps what it showed.
