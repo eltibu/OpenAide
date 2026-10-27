@@ -136,6 +136,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
+          // As on the web: switch a new chat to temporary before it starts.
+          if (state.messages.isEmpty || state.temporary)
+            IconButton(
+              tooltip: state.temporary
+                  ? 'Temporary chat: not saved'
+                  : 'Temporary chat',
+              isSelected: state.temporary,
+              icon: const Icon(Icons.history_toggle_off),
+              selectedIcon: const Icon(
+                Icons.visibility_off_outlined,
+                color: NexusColors.accent,
+              ),
+              onPressed: () => ref
+                  .read(chatControllerProvider.notifier)
+                  .newChat(temporary: !state.temporary),
+            ),
           const ReadAloudButton(),
           IconButton(
             tooltip: 'New chat',
@@ -149,6 +165,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       body: Column(
         children: [
           const UpdateBanner(),
+          if (state.temporary) const _TemporaryBar(),
           if (state.error != null)
             MaterialBanner(
               content: Text(state.error!),
@@ -173,6 +190,50 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           _Composer(streaming: state.streaming),
         ],
+      ),
+    );
+  }
+}
+
+/// Says the chat isn't being saved, with a way to keep it.
+class _TemporaryBar extends ConsumerWidget {
+  const _TemporaryBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(chatControllerProvider.notifier);
+    final canSave = ref.watch(
+      chatControllerProvider.select(
+        (s) => s.messages.isNotEmpty && !s.streaming,
+      ),
+    );
+    return Material(
+      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 8, 4),
+        child: Row(
+          children: [
+            Icon(
+              Icons.visibility_off_outlined,
+              size: 18,
+              color: context.nexus.muted,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text("Temporary chat. It won't be saved or kept."),
+            ),
+            if (canSave)
+              TextButton(
+                onPressed: controller.saveTemporary,
+                child: const Text('Save it'),
+              )
+            else
+              TextButton(
+                onPressed: () => controller.newChat(),
+                child: const Text('Turn off'),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -765,6 +826,22 @@ class _ComposerState extends ConsumerState<_Composer> {
       SlashCommand('chat', 'Attach a past chat', Icons.forum_outlined, () {
         run(() => attachFromServer(context, ref, 'chat'));
       }),
+      if (state.temporary && state.messages.isNotEmpty && !state.streaming)
+        SlashCommand(
+          'save',
+          'Save this temporary chat',
+          Icons.save_outlined,
+          () => run(controller.saveTemporary),
+        )
+      else if (state.messages.isEmpty)
+        SlashCommand(
+          'temporary',
+          state.temporary
+              ? 'Temporary chat is on: turn it off'
+              : "Temporary chat: one that isn't saved",
+          Icons.visibility_off_outlined,
+          () => run(() => controller.newChat(temporary: !state.temporary)),
+        ),
       SlashCommand('new', 'Start a new chat', Icons.add_comment_outlined, () {
         run(controller.newChat);
       }),

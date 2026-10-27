@@ -168,6 +168,7 @@ class ChatState {
     this.skillIds,
     this.terminalId,
     this.attachments = const [],
+    this.temporary = false,
     this.revision = 0,
   });
 
@@ -194,6 +195,10 @@ class ChatState {
   /// Photos and files waiting in the composer for the next message.
   final List<PendingAttachment> attachments;
 
+  /// A temporary chat, as on the web: answered by the server but never
+  /// saved, so it isn't in the chat list and is gone once you leave it.
+  final bool temporary;
+
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
 
@@ -214,6 +219,7 @@ class ChatState {
     Set<String>? skillIds,
     String? terminalId,
     List<PendingAttachment>? attachments,
+    bool? temporary,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -226,6 +232,7 @@ class ChatState {
     skillIds: skillIds ?? this.skillIds,
     terminalId: terminalId ?? this.terminalId,
     attachments: attachments ?? this.attachments,
+    temporary: temporary ?? this.temporary,
     revision: revision + 1,
   );
 }
@@ -328,11 +335,27 @@ class ChatController extends Notifier<ChatState> {
   /// '' switches the terminal off for this chat.
   void setTerminal(String id) => state = state.copyWith(terminalId: id);
 
-  void newChat() {
+  void newChat({bool temporary = false}) {
     _view++;
     _run?.finish();
     unawaited(ref.read(readAloudProvider).stop());
-    state = ChatState(modelId: state.modelId, attachments: state.attachments);
+    state = ChatState(
+      modelId: state.modelId,
+      attachments: state.attachments,
+      temporary: temporary,
+    );
+  }
+
+  /// Keeps a temporary chat: saves it as a normal chat and opens that.
+  Future<void> saveTemporary() async {
+    final last = state.messages.lastOrNull;
+    if (!state.temporary || last == null) return;
+    final chat = state.chat!;
+    if (chat.title.isEmpty || chat.title == 'New chat') {
+      final first = state.messages.first.content.trim().split('\n').first;
+      chat.title = first.length > 50 ? '${first.substring(0, 50)}…' : first;
+    }
+    await fork(last, title: chat.title);
   }
 
   /// Renames a chat on the server (and on screen, if it's open).
@@ -597,6 +620,7 @@ class ChatController extends Notifier<ChatState> {
       clearChat: true,
       clearError: true,
       clearStatus: true,
+      temporary: false,
     );
     try {
       final chat = await ref.read(clientProvider).chat(id);
@@ -698,7 +722,7 @@ class ChatController extends Notifier<ChatState> {
 
   /// Starts a new chat with this chat's conversation up to [at]; the
   /// original stays as it is. Opens the new one.
-  Future<void> fork(ChatMessage at) async {
+  Future<void> fork(ChatMessage at, {String? title}) async {
     final chat = state.chat;
     if (chat == null || state.streaming) return;
     final path = chat.thread;
@@ -707,7 +731,7 @@ class ChatController extends Notifier<ChatState> {
     final kept = path.sublist(0, end + 1);
     final copy = Chat(
       id: '',
-      title: '${chat.title} (fork)',
+      title: title ?? '${chat.title} (fork)',
       messages: {},
       models: [...chat.models],
       extra: {
@@ -969,7 +993,16 @@ class ChatController extends Notifier<ChatState> {
         .where((e) => e['message_id'] == reply.id)
         .listen((e) => _onEvent(chat, run, e));
     try {
-      final sessionId = await socket.ready() ?? 'nexus-app-${_uuid.v4()}';
+      final live = await socket.ready();
+      // A temporary chat's reply only comes over the live connection.
+      if (state.temporary && live == null) {
+        throw Exception(
+          "Temporary chats need a live connection to the server, and it isn't "
+          'connected right now. Try again in a moment.',
+        );
+      }
+      final sessionId = live ?? 'nexus-app-${_uuid.v4()}';
+      final temporary = state.temporary;
       final models = await ref.read(modelsProvider.future);
       final settings = await _optional(userSettingsProvider);
       final system = '${(settings?['ui'] as Map?)?['system'] ?? ''}'.trim();
@@ -985,7 +1018,11 @@ class ChatController extends Notifier<ChatState> {
       final me = ref.read(sessionProvider).value?.user;
       final turn = await client.startTurn(
         model: modelId,
-        chatId: chat.id.isEmpty ? null : chat.id,
+        chatId: temporary
+            ? 'temporary:$sessionId'
+            : chat.id.isEmpty
+            ? null
+            : chat.id,
         userMessage: user,
         replyId: reply.id,
         messages: [
@@ -1024,13 +1061,16 @@ class ChatController extends Notifier<ChatState> {
             'regeneration_message_id': redoOf.id,
         },
       );
-      chat.id = turn.chatId;
+      // A temporary chat keeps no id: nothing of it is on the server.
+      if (!temporary) chat.id = turn.chatId;
       run.taskIds = turn.taskIds;
       started?.complete((replyId: reply.id, taskIds: turn.taskIds));
       // Stop tapped while the request was on its way: stop it now.
       if (run.stopped) await _stopTasks(run);
-      refreshChatLists(ref.invalidate);
-      unawaited(_poll(chat.id, run));
+      if (!temporary) {
+        refreshChatLists(ref.invalidate);
+        unawaited(_poll(chat.id, run));
+      }
       await run.finished.future;
     } catch (e) {
       if (started != null && !started.isCompleted) started.completeError(e);
