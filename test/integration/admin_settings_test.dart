@@ -29,8 +29,23 @@ void main() {
           expect(part.containsKey(k), isTrue, reason: '${s.title} $k');
         }
       }
-      await client.send('POST', s.save, body: {...all}..remove('status'));
+      try {
+        await client.send(
+          'POST',
+          s.save,
+          body: s.toSave?.call(all) ?? ({...all}..remove('status')),
+        );
+      } on ApiException catch (e) {
+        // An unset LDAP server can't be saved until it is filled in.
+        if (!(s.title == 'LDAP server' && e.statusCode == 400)) rethrow;
+      }
     }
+
+    expect(
+      (await client.send('GET', '/api/v1/auths/admin/config/ldap')
+          as Map)['ENABLE_LDAP'],
+      isFalse,
+    );
 
     // A change is kept.
     final tasks = adminConfigSections.firstWhere(

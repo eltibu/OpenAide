@@ -16,7 +16,8 @@ import '../../core/theme.dart';
 const _acronyms = {
   'API', 'URL', 'RAG', 'PDF', 'OCR', 'TTS', 'STT', 'SSL', 'ID', 'JSON', //
   'LLM', 'BM25', 'VL', 'PSE', 'AI', 'MCP', 'IQ', 'V7', 'SK', 'SID', 'IO',
-  'HTTP', 'HTTPS', 'WS', 'TOP', 'K', 'OAUTH', 'LDAP', 'JWT', 'CSV',
+  'HTTP', 'HTTPS', 'WS', 'TOP', 'K', 'OAUTH', 'LDAP', 'JWT', 'CSV', 'TLS',
+  'DN', 'OIDC', 'MFA', 'UI', 'URI', 'WEBUI',
 };
 
 /// "ENABLE_RAG_HYBRID_SEARCH" as "Enable RAG hybrid search".
@@ -92,6 +93,7 @@ class ConfigSection {
     this.choices = const {},
     this.engines = const {},
     this.help,
+    this.toSave,
   });
 
   final String title;
@@ -108,7 +110,15 @@ class ConfigSection {
   final Map<String, List<String>> choices;
   final EngineSettings engines;
   final String? help;
+
+  /// The body to save, when the server takes it in another shape than it
+  /// reads.
+  final Map<String, dynamic> Function(Map<String, dynamic> read)? toSave;
 }
+
+Map<String, dynamic> _ldapSwitch(Map<String, dynamic> read) => {
+  'enable_ldap': read['ENABLE_LDAP'] == true,
+};
 
 const _webEngines = <String, List<String>>{
   '': [],
@@ -281,6 +291,42 @@ final adminConfigSections = <ConfigSection>[
     help: 'Direct connections and the model list cache.',
   ),
   const ConfigSection(
+    title: 'Sign-in and features',
+    read: '/api/v1/auths/admin/config',
+    save: '/api/v1/auths/admin/config',
+    choices: {
+      'DEFAULT_USER_ROLE': ['pending', 'user', 'admin'],
+    },
+    help:
+        'Every site setting: sign-ups, two-step sign-in, API keys, '
+        'pending accounts and features.',
+  ),
+  const ConfigSection(
+    title: 'OAuth / OIDC',
+    read: '/api/v1/auths/admin/config/oauth',
+    save: '/api/v1/auths/admin/config/oauth',
+    help: 'Signing in with another account provider.',
+  ),
+  const ConfigSection(
+    title: 'LDAP',
+    read: '/api/v1/auths/admin/config/ldap',
+    save: '/api/v1/auths/admin/config/ldap',
+    toSave: _ldapSwitch,
+    help: 'Turn signing in with a directory server on or off.',
+  ),
+  const ConfigSection(
+    title: 'LDAP server',
+    read: '/api/v1/auths/admin/config/ldap/server',
+    save: '/api/v1/auths/admin/config/ldap/server',
+    help: 'The directory server people sign in with.',
+  ),
+  const ConfigSection(
+    title: 'Subagents',
+    read: '/api/v1/configs/subagents',
+    save: '/api/v1/configs/subagents',
+    help: 'Models handing parts of a task to helpers.',
+  ),
+  const ConfigSection(
     title: 'Evaluations',
     read: '/api/v1/evaluations/config',
     save: '/api/v1/evaluations/config',
@@ -346,7 +392,9 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
-      final body = Map<String, dynamic>.of(_all!)..remove('status');
+      final body =
+          _s.toSave?.call(_all!) ??
+          (Map<String, dynamic>.of(_all!)..remove('status'));
       await ref.read(clientProvider).send('POST', _s.save, body: body);
       if (mounted) _say(context, 'Saved');
       await _load();

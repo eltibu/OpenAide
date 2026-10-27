@@ -31,6 +31,11 @@ const _sectionIcons = {
   'Interface and tasks': Icons.view_quilt_outlined,
   'Connections': Icons.cable,
   'Evaluations': Icons.leaderboard_outlined,
+  'Sign-in and features': Icons.login,
+  'OAuth / OIDC': Icons.key_outlined,
+  'LDAP': Icons.account_tree_outlined,
+  'LDAP server': Icons.dns_outlined,
+  'Subagents': Icons.hub_outlined,
 };
 
 void _say(BuildContext context, String text) =>
