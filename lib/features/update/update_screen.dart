@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../core/widgets/nexus_logo.dart';
 import 'updater.dart';
 
 /// Settings page: GitHub token, current build, check and install.
@@ -53,7 +54,24 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Installed: $_version', style: theme.textTheme.bodyLarge),
+          Row(
+            children: [
+              const NexusLogo(size: 56),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Nexus Assistant', style: theme.textTheme.titleLarge),
+                    Text(
+                      'Installed: $_version',
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
           Text('GitHub token', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),

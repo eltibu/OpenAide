@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/session.dart';
 import 'core/theme.dart';
+import 'core/widgets/nexus_logo.dart';
 import 'features/auth/login_screen.dart';
 import 'features/chat/chat_screen.dart';
 
@@ -26,7 +27,18 @@ class NexusApp extends ConsumerWidget {
         // Spinner only while restoring a saved session; during sign-in the
         // login screen stays up so what was typed isn't lost.
         AsyncLoading() when !ref.read(sessionProvider.notifier).booted =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
+          const Scaffold(
+            body: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  NexusLogo(size: 112),
+                  SizedBox(height: 32),
+                  CircularProgressIndicator(),
+                ],
+              ),
+            ),
+          ),
         _ => const LoginScreen(),
       },
     );
