@@ -451,16 +451,31 @@ class OpenWebUiClient {
     required String model,
     required List<Map<String, dynamic>> messages,
     Map<String, dynamic> extraParams = const {},
-  }) async* {
+  }) => _streamText('/api/chat/completions', {
+    'model': model,
+    'messages': messages,
+    'stream': true,
+    ...extraParams,
+  });
+
+  /// Streams one answer that merges several models' [responses] to [prompt]
+  /// (Merge Responses on the web), written by [model].
+  Stream<String> streamMerge({
+    required String model,
+    required String prompt,
+    required List<String> responses,
+  }) => _streamText('/api/v1/tasks/moa/completions', {
+    'model': model,
+    'prompt': prompt,
+    'responses': responses,
+    'stream': true,
+  });
+
+  Stream<String> _streamText(String path, Map<String, dynamic> body) async* {
     final res = await _open(
-      () => http.Request('POST', _uri('/api/chat/completions'))
+      () => http.Request('POST', _uri(path))
         ..headers.addAll({..._headers, 'Accept': 'text/event-stream'})
-        ..body = jsonEncode({
-          'model': model,
-          'messages': messages,
-          'stream': true,
-          ...extraParams,
-        }),
+        ..body = jsonEncode(body),
     );
     if (res.statusCode >= 300 && res.statusCode < 400) {
       throw ApiException(

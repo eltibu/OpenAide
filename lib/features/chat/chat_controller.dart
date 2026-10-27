@@ -170,6 +170,7 @@ class ChatState {
     this.attachments = const [],
     this.temporary = false,
     this.queued = const [],
+    this.compareIds = const [],
     this.revision = 0,
   });
 
@@ -204,6 +205,9 @@ class ChatState {
   /// done, as the web's message queue does.
   final List<String> queued;
 
+  /// More models answering each message next to [modelId], to compare.
+  final List<String> compareIds;
+
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
 
@@ -226,6 +230,7 @@ class ChatState {
     List<PendingAttachment>? attachments,
     bool? temporary,
     List<String>? queued,
+    List<String>? compareIds,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -240,6 +245,7 @@ class ChatState {
     attachments: attachments ?? this.attachments,
     temporary: temporary ?? this.temporary,
     queued: queued ?? this.queued,
+    compareIds: compareIds ?? this.compareIds,
     revision: revision + 1,
   );
 }
@@ -284,8 +290,19 @@ class _Run {
   /// How much of the reply has been handed to read aloud.
   int spoken = 0;
 
+  /// The other models' replies to the same message, when comparing.
+  List<_Run> also = const [];
+
   void finish() {
     if (!finished.isCompleted) finished.complete();
+  }
+
+  /// Ends this reply and the other models' with it.
+  void cancel() {
+    finish();
+    for (final r in also) {
+      r.finish();
+    }
   }
 }
 
@@ -303,7 +320,7 @@ class ChatController extends Notifier<ChatState> {
     ref.watch(sessionProvider.select((s) => s.value?.token));
     ref.onDispose(() {
       _view++;
-      _run?.finish();
+      _run?.cancel();
     });
     // Connect early so the first reply streams live, and pick up what the
     // server adds after a reply is done (follow-up suggestions).
@@ -344,12 +361,13 @@ class ChatController extends Notifier<ChatState> {
 
   void newChat({bool temporary = false}) {
     _view++;
-    _run?.finish();
+    _run?.cancel();
     unawaited(ref.read(readAloudProvider).stop());
     state = ChatState(
       modelId: state.modelId,
       attachments: state.attachments,
       temporary: temporary,
+      compareIds: state.compareIds,
     );
   }
 
@@ -619,7 +637,7 @@ class ChatController extends Notifier<ChatState> {
 
   Future<void> open(String id) async {
     final view = ++_view;
-    _run?.finish();
+    _run?.cancel();
     unawaited(ref.read(readAloudProvider).stop());
     state = state.copyWith(
       loading: true,
@@ -636,6 +654,7 @@ class ChatController extends Notifier<ChatState> {
       state = state.copyWith(
         chat: chat,
         modelId: chat.models.firstOrNull ?? state.modelId,
+        compareIds: chat.models.skip(1).toList(),
         loading: false,
       );
     } catch (e) {
@@ -651,7 +670,7 @@ class ChatController extends Notifier<ChatState> {
     run.stopped = true;
     unawaited(ref.read(readAloudProvider).stop());
     await _stopTasks(run);
-    run.finish();
+    run.cancel();
   }
 
   Future<void> _stopTasks(_Run run) async {
@@ -702,16 +721,85 @@ class ChatController extends Notifier<ChatState> {
       content: text.trim(),
       parentId: editOf != null ? editOf.parentId : chat.currentId,
       extra: {
-        'models': [modelId],
+        'models': [modelId, ...state.compareIds],
         if (files.isNotEmpty) 'files': [for (final f in files) f.toJson()],
       },
     );
     chat
-      ..models = [modelId]
+      ..models = [modelId, ...state.compareIds]
       ..append(user);
     if (editOf == null) state = state.copyWith(attachments: const []);
-    await _reply(chat, user, modelId);
+    await _reply(chat, user, modelId, also: state.compareIds);
     return true;
+  }
+
+  /// Has [ids] answer too, next to the chosen model (the web's "+" beside
+  /// the model name).
+  void setCompare(List<String> ids) => state = state.copyWith(
+    compareIds: [
+      for (final id in ids.toSet())
+        if (id != state.modelId) id,
+    ],
+  );
+
+  /// The replies to [user] from each model it was sent to, newest version
+  /// of each, in the order the models were picked.
+  List<ChatMessage> answersTo(ChatMessage user) {
+    final chat = state.chat;
+    if (chat == null) return const [];
+    final byModel = <Object, ChatMessage>{};
+    for (final id in user.childrenIds) {
+      final m = chat.messages[id];
+      if (m == null) continue;
+      byModel[m.extra['modelIdx'] ?? m.model ?? id] = m;
+    }
+    return byModel.values.toList();
+  }
+
+  /// Shows [answer] (another model's reply to the same message) and the
+  /// conversation under it.
+  Future<void> showAnswer(ChatMessage answer) async {
+    final chat = state.chat;
+    if (chat == null || state.streaming) return;
+    chat.currentId = chat.latestUnder(answer.id);
+    state = state.copyWith(chat: chat);
+    if (chat.id.isEmpty) return;
+    try {
+      await ref.read(clientProvider).saveChat(chat);
+    } catch (_) {}
+  }
+
+  /// One answer made from every model's reply to the same message (Merge
+  /// Responses on the web), shown above them and saved in the chat.
+  Future<void> merge(ChatMessage reply) async {
+    final chat = state.chat;
+    final user = chat?.messages[reply.parentId];
+    if (chat == null || user == null || state.streaming) return;
+    final answers = answersTo(user);
+    if (answers.length < 2) return;
+    final merged = <String, dynamic>{'status': true, 'content': ''};
+    reply.extra['merged'] = merged;
+    state = state.copyWith(chat: chat, streaming: true, clearError: true);
+    try {
+      await for (final text
+          in ref
+              .read(clientProvider)
+              .streamMerge(
+                model: reply.model ?? state.modelId ?? '',
+                prompt: user.content,
+                responses: [for (final a in answers) a.content],
+              )) {
+        if (merged['content'] == '' && text == '\n') continue;
+        merged['content'] = '${merged['content']}$text';
+        state = state.copyWith(chat: chat);
+      }
+      if (chat.id.isNotEmpty) await ref.read(clientProvider).saveChat(chat);
+    } catch (e) {
+      if ('${merged['content']}'.isEmpty) reply.extra.remove('merged');
+      state = state.copyWith(error: "Couldn't merge the answers: $e");
+    } finally {
+      state = state.copyWith(chat: chat, streaming: false);
+    }
   }
 
   /// Holds [text] until the running reply is done, then sends it.
@@ -992,9 +1080,11 @@ class ChatController extends Notifier<ChatState> {
     ChatMessage? continuing,
     ChatMessage? redoOf,
     String? hint,
+    List<String> also = const [],
   }) async {
     final client = ref.read(clientProvider);
     final socket = ref.read(chatSocketProvider);
+    if (continuing != null || redoOf != null) also = const [];
     // What the model reads: the conversation up to the new reply; when
     // continuing, the reply so far; with a hint, the old answer too.
     final history = [
@@ -1012,11 +1102,32 @@ class ChatController extends Notifier<ChatState> {
         content: '',
         parentId: user.id,
         model: modelId,
+        extra: {if (also.isNotEmpty) 'modelIdx': 0},
       );
       chat.append(reply);
     }
+    // Comparing: the other models' replies sit next to it, as on the web.
+    final others = [
+      for (final (i, id) in also.indexed)
+        ChatMessage(
+          id: _uuid.v4(),
+          role: 'assistant',
+          content: '',
+          parentId: user.id,
+          model: id,
+          extra: {'modelIdx': i + 1},
+        ),
+    ];
+    for (final o in others) {
+      chat.append(o);
+    }
+    chat.currentId = reply.id;
     unawaited(ref.read(readAloudProvider).stop());
     final run = _run = _Run(reply);
+    run.also = [for (final o in others) _Run(o)];
+    final runs = {
+      for (final r in [run, ...run.also]) r.reply.id: r,
+    };
     final view = _view;
     state = state.copyWith(
       chat: chat,
@@ -1026,8 +1137,8 @@ class ChatController extends Notifier<ChatState> {
     );
 
     final sub = socket.events
-        .where((e) => e['message_id'] == reply.id)
-        .listen((e) => _onEvent(chat, run, e));
+        .where((e) => runs.containsKey(e['message_id']))
+        .listen((e) => _onEvent(chat, runs[e['message_id']]!, e));
     try {
       final live = await socket.ready();
       // A temporary chat's reply only comes over the live connection.
@@ -1095,6 +1206,11 @@ class ChatController extends Notifier<ChatState> {
           'regeneration_prompt': ?hint,
           if (hint != null && redoOf != null)
             'regeneration_message_id': redoOf.id,
+          if (others.isNotEmpty)
+            'message_ids': [
+              for (final r in runs.values)
+                {'model_id': r.reply.model, 'message_id': r.reply.id},
+            ],
         },
       );
       // A temporary chat keeps no id: nothing of it is on the server.
@@ -1105,9 +1221,11 @@ class ChatController extends Notifier<ChatState> {
       if (run.stopped) await _stopTasks(run);
       if (!temporary) {
         refreshChatLists(ref.invalidate);
-        unawaited(_poll(chat.id, run));
+        for (final r in runs.values) {
+          unawaited(_poll(chat.id, r));
+        }
       }
-      await run.finished.future;
+      await Future.wait([for (final r in runs.values) r.finished.future]);
     } catch (e) {
       if (started != null && !started.isCompleted) started.completeError(e);
       if (view == _view) state = state.copyWith(error: '$e');
@@ -1346,6 +1464,8 @@ class ChatController extends Notifier<ChatState> {
   /// Hands read aloud what is newly ready to say, when it is on.
   void _speak(_Run run, String text, {bool done = false}) {
     if (voiceCall || !ref.read(readAloudOnProvider)) return;
+    // Comparing: only the chosen model's reply is read aloud.
+    if ((run.reply.extra['modelIdx'] ?? 0) != 0) return;
     if (run.spoken > text.length) run.spoken = text.length;
     final end = done ? text.length : readyUpTo(text, run.spoken);
     if (end <= run.spoken || (!done && end - run.spoken < 40)) return;

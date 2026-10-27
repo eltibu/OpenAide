@@ -424,6 +424,7 @@ class _MessageList extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              _ModelAnswers(reply: m, isLast: i == 0),
               if (m.attachments.isNotEmpty)
                 MessageAttachments(attachments: m.attachments, alignEnd: false),
               for (var g = 0; g < groups.length; g++) ...[
@@ -475,6 +476,89 @@ class _MessageList extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// When several models answered the same message: the merged answer, if
+/// made, and a tab per model to switch between their replies, as the web's
+/// side-by-side answers do on a phone.
+class _ModelAnswers extends ConsumerWidget {
+  const _ModelAnswers({required this.reply, required this.isLast});
+  final ChatMessage reply;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(chatControllerProvider);
+    final controller = ref.read(chatControllerProvider.notifier);
+    final user = state.chat?.messages[reply.parentId];
+    if (user == null || user.role != 'user') return const SizedBox.shrink();
+    final answers = controller.answersTo(user);
+    if (answers.length < 2) return const SizedBox.shrink();
+    final names = {
+      for (final m in ref.watch(modelsProvider).value ?? const []) m.id: m.name,
+    };
+    final merged = [
+      for (final a in answers)
+        if (a.extra['merged'] is Map) a.extra['merged'] as Map,
+    ].firstOrNull;
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if ('${merged?['content'] ?? ''}'.isNotEmpty)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceContainerHighest.withValues(
+                alpha: 0.5,
+              ),
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.merge, size: 18, color: theme.hintColor),
+                    const SizedBox(width: 6),
+                    Text('Merged answer', style: theme.textTheme.labelLarge),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                MarkdownBlock(data: '${merged!['content']}', selectable: true),
+              ],
+            ),
+          ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final a in answers)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: ChoiceChip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text(names[a.model] ?? a.model ?? 'Model'),
+                    selected: a.id == reply.id,
+                    onSelected: (_) => controller.showAnswer(a),
+                  ),
+                ),
+              if (isLast && !state.streaming)
+                TextButton.icon(
+                  icon: const Icon(Icons.merge, size: 18),
+                  label: Text(merged == null ? 'Merge' : 'Merge again'),
+                  onPressed: () => controller.merge(reply),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+      ],
     );
   }
 }
@@ -1186,11 +1270,15 @@ class _ModelChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final models = ref.watch(modelsProvider);
     final selected = ref.watch(chatControllerProvider.select((s) => s.modelId));
+    final compare = ref.watch(
+      chatControllerProvider.select((s) => s.compareIds),
+    );
     final list = models.value ?? const [];
     final name = models.isLoading
         ? 'Loading…'
-        : list.where((m) => m.id == selected).firstOrNull?.name ??
-              (models.hasError ? 'Models unavailable' : 'Choose a model');
+        : (list.where((m) => m.id == selected).firstOrNull?.name ??
+                  (models.hasError ? 'Models unavailable' : 'Choose a model')) +
+              (compare.isEmpty ? '' : ' +${compare.length}');
     return TextButton(
       style: TextButton.styleFrom(
         foregroundColor: context.nexus.muted,
@@ -1210,38 +1298,78 @@ class _ModelChip extends ConsumerWidget {
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.sizeOf(context).height * 0.7,
                   ),
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final m in list)
-                        ListTile(
-                          title: Text(m.name),
-                          subtitle: m.description == null
-                              ? null
-                              : Text(
-                                  m.description!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (m.id == selected)
-                                const Icon(
-                                  Icons.check,
-                                  color: NexusColors.accent,
-                                ),
-                              _DefaultStar(id: m.id),
-                            ],
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      final state = ref.watch(chatControllerProvider);
+                      final selected = state.modelId;
+                      final compare = state.compareIds;
+                      final chat = ref.read(chatControllerProvider.notifier);
+                      return ListView(
+                        shrinkWrap: true,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                            child: Text(
+                              'Tap a model to use it. Tap + to have it answer '
+                              'too, so you can compare.',
+                            ),
                           ),
-                          onTap: () {
-                            ref
-                                .read(chatControllerProvider.notifier)
-                                .selectModel(m.id);
-                            Navigator.pop(context);
-                          },
-                        ),
-                    ],
+                          for (final m in list)
+                            ListTile(
+                              title: Text(m.name),
+                              subtitle: m.description == null
+                                  ? null
+                                  : Text(
+                                      m.description!,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (m.id == selected)
+                                    const Icon(
+                                      Icons.check,
+                                      color: NexusColors.accent,
+                                    )
+                                  else
+                                    IconButton(
+                                      tooltip: compare.contains(m.id)
+                                          ? 'Stop comparing'
+                                          : 'Compare: have it answer too',
+                                      icon: Icon(
+                                        compare.contains(m.id)
+                                            ? Icons.remove_circle
+                                            : Icons.add_circle_outline,
+                                        color: compare.contains(m.id)
+                                            ? NexusColors.accent
+                                            : null,
+                                      ),
+                                      onPressed: () => chat.setCompare(
+                                        compare.contains(m.id)
+                                            ? [
+                                                for (final c in compare)
+                                                  if (c != m.id) c,
+                                              ]
+                                            : [...compare, m.id],
+                                      ),
+                                    ),
+                                  _DefaultStar(id: m.id),
+                                ],
+                              ),
+                              onTap: () {
+                                chat
+                                  ..selectModel(m.id)
+                                  ..setCompare([
+                                    for (final c in compare)
+                                      if (c != m.id) c,
+                                  ]);
+                                Navigator.pop(context);
+                              },
+                            ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ),
