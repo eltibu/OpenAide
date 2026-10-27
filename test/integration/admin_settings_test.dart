@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
 import 'package:nexus_assistant/features/admin/config_editor.dart';
+import 'package:nexus_assistant/features/admin/connections_screen.dart';
 import 'package:nexus_assistant/features/admin/groups_screen.dart';
 
 void main() {
@@ -130,6 +131,55 @@ void main() {
       );
     } finally {
       await client.send('DELETE', '$at/delete');
+    }
+  }, skip: skip);
+
+  test('adds, checks and removes a model connection', () async {
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    final before = await client.send('GET', '/openai/config') as Map;
+    final list = readConnections(openAiConnections, before);
+    final first = list.first;
+    // The connection the server already uses answers.
+    await client.send(
+      'POST',
+      '/openai/verify',
+      body: {'url': first.url, 'key': first.key, 'config': first.config},
+    );
+    list.add(
+      Connection(
+        url: 'http://127.0.0.1:9/v1',
+        key: 'k',
+        config: {'prefix_id': 'z'},
+      ),
+    );
+    try {
+      await client.send(
+        'POST',
+        '/openai/config/update',
+        body: writeConnections(openAiConnections, true, list),
+      );
+      final after = readConnections(
+        openAiConnections,
+        await client.send('GET', '/openai/config') as Map,
+      );
+      expect(after.length, list.length);
+      expect(after.last.key, 'k');
+      expect(after.last.config['prefix_id'], 'z');
+      await expectLater(
+        client.send(
+          'POST',
+          '/openai/verify',
+          body: {
+            'url': after.last.url,
+            'key': 'k',
+            'config': <String, dynamic>{},
+          },
+        ),
+        throwsA(isA<ApiException>()),
+      );
+    } finally {
+      await client.send('POST', '/openai/config/update', body: {...before});
     }
   }, skip: skip);
 }

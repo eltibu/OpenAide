@@ -8,6 +8,7 @@ import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'admin_api.dart';
 import 'config_editor.dart';
+import 'connections_screen.dart';
 import 'groups_screen.dart';
 
 final adminApiProvider = Provider<AdminApi>(
@@ -81,6 +82,12 @@ class AdminScreen extends StatelessWidget {
             onTap: () => open(const FunctionsScreen()),
           ),
           const Divider(),
+          ListTile(
+            leading: const Icon(Icons.cable),
+            title: const Text('Model connections'),
+            subtitle: const Text('OpenAI-compatible and Ollama servers'),
+            onTap: () => open(const ConnectionsScreen()),
+          ),
           for (final section in adminConfigSections)
             ListTile(
               leading: Icon(_sectionIcons[section.title] ?? Icons.tune),
