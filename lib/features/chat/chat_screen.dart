@@ -628,12 +628,16 @@ class _ComposerState extends ConsumerState<_Composer> {
       // "/" at the start offers the person's saved prompts, as on the web.
       final slash = RegExp(r'^/(\S*)$').firstMatch(_text.text)?.group(1);
       if (slash != _slash) setState(() => _slash = slash);
+      // "@" picks the model for this chat, as on the web.
+      final at = RegExp(r'(?:^|\s)@(\S*)$').firstMatch(_text.text)?.group(1);
+      if (at != _at) setState(() => _at = at);
     });
   }
 
   bool _hasText = false;
   bool _recording = false;
   String? _slash;
+  String? _at;
 
   /// The app's own "/" commands, listed above your saved prompts.
   List<SlashCommand> _commands() {
@@ -684,6 +688,17 @@ class _ComposerState extends ConsumerState<_Composer> {
                 .showSnackBar(const SnackBar(content: Text('Copied')));
           });
         }),
+      SlashCommand(
+        'model',
+        'Switch the model for this chat',
+        Icons.swap_horiz,
+        () {
+          _text.value = const TextEditingValue(
+            text: '@',
+            selection: TextSelection.collapsed(offset: 1),
+          );
+        },
+      ),
       SlashCommand('new', 'Start a new chat', Icons.add_comment_outlined, () {
         run(controller.newChat);
       }),
@@ -697,6 +712,15 @@ class _ComposerState extends ConsumerState<_Composer> {
           );
         }),
     ];
+  }
+
+  void _pickModel(String id) {
+    ref.read(chatControllerProvider.notifier).selectModel(id);
+    final text = _text.text.replaceFirst(RegExp(r'@\S*$'), '');
+    _text.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
   }
 
   Future<void> _usePrompt(Prompt p) async {
@@ -819,6 +843,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                 },
               )
             else ...[
+              if (_at != null) _ModelMentions(query: _at!, onPick: _pickModel),
               if (_slash != null)
                 PromptSuggestions(
                   query: _slash!,
@@ -857,6 +882,51 @@ class _ComposerState extends ConsumerState<_Composer> {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Models matching what follows "@", to switch to.
+class _ModelMentions extends ConsumerWidget {
+  const _ModelMentions({required this.query, required this.onPick});
+  final String query;
+  final ValueChanged<String> onPick;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final q = query.toLowerCase();
+    final selected = ref.watch(chatControllerProvider.select((s) => s.modelId));
+    final models = [
+      for (final m in ref.watch(modelsProvider).value ?? const [])
+        if (m.name.toLowerCase().contains(q) || m.id.toLowerCase().contains(q))
+          m,
+    ];
+    if (models.isEmpty) return const SizedBox.shrink();
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 220),
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(top: 6),
+        children: [
+          for (final m in models)
+            ListTile(
+              dense: true,
+              leading: const Icon(Icons.smart_toy_outlined),
+              title: Text(m.name),
+              subtitle: m.description == null
+                  ? null
+                  : Text(
+                      m.description!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+              trailing: m.id == selected
+                  ? const Icon(Icons.check, color: NexusColors.accent)
+                  : null,
+              onTap: () => onPick(m.id),
+            ),
+        ],
       ),
     );
   }
