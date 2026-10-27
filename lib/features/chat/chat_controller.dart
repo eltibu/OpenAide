@@ -28,6 +28,46 @@ final serverConfigProvider = FutureProvider<Map<String, dynamic>>(
   (ref) => ref.watch(clientProvider).config(),
 );
 
+/// The model a new chat starts with, as the web UI picks it: your own
+/// default (set with the star in the model list, or "Set as default" on
+/// the web), else the server's default, else the first model.
+String? pickDefaultModel(
+  List<ModelInfo> models,
+  Map<String, dynamic> settings,
+  Map<String, dynamic> config,
+) {
+  bool known(String id) => models.any((m) => m.id == id);
+  final ui = settings['ui'];
+  final mine = ui is Map ? ui['models'] : null;
+  for (final id in mine is List ? mine : const []) {
+    if (id is String && known(id)) return id;
+  }
+  final server = '${config['default_models'] ?? ''}'.split(',');
+  for (final id in server.map((s) => s.trim())) {
+    if (id.isNotEmpty && known(id)) return id;
+  }
+  return models.firstOrNull?.id;
+}
+
+final defaultModelProvider = FutureProvider<String?>((ref) async {
+  final models = await ref.watch(modelsProvider.future);
+  Future<Map<String, dynamic>> optional(
+    FutureProvider<Map<String, dynamic>> p,
+  ) async {
+    try {
+      return await ref.watch(p.future);
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  return pickDefaultModel(
+    models,
+    await optional(userSettingsProvider),
+    await optional(serverConfigProvider),
+  );
+});
+
 /// The tools and skills this person may switch on in a chat.
 final toolsProvider = FutureProvider<List<Pickable>>((ref) async {
   final res = await ref.watch(clientProvider).send('GET', '/api/v1/tools/');

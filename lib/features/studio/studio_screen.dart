@@ -11,6 +11,13 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_screen.dart' show readingInset;
+import 'ai_sheet.dart';
+import 'office.dart';
+import 'record_notes.dart';
+import 'sheet.dart';
+import 'sheet_editor.dart';
+import 'slides.dart';
+import 'slides_editor.dart';
 import 'studio_api.dart';
 import 'studio_doc.dart';
 import 'studio_export.dart';
@@ -35,10 +42,13 @@ String _when(BuildContext context, DateTime t) {
       : '${l.formatMediumDate(t)}, ${l.formatTimeOfDay(TimeOfDay.fromDateTime(t))}';
 }
 
-/// The model the Studio writes with: the one picked in chat, else the first.
-String? _defaultModel(WidgetRef ref) {
+/// The model the Studio writes with: the one picked in chat, else your
+/// default.
+String? studioModel(WidgetRef ref) {
   final picked = ref.read(chatControllerProvider).modelId;
   if (picked != null) return picked;
+  final preferred = ref.read(defaultModelProvider).value;
+  if (preferred != null) return preferred;
   final models = ref.read(modelsProvider).value ?? const [];
   return models.isEmpty ? null : models.first.id;
 }
@@ -66,6 +76,62 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
   }
 
   Future<void> _new() async {
+    final kind = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.mic_none),
+              title: const Text('Record notes'),
+              subtitle: const Text(
+                'Meeting minutes, class notes or a dictated document',
+              ),
+              onTap: () => Navigator.pop(context, 'record'),
+            ),
+            for (final (k, icon, title, sub) in const [
+              (
+                'doc',
+                Icons.description_outlined,
+                'Document',
+                'Letters, reports, lessons, notes (Word)',
+              ),
+              (
+                'sheet',
+                Icons.grid_on,
+                'Spreadsheet',
+                'Budgets, lists, grades, with formulas (Excel)',
+              ),
+              (
+                'slides',
+                Icons.slideshow_outlined,
+                'Presentation',
+                'Slides to show or share (PowerPoint)',
+              ),
+            ])
+              ListTile(
+                leading: Icon(icon),
+                title: Text(title),
+                subtitle: Text(sub),
+                onTap: () => Navigator.pop(context, k),
+              ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.file_open_outlined),
+              title: const Text('Open a file'),
+              subtitle: const Text('Word, Excel, PowerPoint, CSV or text'),
+              onTap: () => Navigator.pop(context, 'open'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (kind == null || !mounted) return;
+    if (kind == 'open') return _openFile();
+    if (kind == 'record') return _record();
+    final noun = studioNoun(kind);
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
@@ -75,13 +141,13 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.auto_awesome),
-              title: const Text('Write it with AI'),
-              subtitle: const Text('Say what it is, the AI writes a draft'),
+              title: const Text('Make it with AI'),
+              subtitle: Text('Say what it is, the AI makes a first $noun'),
               onTap: () => Navigator.pop(context, 'ai'),
             ),
             ListTile(
               leading: const Icon(Icons.note_add_outlined),
-              title: const Text('Blank document'),
+              title: Text('Blank $noun'),
               onTap: () => Navigator.pop(context, 'blank'),
             ),
           ],
@@ -92,7 +158,11 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
     final api = ref.read(studioApiProvider);
     try {
       if (choice == 'blank') {
-        final doc = await api.create('Untitled', '');
+        final doc = await api.create('Untitled', switch (kind) {
+          'sheet' => sheetsToMarkdown([Sheet(name: 'Sheet1')]),
+          'slides' => slidesToMarkdown([Slide()]),
+          _ => '',
+        });
         await _open(doc.id);
         return;
       }
@@ -100,14 +170,18 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
         context: context,
         isScrollControlled: true,
         showDragHandle: true,
-        builder: (_) => const GenerateSheet(),
+        builder: (_) => GenerateSheet(kind: kind),
       );
       if (request == null || !mounted) return;
       final doc = await api.create(
         request.about.length > 60
             ? '${request.about.substring(0, 60)}…'
             : request.about,
-        '',
+        switch (kind) {
+          'sheet' => sheetMarker,
+          'slides' => slidesMarker,
+          _ => '',
+        },
       );
       if (!mounted) return;
       await Navigator.push(
@@ -122,16 +196,51 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
     }
   }
 
+  Future<void> _record() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => const RecordNotesScreen()),
+    );
+    ref.invalidate(studioDocsProvider);
+  }
+
+  Future<void> _openFile() async {
+    try {
+      final files = await FilePicker.pickFiles();
+      if (files.isEmpty || !mounted) return;
+      final f = files.first;
+      final (title, markdown) = importFile(f.name, await f.readAsBytes());
+      final doc = await ref.read(studioApiProvider).create(title, markdown);
+      if (mounted) await _open(doc.id);
+    } catch (e) {
+      if (mounted) _say(context, 'Couldn\'t open it: $e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final docs = ref.watch(studioDocsProvider);
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Studio')),
+      appBar: AppBar(
+        title: const Text('Studio'),
+        actions: [
+          IconButton(
+            tooltip: 'Record notes',
+            onPressed: _record,
+            icon: const Icon(Icons.mic_none),
+          ),
+          IconButton(
+            tooltip: 'Open a file',
+            onPressed: _openFile,
+            icon: const Icon(Icons.file_open_outlined),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _new,
         icon: const Icon(Icons.add),
-        label: const Text('New document'),
+        label: const Text('New'),
       ),
       body: Column(
         children: [
@@ -184,16 +293,17 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                           padding: const EdgeInsets.all(24),
                           child: Text(
                             all.isEmpty
-                                ? 'No documents yet. Tap New document and let '
-                                      'the AI write a first draft, or start '
-                                      'blank.'
+                                ? 'Nothing here yet. Tap New for a document, '
+                                      'spreadsheet or presentation, made by '
+                                      'the AI or blank, or open a Word, Excel '
+                                      'or PowerPoint file.'
                                 : 'Nothing matches.',
                             style: TextStyle(color: muted),
                           ),
                         ),
                       for (final d in items)
                         ListTile(
-                          leading: const Icon(Icons.description_outlined),
+                          leading: Icon(studioIcon(studioKind(d.markdown))),
                           title: Text(
                             d.title.isEmpty ? 'Untitled' : d.title,
                             maxLines: 1,
@@ -203,7 +313,9 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                             [
                               _when(context, d.updated),
                               d.markdown
-                                  .replaceAll(RegExp(r'[#*_>`-]'), '')
+                                  .replaceAll(sheetMarker, '')
+                                  .replaceAll(slidesMarker, '')
+                                  .replaceAll(RegExp(r'[#*_>`|-]'), ' ')
                                   .replaceAll(RegExp(r'\s+'), ' ')
                                   .trim(),
                             ].where((s) => s.isNotEmpty).join(' · '),
@@ -225,6 +337,19 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
   }
 }
 
+IconData studioIcon(String kind) => switch (kind) {
+  'sheet' => Icons.grid_on,
+  'slides' => Icons.slideshow_outlined,
+  _ => Icons.description_outlined,
+};
+
+/// What a Studio file is called, in words.
+String studioNoun(String kind) => switch (kind) {
+  'sheet' => 'spreadsheet',
+  'slides' => 'presentation',
+  _ => 'document',
+};
+
 class Generate {
   const Generate(this.kind, this.about, this.language);
   final String kind;
@@ -233,14 +358,22 @@ class Generate {
 }
 
 class GenerateSheet extends StatefulWidget {
-  const GenerateSheet({super.key});
+  const GenerateSheet({super.key, this.kind = 'doc'});
+
+  /// doc, sheet or slides.
+  final String kind;
 
   @override
   State<GenerateSheet> createState() => GenerateSheetState();
 }
 
 class GenerateSheetState extends State<GenerateSheet> {
-  String _kind = documentKinds.first;
+  late final _kinds = switch (widget.kind) {
+    'sheet' => sheetKinds,
+    'slides' => presentationKinds,
+    _ => documentKinds,
+  };
+  late String _kind = _kinds.first;
   final _about = TextEditingController();
   final _language = TextEditingController();
 
@@ -256,13 +389,16 @@ class GenerateSheetState extends State<GenerateSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Write it with AI', style: Theme.of(context).textTheme.titleLarge),
+        Text(
+          'Make a ${studioNoun(widget.kind)} with AI',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
         const SizedBox(height: 12),
         Wrap(
           spacing: 6,
           runSpacing: 4,
           children: [
-            for (final k in documentKinds)
+            for (final k in _kinds)
               ChoiceChip(
                 label: Text(k),
                 selected: _kind == k,
@@ -302,7 +438,7 @@ class GenerateSheetState extends State<GenerateSheet> {
             );
           },
           icon: const Icon(Icons.auto_awesome),
-          label: const Text('Write it'),
+          label: const Text('Make it'),
         ),
       ],
     ),
@@ -356,6 +492,13 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
   /// Text the AI is writing for a new document, shown as it comes.
   String? _drafting;
 
+  /// doc, sheet or slides. Sheets and slides are edited by their own
+  /// editors, which hand up their whole text in [_body]; [_gen] makes a
+  /// new editor when the text is replaced (AI, a restored version).
+  String _kind = 'doc';
+  String _body = '';
+  int _gen = 0;
+
   /// Held from the start: the last save runs while the page closes.
   late final StudioApi _api;
 
@@ -363,7 +506,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
   void initState() {
     super.initState();
     _api = ref.read(studioApiProvider);
-    _model = _defaultModel(ref);
+    _model = studioModel(ref);
     _load();
   }
 
@@ -378,7 +521,18 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     super.dispose();
   }
 
-  String get _markdown => joinSections([for (final c in _cards) c.current]);
+  String get _markdown => _kind == 'doc'
+      ? joinSections([for (final c in _cards) c.current])
+      : _body;
+
+  void _setContent(String markdown) {
+    if (_kind == 'doc') {
+      _setCards(markdown);
+    } else {
+      _body = markdown;
+      _gen++;
+    }
+  }
 
   Future<void> _load() async {
     try {
@@ -388,7 +542,8 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
       _savedTitle = doc.title;
       _saved = doc.markdown;
       _versions = [...doc.versions];
-      _setCards(doc.markdown);
+      _kind = studioKind(doc.markdown);
+      _setContent(doc.markdown);
       setState(() => _loading = false);
       if (widget.generate != null) unawaited(_write(widget.generate!));
     } catch (e) {
@@ -471,59 +626,100 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     setState(() => _drafting = '');
     var text = '';
     try {
-      await for (final delta in _ask(
-        generatePrompt(kind: g.kind, about: g.about, language: g.language),
-      )) {
+      await for (final delta in _ask(switch (_kind) {
+        'sheet' => generateSheetPrompt(
+          kind: g.kind,
+          about: g.about,
+          language: g.language,
+        ),
+        'slides' => generateSlidesPrompt(
+          kind: g.kind,
+          about: g.about,
+          language: g.language,
+        ),
+        _ => generatePrompt(kind: g.kind, about: g.about, language: g.language),
+      })) {
         text += delta;
         if (mounted) setState(() => _drafting = text);
       }
-      final (title, body) = titleAndBody(cleanAiText(text));
+      final (title, body) = _read(cleanAiText(text));
       if (!mounted) return;
       if (title.isNotEmpty) _title.text = title;
-      _setCards(body);
+      _setContent(body);
       setState(() => _drafting = null);
-      await _save(label: 'Written by AI');
+      await _save(label: 'Made by AI');
     } catch (e) {
       if (!mounted) return;
       setState(() => _drafting = null);
-      _say(context, 'The AI couldn\'t write it: $e');
+      _say(context, 'The AI couldn\'t make it: $e');
+    }
+  }
+
+  /// What the AI wrote, as this kind of file: its title (if it gave one)
+  /// and its text.
+  (String, String) _read(String text) {
+    final (title, body) = titleAndBody(text);
+    switch (_kind) {
+      case 'sheet':
+        final sheets = sheetsFromMarkdown(body);
+        if (sheets.isEmpty) throw 'there was no table in its answer';
+        return (title, sheetsToMarkdown(sheets));
+      case 'slides':
+        final slides = slidesFromMarkdown(text);
+        if (slides.isEmpty) throw 'there were no slides in its answer';
+        return (
+          title.isEmpty ? plainText(slides.first.title) : title,
+          slidesToMarkdown(slides),
+        );
+      default:
+        return (title, title.isNotEmpty ? body : text);
     }
   }
 
   Future<void> _aiDocument() async {
     await _save();
     if (!mounted) return;
-    final result = await showModalBottomSheet<_AiResult>(
+    final result = await showModalBottomSheet<AiResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _AiSheet(
-        title: 'Change the whole document',
-        suggestions: documentSuggestions,
+      builder: (_) => AiSheet(
+        dictate: (c) => dictate(c, ref.read(clientProvider)),
+        title: 'Change the whole ${studioNoun(_kind)}',
+        suggestions: switch (_kind) {
+          'sheet' => sheetSuggestions,
+          'slides' => deckSuggestions,
+          _ => documentSuggestions,
+        },
         run: (instruction) => _ask(
-          documentEditPrompt(
-            title: _title.text,
-            markdown: _markdown,
-            instruction: instruction,
-          ),
+          (switch (_kind) {
+            'sheet' => sheetEditPrompt,
+            'slides' => deckEditPrompt,
+            _ => documentEditPrompt,
+          })(title: _title.text, markdown: _markdown, instruction: instruction),
         ),
       ),
     );
     if (result == null || !mounted) return;
-    final text = cleanAiText(result.text);
-    final (title, body) = titleAndBody(text);
-    setState(() => _setCards(title.isNotEmpty ? body : text));
+    try {
+      final (_, body) = _read(cleanAiText(result.text));
+      setState(() => _setContent(body));
+    } catch (e) {
+      _say(context, 'Not changed: $e');
+      return;
+    }
     await _save(label: 'AI: ${result.instruction}');
   }
 
   Future<void> _aiSection(_Card card) async {
     await _save();
     if (!mounted) return;
-    final result = await showModalBottomSheet<_AiResult>(
+    final result = await showModalBottomSheet<AiResult>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
-      builder: (_) => _AiSheet(
+      builder: (_) => AiSheet(
+        dictate: (c) => dictate(c, ref.read(clientProvider)),
         title: card.head.text.isEmpty
             ? 'Change this part'
             : 'Change "${card.head.text}"',
@@ -550,6 +746,26 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     }
     setState(() => card.body.text = text.trim());
     await _save(label: 'AI: ${result.instruction}');
+  }
+
+  /// Speech typed into [field] where the cursor is (or at the end).
+  Future<void> _dictateInto(TextEditingController field) async {
+    final said = await dictate(context, ref.read(clientProvider));
+    if (said == null || said.isEmpty || !mounted) return;
+    final text = field.text;
+    final sel = field.selection;
+    final at = sel.isValid ? sel.start.clamp(0, text.length) : text.length;
+    final end = sel.isValid ? sel.end.clamp(at, text.length) : text.length;
+    final before = text.substring(0, at);
+    final gap = before.isEmpty || before.endsWith('\n') || before.endsWith(' ')
+        ? ''
+        : ' ';
+    field.value = TextEditingValue(
+      text: '$before$gap$said${text.substring(end)}',
+      selection: TextSelection.collapsed(offset: at + gap.length + said.length),
+    );
+    setState(() {});
+    _changed();
   }
 
   void _move(int i, int by) {
@@ -603,23 +819,49 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     final title = _title.text.trim().isEmpty ? 'Untitled' : _title.text.trim();
     final markdown = _markdown;
     try {
-      final (Uint8List bytes, String name, String type) = switch (kind) {
+      final (Uint8List bytes, String type) = switch (kind) {
         'docx' => (
           toDocx(title, markdown),
-          exportName(title, 'docx'),
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         ),
+        'xlsx' => (
+          toXlsx(sheetsFromMarkdown(markdown)),
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ),
+        'csv' => (
+          Uint8List.fromList(
+            utf8.encode(toCsv(sheetsFromMarkdown(markdown).first)),
+          ),
+          'text/csv',
+        ),
+        'pptx' => (
+          toPptx(title, slidesFromMarkdown(markdown)),
+          'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        ),
         'pdf' => (
-          await toPdf(title, markdown, theme: await pdfTheme(rootBundle.load)),
-          exportName(title, 'pdf'),
+          _kind == 'slides'
+              ? await slidesToPdf(
+                  title,
+                  slidesFromMarkdown(markdown),
+                  theme: await pdfTheme(rootBundle.load),
+                )
+              : await toPdf(
+                  title,
+                  markdown,
+                  theme: await pdfTheme(rootBundle.load),
+                ),
           'application/pdf',
         ),
         _ => (
-          Uint8List.fromList(utf8.encode('# $title\n\n$markdown\n')),
-          exportName(title, 'md'),
+          Uint8List.fromList(
+            utf8.encode(
+              '# $title\n\n${markdown.replaceFirst(sheetMarker, '').replaceFirst(slidesMarker, '').trim()}\n',
+            ),
+          ),
           'text/markdown',
         ),
       };
+      final name = exportName(title, kind);
       final saved = await FilePicker.saveFile(
         fileName: name,
         bytes: bytes,
@@ -665,7 +907,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     );
     if (restore == null || !mounted) return;
     _title.text = restore.title;
-    setState(() => _setCards(restore.markdown));
+    setState(() => _setContent(restore.markdown));
     await _save(
       label: 'Restored the version from ${_when(context, restore.at)}',
     );
@@ -675,7 +917,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Delete this document?'),
+        title: Text('Delete this ${studioNoun(_kind)}?'),
         content: const Text(
           'It is removed from the server, with its versions. Export it first '
           'if you may want it again.',
@@ -711,6 +953,16 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     final modelName =
         models.where((m) => m.id == _model).firstOrNull?.name ?? _model ?? '';
     final busy = _drafting != null;
+    final titleField = TextField(
+      controller: _title,
+      enabled: !busy,
+      style: Theme.of(context).textTheme.headlineSmall,
+      decoration: const InputDecoration(
+        hintText: 'Title',
+        border: InputBorder.none,
+      ),
+      onChanged: (_) => _changed(),
+    );
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -718,6 +970,21 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         actions: [
+          if (_kind == 'slides')
+            IconButton(
+              tooltip: 'Present',
+              onPressed: _loading || busy
+                  ? null
+                  : () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => PresentScreen(
+                          slides: slidesFromMarkdown(_markdown),
+                        ),
+                      ),
+                    ),
+              icon: const Icon(Icons.play_arrow_outlined),
+            ),
           IconButton(
             tooltip: 'Versions',
             onPressed: _loading || busy ? null : _showVersions,
@@ -731,8 +998,26 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
               _ => _export(v),
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'docx', child: Text('Export to Word')),
-              const PopupMenuItem(value: 'pdf', child: Text('Export to PDF')),
+              ...switch (_kind) {
+                'sheet' => const [
+                  PopupMenuItem(value: 'xlsx', child: Text('Export to Excel')),
+                  PopupMenuItem(
+                    value: 'csv',
+                    child: Text('Export CSV (first sheet)'),
+                  ),
+                ],
+                'slides' => const [
+                  PopupMenuItem(
+                    value: 'pptx',
+                    child: Text('Export to PowerPoint'),
+                  ),
+                  PopupMenuItem(value: 'pdf', child: Text('Export to PDF')),
+                ],
+                _ => const [
+                  PopupMenuItem(value: 'docx', child: Text('Export to Word')),
+                  PopupMenuItem(value: 'pdf', child: Text('Export to PDF')),
+                ],
+              },
               const PopupMenuItem(value: 'md', child: Text('Export Markdown')),
               const PopupMenuDivider(),
               PopupMenuItem(
@@ -756,7 +1041,44 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
           : _error != null
           ? Padding(
               padding: const EdgeInsets.all(24),
-              child: Text('Couldn\'t open this document.\n$_error'),
+              child: Text('Couldn\'t open this ${studioNoun(_kind)}.\n$_error'),
+            )
+          : _kind == 'sheet' && !busy
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                  child: titleField,
+                ),
+                Expanded(
+                  child: SheetEditor(
+                    key: ValueKey(_gen),
+                    markdown: _body,
+                    onChanged: (md) {
+                      _body = md;
+                      _changed();
+                    },
+                  ),
+                ),
+              ],
+            )
+          : _kind == 'slides' && !busy
+          ? SlidesEditor(
+              key: ValueKey(_gen),
+              markdown: _body,
+              header: titleField,
+              deckTitle: () => _title.text,
+              ask: _ask,
+              dictate: (c) => dictate(c, ref.read(clientProvider)),
+              onChanged: (md, {label}) {
+                _body = md;
+                if (label != null) {
+                  _save(label: label);
+                } else {
+                  _changed();
+                }
+              },
             )
           : ListView(
               padding: EdgeInsets.fromLTRB(
@@ -766,16 +1088,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
                 120,
               ),
               children: [
-                TextField(
-                  controller: _title,
-                  enabled: !busy,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                  decoration: const InputDecoration(
-                    hintText: 'Title',
-                    border: InputBorder.none,
-                  ),
-                  onChanged: (_) => _changed(),
-                ),
+                titleField,
                 if (busy) ...[
                   Row(
                     children: [
@@ -785,7 +1098,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        'The AI is writing…',
+                        'The AI is making it…',
                         style: TextStyle(color: muted),
                       ),
                     ],
@@ -806,6 +1119,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
                       last: i == _cards.length - 1,
                       onChanged: _changed,
                       onAi: () => _aiSection(c),
+                      onDictate: () => _dictateInto(c.body),
                       onUp: () => _move(i, -1),
                       onDown: () => _move(i, 1),
                       onCopy: () => _addBelow(i, copy: c.current),
@@ -827,6 +1141,7 @@ class _SectionCard extends StatelessWidget {
     required this.last,
     required this.onChanged,
     required this.onAi,
+    required this.onDictate,
     required this.onUp,
     required this.onDown,
     required this.onCopy,
@@ -838,6 +1153,7 @@ class _SectionCard extends StatelessWidget {
   final bool last;
   final VoidCallback onChanged;
   final VoidCallback onAi;
+  final VoidCallback onDictate;
   final VoidCallback onUp;
   final VoidCallback onDown;
   final VoidCallback onCopy;
@@ -903,6 +1219,12 @@ class _SectionCard extends StatelessWidget {
                   label: const Text('Edit with AI'),
                 ),
                 IconButton(
+                  tooltip: 'Dictate',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onDictate,
+                  icon: const Icon(Icons.mic_none),
+                ),
+                IconButton(
                   tooltip: 'Move up',
                   visualDensity: VisualDensity.compact,
                   onPressed: first ? null : onUp,
@@ -934,195 +1256,6 @@ class _SectionCard extends StatelessWidget {
                 ),
               ],
             ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _AiResult {
-  const _AiResult(this.instruction, this.text);
-  final String instruction;
-  final String text;
-}
-
-/// Ask the AI for a change, watch it write, then keep it or not.
-class _AiSheet extends StatefulWidget {
-  const _AiSheet({
-    required this.title,
-    required this.suggestions,
-    required this.run,
-  });
-  final String title;
-  final List<String> suggestions;
-  final Stream<String> Function(String instruction) run;
-
-  @override
-  State<_AiSheet> createState() => _AiSheetState();
-}
-
-class _AiSheetState extends State<_AiSheet> {
-  final _instruction = TextEditingController();
-  StreamSubscription<String>? _sub;
-  String? _text;
-  String? _error;
-  bool _done = false;
-
-  @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
-  }
-
-  void _go([String? suggestion]) {
-    if (suggestion != null) _instruction.text = suggestion;
-    final instruction = _instruction.text.trim();
-    if (instruction.isEmpty) {
-      setState(() => _error = 'Say what to change, or tap a suggestion');
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    _sub?.cancel();
-    setState(() {
-      _text = '';
-      _error = null;
-      _done = false;
-    });
-    _sub = widget
-        .run(instruction)
-        .listen(
-          (d) => setState(() => _text = (_text ?? '') + d),
-          onError: (Object e) => setState(() {
-            _error = '$e';
-            _done = true;
-          }),
-          onDone: () => setState(() => _done = true),
-          cancelOnError: true,
-        );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final muted = context.nexus.muted;
-    final writing = _text != null && !_done;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(
-        20,
-        0,
-        20,
-        16 + MediaQuery.viewInsetsOf(context).bottom,
-      ),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.sizeOf(context).height * 0.85,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(widget.title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _instruction,
-              autofocus: _text == null,
-              minLines: 1,
-              maxLines: 4,
-              enabled: !writing,
-              textInputAction: TextInputAction.send,
-              onSubmitted: (_) => _go(),
-              decoration: InputDecoration(
-                hintText: 'What should change?',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  tooltip: 'Apply',
-                  onPressed: writing ? null : _go,
-                  icon: const Icon(Icons.send),
-                ),
-              ),
-            ),
-            if (_text == null) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                children: [
-                  for (final s in widget.suggestions)
-                    ActionChip(label: Text(s), onPressed: () => _go(s)),
-                ],
-              ),
-            ],
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
-                ),
-              ),
-            if (_text != null) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  if (writing) ...[
-                    const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
-                    writing ? 'Writing…' : 'The change',
-                    style: TextStyle(color: muted),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Flexible(
-                child: Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outlineVariant,
-                    ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  child: SingleChildScrollView(
-                    reverse: writing,
-                    child: MarkdownBlock(
-                      data: cleanAiText(_text!),
-                      config: Theme.of(context).brightness == Brightness.dark
-                          ? MarkdownConfig.darkConfig
-                          : MarkdownConfig.defaultConfig,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Discard'),
-                  ),
-                  const Spacer(),
-                  OutlinedButton(
-                    onPressed: writing ? null : _go,
-                    child: const Text('Try again'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: writing || _text!.trim().isEmpty
-                        ? null
-                        : () => Navigator.pop(
-                            context,
-                            _AiResult(_instruction.text.trim(), _text!),
-                          ),
-                    child: const Text('Keep it'),
-                  ),
-                ],
-              ),
-            ],
           ],
         ),
       ),

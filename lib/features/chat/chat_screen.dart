@@ -27,15 +27,15 @@ class ChatScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(chatControllerProvider);
-    final models = ref.watch(modelsProvider);
 
-    // Default to the first server model once the list arrives.
-    if (state.modelId == null && (models.value?.isNotEmpty ?? false)) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => ref
-            .read(chatControllerProvider.notifier)
-            .selectModel(models.value!.first.id),
-      );
+    // Start with your default model once it is known.
+    final preferred = ref.watch(defaultModelProvider).value;
+    if (state.modelId == null && preferred != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ref.read(chatControllerProvider).modelId == null) {
+          ref.read(chatControllerProvider.notifier).selectModel(preferred);
+        }
+      });
     }
     final title = state.chat?.title;
 
@@ -660,12 +660,17 @@ class _ModelChip extends ConsumerWidget {
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                          trailing: m.id == selected
-                              ? const Icon(
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (m.id == selected)
+                                const Icon(
                                   Icons.check,
                                   color: NexusColors.accent,
-                                )
-                              : null,
+                                ),
+                              _DefaultStar(id: m.id),
+                            ],
+                          ),
                           onTap: () {
                             ref
                                 .read(chatControllerProvider.notifier)
@@ -684,6 +689,49 @@ class _ModelChip extends ConsumerWidget {
           Flexible(child: Text(name, overflow: TextOverflow.ellipsis)),
           const Icon(Icons.expand_more, size: 18),
         ],
+      ),
+    );
+  }
+}
+
+/// Makes a model the one every new chat starts with; kept in your
+/// settings on the server, so the web UI starts with it too.
+class _DefaultStar extends ConsumerWidget {
+  const _DefaultStar({required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isDefault = ref.watch(defaultModelProvider).value == id;
+    return IconButton(
+      tooltip: isDefault ? 'Your default model' : 'Make this the default',
+      onPressed: isDefault
+          ? null
+          : () async {
+              try {
+                await ref
+                    .read(clientProvider)
+                    .send(
+                      'POST',
+                      '/api/v1/users/user/settings/update',
+                      body: {
+                        'ui': {
+                          'models': [id],
+                        },
+                      },
+                    );
+                ref.invalidate(userSettingsProvider);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Couldn\'t set the default: $e')),
+                  );
+                }
+              }
+            },
+      icon: Icon(
+        isDefault ? Icons.star : Icons.star_border,
+        color: isDefault ? NexusColors.accent : null,
       ),
     );
   }

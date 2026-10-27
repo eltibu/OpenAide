@@ -69,6 +69,11 @@ class VoiceAudio(private val activity: Activity) :
     private var captureThread: Thread? = null
     private var playThread: Thread? = null
     private var previousMode = AudioManager.MODE_NORMAL
+    private var modeChanged = false
+
+    /** Recording only (notes, dictation): no speaker, no call mode, and the
+     *  microphone tuned for speech recognition rather than for a call. */
+    private var recordOnly = false
     @Volatile private var running = false
     @Volatile private var capturing = false
     @Volatile private var flushTrack = false
@@ -99,6 +104,7 @@ class VoiceAudio(private val activity: Activity) :
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "start" -> {
+                if (!running) recordOnly = call.argument<Boolean>("record") == true
                 val granted = ContextCompat.checkSelfPermission(
                     activity, Manifest.permission.RECORD_AUDIO,
                 ) == PackageManager.PERMISSION_GRANTED
@@ -199,21 +205,25 @@ class VoiceAudio(private val activity: Activity) :
             queue.clear(); queued = 0; received = 0; playing = false; paused = false
             rendered.clear(); ended.clear(); clearId = 0
         }
-        previousMode = audioManager.mode
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            audioManager.availableCommunicationDevices
-                .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                ?.let { audioManager.setCommunicationDevice(it) }
-        } else {
-            audioManager.isSpeakerphoneOn = true
+        if (!recordOnly) {
+            previousMode = audioManager.mode
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            modeChanged = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.availableCommunicationDevices
+                    .firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    ?.let { audioManager.setCommunicationDevice(it) }
+            } else {
+                audioManager.isSpeakerphoneOn = true
+            }
         }
 
         val recordMin = AudioRecord.getMinBufferSize(
             RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
         )
         val rec = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            if (recordOnly) MediaRecorder.AudioSource.VOICE_RECOGNITION
+            else MediaRecorder.AudioSource.VOICE_COMMUNICATION,
             RATE,
             AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT,
@@ -224,6 +234,13 @@ class VoiceAudio(private val activity: Activity) :
             throw IllegalStateException("The microphone could not be opened.")
         }
         recorder = rec
+        if (recordOnly) {
+            running = true
+            rec.startRecording()
+            activity.window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            captureThread = Thread(::captureLoop, "voice-capture").apply { start() }
+            return
+        }
         if (AcousticEchoCanceler.isAvailable()) {
             echo = AcousticEchoCanceler.create(rec.audioSessionId)?.apply { enabled = true }
         }
@@ -390,7 +407,8 @@ class VoiceAudio(private val activity: Activity) :
         echo = null
         noise?.release()
         noise = null
-        if (wasRunning) {
+        if (wasRunning && modeChanged) {
+            modeChanged = false
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 audioManager.clearCommunicationDevice()
             } else {

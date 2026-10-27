@@ -66,7 +66,8 @@ void main() {
     expect(nested.number, 1);
     final bold = b.firstWhere((x) => x.text.startsWith('Usar'));
     expect(bold.runs.any((r) => r.bold && r.text == 'bien'), isTrue);
-    expect(b.any((x) => x.text.contains('1  |  2')), isTrue);
+    final table = b.firstWhere((x) => x.kind == 'table');
+    expect(table.rows.length, greaterThan(1));
   });
 
   test('Word file is a real docx', () {

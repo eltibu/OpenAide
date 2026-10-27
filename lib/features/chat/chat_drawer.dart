@@ -11,6 +11,7 @@ import '../calendar/calendar_screen.dart';
 import '../channels/channels_screen.dart';
 import '../notes/notes_screen.dart';
 import '../playground/playground_screen.dart';
+import '../studio/record_notes.dart';
 import '../studio/studio_screen.dart';
 import '../terminal/terminal_screen.dart';
 import '../workspace/knowledge_screen.dart';
@@ -643,6 +644,12 @@ class _Places extends ConsumerWidget {
           Icons.edit_document,
           'Studio',
           () => const StudioScreen(),
+        ),
+        _tile(
+          context,
+          Icons.mic_none,
+          'Record notes',
+          () => const RecordNotesScreen(),
         ),
         if (admin) ...[
           _tile(

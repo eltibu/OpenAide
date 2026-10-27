@@ -214,3 +214,47 @@ List<Map<String, String>> sectionEditPrompt({
         '${section.body}\n\n---\nChange that part like this: $instruction',
   },
 ];
+
+// ---- Notes from a recording ----
+
+/// What a recording can become, and how the AI is asked for it.
+const noteKinds = {
+  'Meeting minutes':
+      'meeting minutes, with these sections: "## Summary" (a few '
+      'sentences), "## Decisions", "## Action items" (a "- [ ] " list: who '
+      'does what, and by when if it was said), "## Discussion" (the main '
+      'points, grouped by topic) and "## Open questions" if there are any',
+  'Notes':
+      'clear notes of what was said, grouped by topic under "## " '
+      'headings, as short points',
+  'Summary': 'a short summary: a few paragraphs, then the key points',
+  'Lecture notes':
+      'study notes: the key ideas under "## " headings, definitions, '
+      'examples and anything said to remember, then "## Review questions"',
+  'Action items':
+      'a to-do list: "- [ ] " items with who and when if it was said, '
+      'grouped by person or topic',
+  'Dictated document':
+      'a well written document from this dictation. Keep the speaker\'s '
+      'meaning and as many of their own words as reads well. Follow '
+      'spoken instructions like "new paragraph", "heading", "list" or '
+      '"scratch that". Leave out filler words and false starts',
+  'Just the transcript': '',
+};
+
+List<Map<String, String>> notesPrompt({
+  required String kind,
+  required String transcript,
+}) => [
+  {
+    'role': 'system',
+    'content':
+        'You turn the transcript of a recording into ${noteKinds[kind]}. '
+        'Answer with that only, no comments before or after it. Start with '
+        'one line "# Title" (a short title that says what it was about). '
+        'Write in the language the transcript is in. Don\'t invent '
+        'anything that wasn\'t said; the transcript was made by speech '
+        'recognition, so fix words it obviously misheard. $layoutRule',
+  },
+  {'role': 'user', 'content': 'The transcript:\n\n$transcript'},
+];

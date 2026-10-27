@@ -578,14 +578,22 @@ class OpenWebUiClient {
     List<int> bytes,
     String filename, {
     Map<String, String>? query,
+    MediaType? contentType,
+    Map<String, String>? fields,
   }) async {
     final res = await http.Response.fromStream(
       await _open(
         () => http.MultipartRequest('POST', _uri(path, query))
           ..headers.addAll(authHeaders)
           ..headers['Accept'] = 'application/json'
+          ..fields.addAll(fields ?? const {})
           ..files.add(
-            http.MultipartFile.fromBytes('file', bytes, filename: filename),
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: filename,
+              contentType: contentType,
+            ),
           ),
       ),
     );

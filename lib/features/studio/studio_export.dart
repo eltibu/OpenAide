@@ -22,9 +22,15 @@ class Run {
 
 /// A paragraph-level part of a document, ready for Word or PDF.
 class Block {
-  const Block(this.kind, this.runs, {this.level = 0, this.number});
+  const Block(
+    this.kind,
+    this.runs, {
+    this.level = 0,
+    this.number,
+    this.rows = const [],
+  });
 
-  /// h1, h2, h3, p, bullet, number, quote, code, rule.
+  /// h1, h2, h3, p, bullet, number, quote, code, rule, table.
   final String kind;
   final List<Run> runs;
 
@@ -33,6 +39,9 @@ class Block {
 
   /// A numbered item's number.
   final int? number;
+
+  /// A table's cells, the first row being its header.
+  final List<List<String>> rows;
 
   String get text => runs.map((r) => r.text).join();
 }
@@ -123,10 +132,8 @@ List<Block> markdownBlocks(String markdown) {
             walk(nested, depth: depth + 1);
           }
         case 'table':
-          // Tables become one line per row, cells split by a bar.
-          for (final row in _rows(n)) {
-            out.add(Block('p', [Run(row.join('  |  '))]));
-          }
+          final rows = _rows(n);
+          if (rows.isNotEmpty) out.add(Block('table', const [], rows: rows));
         default:
           walk(n.children ?? const [], depth: depth, quote: quote);
       }
@@ -198,7 +205,29 @@ String _run(Run r) {
   return '<w:r>${props.isEmpty ? '' : '<w:rPr>$props</w:rPr>'}$text</w:r>';
 }
 
-String _paragraph(Block b) {
+String _table(Block b) {
+  final width = b.rows.map((r) => r.length).fold(0, (a, n) => a > n ? a : n);
+  final border = [
+    for (final side in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV'])
+      '<w:$side w:val="single" w:sz="4" w:space="0" w:color="BFBFBF"/>',
+  ].join();
+  final rows = [
+    for (final (i, r) in b.rows.indexed)
+      '<w:tr>${[for (var c = 0; c < width; c++) '<w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>'
+            '<w:p><w:pPr><w:spacing w:after="0"/></w:pPr>'
+            '${_run(Run(c < r.length ? r[c] : '', bold: i == 0))}</w:p></w:tc>'].join()}</w:tr>',
+  ].join();
+  return '<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct"/>'
+      '<w:tblBorders>$border</w:tblBorders>'
+      '<w:tblCellMar><w:left w:w="80" w:type="dxa"/><w:right w:w="80" w:type="dxa"/></w:tblCellMar>'
+      '</w:tblPr><w:tblGrid>${'<w:gridCol/>' * width}</w:tblGrid>$rows</w:tbl>'
+      // Word wants a paragraph between a table and what follows.
+      '<w:p/>';
+}
+
+/// [numId] is the Word list a list item belongs to.
+String _paragraph(Block b, {int? numId}) {
+  if (b.kind == 'table') return _table(b);
   final style = switch (b.kind) {
     'h1' => 'Heading1',
     'h2' => 'Heading2',
@@ -207,21 +236,17 @@ String _paragraph(Block b) {
     'code' => 'Code',
     _ => null,
   };
-  final indent = (b.kind == 'bullet' || b.kind == 'number')
-      ? '<w:ind w:left="${360 + b.level * 360}" w:hanging="360"/>'
+  final indent = numId != null
+      ? '<w:pStyle w:val="ListParagraph"/><w:numPr><w:ilvl w:val="${b.level.clamp(0, 8)}"/>'
+            '<w:numId w:val="$numId"/></w:numPr>'
       : '';
   final border = b.kind == 'rule'
       ? '<w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="999999"/></w:pBdr>'
       : '';
   final props =
       '${style == null ? '' : '<w:pStyle w:val="$style"/>'}$border$indent';
-  final marker = switch (b.kind) {
-    'bullet' => [const Run('•\t')],
-    'number' => [Run('${b.number}.\t')],
-    _ => const <Run>[],
-  };
   return '<w:p>${props.isEmpty ? '' : '<w:pPr>$props</w:pPr>'}'
-      '${[...marker, ...b.runs].map(_run).join()}</w:p>';
+      '${b.runs.map(_run).join()}</w:p>';
 }
 
 const _styles = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -233,16 +258,49 @@ const _styles = '''<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="360" w:after="120"/><w:outlineLvl w:val="0"/></w:pPr><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="280" w:after="100"/><w:outlineLvl w:val="1"/></w:pPr><w:rPr><w:b/><w:sz w:val="30"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="80"/><w:outlineLvl w:val="2"/></w:pPr><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style>
+<w:style w:type="paragraph" w:styleId="ListParagraph"><w:name w:val="List Paragraph"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="60"/><w:contextualSpacing/></w:pPr></w:style>
 <w:style w:type="paragraph" w:styleId="Quote"><w:name w:val="Quote"/><w:basedOn w:val="Normal"/><w:pPr><w:ind w:left="720"/></w:pPr><w:rPr><w:i/><w:color w:val="555555"/></w:rPr></w:style>
 <w:style w:type="paragraph" w:styleId="Code"><w:name w:val="Code"/><w:basedOn w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:rFonts w:ascii="Courier New" w:hAnsi="Courier New"/><w:sz w:val="20"/></w:rPr></w:style>
 </w:styles>''';
 
+String _levels(bool numbered) => [
+  for (var l = 0; l < 9; l++)
+    '<w:lvl w:ilvl="$l"><w:start w:val="1"/>'
+        '<w:numFmt w:val="${numbered ? const ['decimal', 'lowerLetter', 'lowerRoman'][l % 3] : 'bullet'}"/>'
+        '<w:lvlText w:val="${numbered ? '%${l + 1}.' : const ['•', '◦', '▪'][l % 3]}"/>'
+        '<w:lvlJc w:val="left"/><w:pPr><w:ind w:left="${720 + l * 360}" w:hanging="360"/></w:pPr>'
+        '${numbered ? '' : '<w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr>'}</w:lvl>',
+].join();
+
 /// The document as a Word file (.docx), which Google Docs opens too.
 Uint8List toDocx(String title, String markdown) {
+  // Bullets share one Word list; each numbered list starts at 1 again.
+  var lists = 1;
+  int? current;
+  final paragraphs = <String>[];
+  for (final b in markdownBlocks(markdown)) {
+    final item = b.kind == 'bullet' || b.kind == 'number';
+    if (!item) current = null;
+    if (b.kind == 'number' && b.level == 0 && current == null) {
+      current = ++lists;
+    }
+    if (item) current ??= ++lists;
+    paragraphs.add(
+      _paragraph(b, numId: item ? (b.kind == 'bullet' ? 1 : current) : null),
+    );
+  }
+  final numbering =
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+      '<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+      '<w:abstractNum w:abstractNumId="0"><w:multiLevelType w:val="hybridMultilevel"/>${_levels(false)}</w:abstractNum>'
+      '<w:abstractNum w:abstractNumId="1"><w:multiLevelType w:val="hybridMultilevel"/>${_levels(true)}</w:abstractNum>'
+      '<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>'
+      '${[for (var n = 2; n <= lists; n++) '<w:num w:numId="$n"><w:abstractNumId w:val="1"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num>'].join()}'
+      '</w:numbering>';
   final body = [
     if (title.trim().isNotEmpty)
       '<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr>${_run(Run(title.trim()))}</w:p>',
-    for (final b in markdownBlocks(markdown)) _paragraph(b),
+    ...paragraphs,
   ].join();
   final document =
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -258,6 +316,7 @@ Uint8List toDocx(String title, String markdown) {
         '<Default Extension="xml" ContentType="application/xml"/>'
         '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
         '<Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>'
+        '<Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>'
         '</Types>',
     '_rels/.rels':
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
@@ -268,9 +327,11 @@ Uint8List toDocx(String title, String markdown) {
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
         '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+        '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>'
         '</Relationships>',
     'word/document.xml': document,
     'word/styles.xml': _styles,
+    'word/numbering.xml': numbering,
   };
   final archive = Archive();
   for (final e in files.entries) {
@@ -368,6 +429,20 @@ Future<Uint8List> toPdf(
           child: text(b.runs, 9.5),
         ),
         'rule' => pw.Divider(color: PdfColors.grey),
+        'table' => pw.Padding(
+          padding: const pw.EdgeInsets.only(bottom: 8),
+          child: pw.TableHelper.fromTextArray(
+            data: b.rows,
+            headerStyle: pw.TextStyle(
+              fontSize: 10,
+              fontWeight: pw.FontWeight.bold,
+            ),
+            cellStyle: const pw.TextStyle(fontSize: 10),
+            cellAlignment: pw.Alignment.centerLeft,
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.5),
+          ),
+        ),
         _ => pw.Padding(
           padding: const pw.EdgeInsets.only(bottom: 6),
           child: text(b.runs, 11),
