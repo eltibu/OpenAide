@@ -26,14 +26,24 @@ MarkdownGenerator replyMarkdownGenerator() => MarkdownGenerator(
 
 /// [base] with code blocks that show their language and a copy button, and
 /// Mermaid blocks drawn as diagrams.
-MarkdownConfig withReplyCode(MarkdownConfig base, bool dark) {
+/// With [collapse], code blocks start folded to one line.
+MarkdownConfig withReplyCode(
+  MarkdownConfig base,
+  bool dark, {
+  bool collapse = false,
+}) {
   final pre = dark ? PreConfig.darkConfig : const PreConfig();
   return base.copy(
     configs: [
       pre.copy(
         wrapper: (child, code, language) => language == 'mermaid'
             ? MermaidView(code: code, dark: dark)
-            : CodeFrame(code: code, language: language, child: child),
+            : CodeFrame(
+                code: code,
+                language: language,
+                collapsed: collapse,
+                child: child,
+              ),
       ),
     ],
   );
@@ -95,21 +105,65 @@ class LatexNode extends SpanNode {
   }
 }
 
-/// A code block with its language on top and a copy button.
-class CodeFrame extends StatelessWidget {
+/// A code block with its language on top and a copy button; [collapsed]
+/// starts it folded to a line that opens it.
+class CodeFrame extends StatefulWidget {
   const CodeFrame({
     super.key,
     required this.code,
     required this.language,
     required this.child,
+    this.collapsed = false,
   });
   final String code;
   final String language;
   final Widget child;
+  final bool collapsed;
+
+  @override
+  State<CodeFrame> createState() => _CodeFrameState();
+}
+
+class _CodeFrameState extends State<CodeFrame> {
+  late bool _folded = widget.collapsed;
 
   @override
   Widget build(BuildContext context) {
+    final code = widget.code;
+    final language = widget.language;
+    final child = widget.child;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    if (_folded) {
+      final lines = '\n'.allMatches(code.trimRight()).length + 1;
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Material(
+          color: Theme.of(context).colorScheme.surfaceContainerHigh,
+          borderRadius: BorderRadius.circular(8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => setState(() => _folded = false),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              child: Row(
+                children: [
+                  Icon(Icons.code, size: 18, color: muted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${language.isEmpty ? 'Code' : language} · '
+                      '$lines line${lines == 1 ? '' : 's'}',
+                      style: TextStyle(color: muted),
+                    ),
+                  ),
+                  Icon(Icons.expand_more, size: 18, color: muted),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Stack(
       children: [
         child,

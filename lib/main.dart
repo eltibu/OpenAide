@@ -5,6 +5,7 @@ import 'core/auth/session.dart';
 import 'core/theme.dart';
 import 'core/widgets/nexus_logo.dart';
 import 'features/auth/login_screen.dart';
+import 'features/chat/chat_controller.dart';
 import 'features/chat/chat_screen.dart';
 
 void main() {
@@ -22,6 +23,13 @@ class NexusApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: nexusTheme(Brightness.light),
       darkTheme: nexusTheme(Brightness.dark),
+      // Settings > Theme, kept on the server with the rest.
+      themeMode: switch ((ref.watch(userSettingsProvider).value?['ui']
+          as Map?)?['nexusTheme']) {
+        'light' => ThemeMode.light,
+        'dark' => ThemeMode.dark,
+        _ => ThemeMode.system,
+      },
       home: switch (session) {
         AsyncData(value: != null) => const ChatScreen(),
         // Spinner only while restoring a saved session; during sign-in the

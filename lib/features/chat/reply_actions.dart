@@ -7,6 +7,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../notes/notes_api.dart';
 import 'chat_controller.dart';
+import 'composer_draft.dart';
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
 
@@ -468,7 +469,13 @@ class FollowUps extends ConsumerWidget {
           for (final q in list)
             InkWell(
               borderRadius: BorderRadius.circular(8),
-              onTap: () => ref.read(chatControllerProvider.notifier).send(q),
+              // Settings > Chats can put it in the box to edit first.
+              onTap: () =>
+                  (ref.read(userSettingsProvider).value?['ui']
+                          as Map?)?['insertFollowUpPrompt'] ==
+                      true
+                  ? ref.read(composerDraftProvider.notifier).put(q)
+                  : ref.read(chatControllerProvider.notifier).send(q),
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 7),
                 child: Row(

@@ -136,6 +136,17 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const GeneralSettings()),
           ),
           ListTile(
+            leading: const Icon(Icons.brightness_6_outlined),
+            title: const Text('Theme'),
+            subtitle: Text(switch ((ref.watch(userSettingsProvider).value?['ui']
+                as Map?)?['nexusTheme']) {
+              'light' => 'Light',
+              'dark' => 'Dark',
+              _ => 'Same as the phone',
+            }),
+            onTap: () => _pickTheme(context, ref),
+          ),
+          ListTile(
             leading: const Icon(Icons.chat_bubble_outline),
             title: const Text('Chats'),
             subtitle: const Text('Titles, tags, suggestions, temporary chats'),
@@ -197,6 +208,45 @@ class SettingsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+Future<void> _pickTheme(BuildContext context, WidgetRef ref) async {
+  final now =
+      (ref.read(userSettingsProvider).value?['ui'] as Map?)?['nexusTheme'] ??
+      'system';
+  final picked = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final (id, label) in const [
+            ('system', 'Same as the phone'),
+            ('light', 'Light'),
+            ('dark', 'Dark'),
+          ])
+            ListTile(
+              leading: Icon(
+                id == now ? Icons.radio_button_checked : Icons.radio_button_off,
+              ),
+              title: Text(label),
+              onTap: () => Navigator.pop(context, id),
+            ),
+        ],
+      ),
+    ),
+  );
+  if (picked == null || picked == now) return;
+  try {
+    await ref.read(settingsApiProvider).patchUi({
+      'nexusTheme': picked == 'system' ? null : picked,
+    });
+  } catch (e) {
+    if (context.mounted) _say(context, '$e');
+  }
+  ref.invalidate(uiSettingsProvider);
+  ref.invalidate(userSettingsProvider);
 }
 
 // ---- Account ----
@@ -566,6 +616,38 @@ class ChatSettings extends ConsumerWidget {
                 ),
                 value: ui['insertSuggestionPrompt'] == true,
                 onChanged: (on) => set({'insertSuggestionPrompt': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Keep follow-up suggestions'),
+                subtitle: const Text('Under every reply, not just the last'),
+                value: ui['keepFollowUpPrompts'] == true,
+                onChanged: (on) => set({'keepFollowUpPrompts': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Edit follow-ups first'),
+                subtitle: const Text(
+                  'Tapping a follow-up puts it in the chat box',
+                ),
+                value: ui['insertFollowUpPrompt'] == true,
+                onChanged: (on) => set({'insertFollowUpPrompt': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Format your messages'),
+                subtitle: const Text('Show Markdown in what you send'),
+                value: ui['renderMarkdownInUserMessages'] != false,
+                onChanged: (on) => set({'renderMarkdownInUserMessages': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Fold code blocks'),
+                subtitle: const Text('Code in replies starts folded'),
+                value: ui['collapseCodeBlocks'] == true,
+                onChanged: (on) => set({'collapseCodeBlocks': on}),
+              ),
+              SwitchListTile(
+                title: const Text('Open steps'),
+                subtitle: const Text('Thinking and tool steps start unfolded'),
+                value: ui['expandDetails'] == true,
+                onChanged: (on) => set({'expandDetails': on}),
               ),
               SwitchListTile(
                 title: const Text('Copy replies'),

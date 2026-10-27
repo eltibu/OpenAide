@@ -31,6 +31,7 @@ import 'reply_parts.dart';
 import 'reply_steps.dart';
 import 'side_panel.dart';
 import 'chat_controller.dart';
+import 'composer_draft.dart';
 import 'reply_notify.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
@@ -320,20 +321,6 @@ class _EmptyState extends ConsumerWidget {
   }
 }
 
-/// Text handed to the chat box from elsewhere on the screen.
-class ComposerDraft extends Notifier<String?> {
-  @override
-  String? build() => null;
-
-  void put(String text) => state = text;
-
-  void clear() => state = null;
-}
-
-final composerDraftProvider = NotifierProvider<ComposerDraft, String?>(
-  ComposerDraft.new,
-);
-
 bool insertSuggestion(WidgetRef ref) =>
     (ref.read(userSettingsProvider).value?['ui']
         as Map?)?['insertSuggestionPrompt'] ==
@@ -432,6 +419,11 @@ class _MessageList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
+    // Settings > Chats choices for how messages show.
+    final ui =
+        (ref.watch(userSettingsProvider).value?['ui'] as Map?) ?? const {};
+    final userMarkdown = ui['renderMarkdownInUserMessages'] != false;
+    final keepFollowUps = ui['keepFollowUpPrompts'] == true;
     // Pictures in replies load from the server signed in, like the web.
     final images = ImgConfig(
       builder: (url, attributes) =>
@@ -459,6 +451,7 @@ class _MessageList extends ConsumerWidget {
           configs: [images],
         ),
         dark,
+        collapse: ui['collapseCodeBlocks'] == true,
       ),
       openFile,
     );
@@ -499,7 +492,15 @@ class _MessageList extends ConsumerWidget {
                       color: context.nexus.userBubble,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: Text(m.content, style: body),
+                    child: userMarkdown
+                        ? MarkdownBlock(
+                            data: m.content,
+                            config: mdConfig.copy(
+                              configs: [PConfig(textStyle: body!)],
+                            ),
+                            generator: generator,
+                          )
+                        : Text(m.content, style: body),
                   ),
                 ),
               if (!streaming) _MessageActions(message: m, compact: true),
@@ -534,6 +535,7 @@ class _MessageList extends ConsumerWidget {
                   final steps => ReplySteps(
                     steps: steps as List<StepPart>,
                     live: live,
+                    open: ui['expandDetails'] == true,
                   ),
                 },
               ],
@@ -567,7 +569,8 @@ class _MessageList extends ConsumerWidget {
                 PendingCallCard(reply: m, call: waiting),
               if (!live && !streaming && waiting == null)
                 _MessageActions(message: m, isLast: i == 0),
-              if (i == 0 && !streaming) FollowUps(reply: m),
+              if ((i == 0 || keepFollowUps) && !live && !streaming)
+                FollowUps(reply: m),
             ],
           ),
         );

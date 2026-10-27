@@ -247,7 +247,46 @@ class SharedChatsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Shared chats')),
+      appBar: AppBar(
+        title: const Text('Shared chats'),
+        actions: [
+          if (list.value?.isNotEmpty ?? false)
+            TextButton(
+              onPressed: () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Stop sharing all chats?'),
+                    content: const Text(
+                      'Every shared link stops working. The chats stay.',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        child: const Text('Stop all'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok != true) return;
+                for (final c in list.value ?? const <Map>[]) {
+                  try {
+                    await client.send(
+                      'DELETE',
+                      '/api/v1/chats/${c['chat_id'] ?? c['id']}/share',
+                    );
+                  } catch (_) {}
+                }
+                ref.invalidate(sharedChatsProvider);
+              },
+              child: const Text('Stop all'),
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(sharedChatsProvider.future),
         child: list.when(

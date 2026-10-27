@@ -6,8 +6,16 @@ import 'side_panel.dart';
 /// A group of steps (thinking, tool calls, task steps) folded into one line,
 /// like the Claude app: tap to see each step, tap a step to see its detail.
 class ReplySteps extends StatefulWidget {
-  const ReplySteps({super.key, required this.steps, this.live = false});
+  const ReplySteps({
+    super.key,
+    required this.steps,
+    this.live = false,
+    this.open = false,
+  });
   final List<StepPart> steps;
+
+  /// Starts unfolded (Settings > Chats, "Always expand details").
+  final bool open;
 
   /// The reply is still working on these steps.
   final bool live;
@@ -17,7 +25,7 @@ class ReplySteps extends StatefulWidget {
 }
 
 class _ReplyStepsState extends State<ReplySteps> {
-  bool _open = false;
+  late bool _open = widget.open;
 
   @override
   Widget build(BuildContext context) {
