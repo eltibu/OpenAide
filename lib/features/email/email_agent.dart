@@ -19,6 +19,9 @@ const _uuid = Uuid();
 const emailChatTitle = 'Email (Nexus app)';
 const emailChatKey = 'nexusEmailChatId';
 
+/// Where the email chat keeps the emails the app has seen.
+const emailStoreKey = 'nexusEmails';
+
 class Email {
   const Email({
     required this.id,
@@ -43,6 +46,18 @@ class Email {
     unread: j['unread'] == true,
     note: '${j['note'] ?? ''}',
   );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'thread': thread,
+    'from': from,
+    'to': to,
+    'subject': subject,
+    'date': date?.toUtc().toIso8601String(),
+    'snippet': snippet,
+    'unread': unread,
+    'note': note,
+  };
 
   final String id;
   final String thread;
@@ -78,6 +93,13 @@ class EmailMessage {
   final String to;
   final DateTime? date;
   final String body;
+
+  Map<String, dynamic> toJson() => {
+    'from': from,
+    'to': to,
+    'date': date?.toUtc().toIso8601String(),
+    'body': body,
+  };
 }
 
 /// An email opened: the thread (oldest first), Nexus's summary and the
@@ -90,10 +112,46 @@ class OpenedEmail {
     this.suggestedReply = '',
   });
 
+  factory OpenedEmail.fromJson(Map j) => OpenedEmail(
+    email: Email.fromJson(j['email'] as Map? ?? const {}),
+    messages: [
+      for (final m in (j['messages'] as List? ?? const []).whereType<Map>())
+        EmailMessage.fromJson(m),
+    ],
+    summary: '${j['summary'] ?? ''}',
+    suggestedReply: '${j['suggested_reply'] ?? ''}',
+  );
+
   final Email email;
   final List<EmailMessage> messages;
   final String summary;
   final String suggestedReply;
+
+  Map<String, dynamic> toJson() => {
+    'email': email.toJson(),
+    'messages': [for (final m in messages) m.toJson()],
+    'summary': summary,
+    'suggested_reply': suggestedReply,
+  };
+}
+
+/// What Nexus just listed, added to what was kept: new ones and updates
+/// replace the kept copy, nothing kept is dropped because a check missed
+/// it, newest first, at most [max].
+List<Email> mergeEmails(List<Email> fresh, List<Email> kept, {int max = 300}) {
+  final byId = <String, Email>{
+    for (final e in kept) e.id: e,
+    for (final e in fresh) e.id: e,
+  };
+  final all = byId.values.toList()
+    ..sort((a, b) {
+      final ad = a.date, bd = b.date;
+      if (ad == null && bd == null) return 0;
+      if (ad == null) return 1;
+      if (bd == null) return -1;
+      return bd.compareTo(ad);
+    });
+  return all.length > max ? all.sublist(0, max) : all;
 }
 
 /// The JSON in a model's answer, with any words or fences around it
@@ -189,6 +247,82 @@ class EmailAgent {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Emails kept on the server, in the email chat (`nexusEmails`): each
+  /// folder's list and the emails already opened, so nothing disappears
+  /// between checks and an opened email shows at once.
+  Map<String, dynamic>? _kept;
+
+  Future<Map<String, dynamic>> _store() async {
+    if (_kept != null) return _kept!;
+    _chatId ??= await _savedChatId();
+    Map<String, dynamic> kept = {};
+    if (_chatId != null) {
+      try {
+        final saved = (await client.chat(_chatId!)).extra[emailStoreKey];
+        if (saved is Map) kept = saved.cast<String, dynamic>();
+      } catch (_) {
+        // A new chat is made on the first request.
+      }
+    }
+    return _kept ??= kept;
+  }
+
+  /// The emails kept for [folder], newest first.
+  Future<List<Email>> kept(String folder) async => [
+    for (final e
+        in ((await _store())[folder] as List? ?? const []).whereType<Map>())
+      Email.fromJson(e),
+  ];
+
+  /// An email opened before, as Nexus showed it then.
+  Future<OpenedEmail?> keptOpen(Email e) async {
+    final opened = (await _store())['opened'];
+    final j = opened is Map ? opened[e.id] : null;
+    return j is Map ? OpenedEmail.fromJson(j) : null;
+  }
+
+  Future<void> _save(void Function(Map<String, dynamic> store) change) async {
+    final store = await _store();
+    change(store);
+    final id = _chatId;
+    if (id == null) return;
+    try {
+      await client.send(
+        'POST',
+        '/api/v1/chats/$id',
+        body: {
+          'chat': {emailStoreKey: store},
+        },
+      );
+    } catch (_) {
+      // Kept in the app until the next save gets through.
+    }
+  }
+
+  /// Checks [folder] with Nexus and keeps the result with what was there.
+  Future<List<Email>> check(String folder) async {
+    final fresh = await list(folder: folder);
+    final merged = mergeEmails(fresh, await kept(folder));
+    await _save((s) => s[folder] = [for (final e in merged) e.toJson()]);
+    return merged;
+  }
+
+  /// Opens [e] with Nexus and keeps what it showed.
+  Future<OpenedEmail> openAndKeep(Email e) async {
+    final opened = await open(e);
+    await _save((s) {
+      final all = Map<String, dynamic>.from(s['opened'] as Map? ?? const {});
+      all.remove(e.id);
+      all[e.id] = opened.toJson();
+      // The 100 opened last.
+      while (all.length > 100) {
+        all.remove(all.keys.first);
+      }
+      s['opened'] = all;
+    });
+    return opened;
   }
 
   /// Asks Nexus and returns its whole answer once it is done.

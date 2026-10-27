@@ -46,11 +46,38 @@ void main() {
       final again = EmailAgent(client, model: model, options: const {});
       await again.list(folder: 'sent');
       expect((await client.chat(id)).thread.length, 8);
+
+      // What was checked and opened is kept in the email chat on the
+      // server, so a fresh start shows it before Nexus answers again.
+      final checked = await again.check('inbox');
+      expect(checked.map((e) => e.id), ['m1', 'm2']);
+      await again.openAndKeep(checked.first);
+      final later = EmailAgent(client, model: model, options: const {});
+      expect((await later.kept('inbox')).map((e) => e.subject), [
+        'Field trip forms',
+        'Your statement',
+      ]);
+      final kept = await later.keptOpen(checked.first);
+      expect(kept?.suggestedReply, startsWith('Hi Ana'));
+      expect(kept?.messages.single.body, contains('field trip forms'));
+      expect(await later.keptOpen(checked.last), isNull);
       await client.deleteChat(id);
     },
     skip: skip,
     timeout: const Timeout(Duration(minutes: 3)),
   );
+
+  test('a check adds to the kept emails and never drops them', () {
+    Email e(String id, int day, {String note = ''}) =>
+        Email(id: id, date: DateTime.utc(2026, 10, day), note: note);
+    final kept = [e('b', 20), e('a', 10, note: 'old')];
+    final merged = mergeEmails([e('c', 27), e('a', 10, note: 'new')], kept);
+    expect(merged.map((m) => m.id), ['c', 'b', 'a']);
+    expect(merged.last.note, 'new');
+    expect(mergeEmails([e('x', 1)], kept, max: 2).map((m) => m.id), ['b', 'a']);
+    final round = Email.fromJson(kept.first.toJson());
+    expect(round.date, kept.first.date!.toLocal());
+  });
 
   test('answers are read even with words around the JSON', () {
     expect(answerJson('Sure!\n```json\n[{"id": 1}]\n```'), [

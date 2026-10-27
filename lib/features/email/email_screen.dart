@@ -40,14 +40,67 @@ final emailAgentProvider = FutureProvider<EmailAgent>((ref) async {
   );
 });
 
-/// The inbox and Sent, as Nexus last read them (kept while the app runs).
-final emailListProvider = FutureProvider.family<List<Email>, String>((
-  ref,
-  folder,
-) async {
-  final agent = await ref.watch(emailAgentProvider.future);
-  return agent.list(folder: folder);
-});
+/// A folder's emails: the ones kept on the server show at once, then
+/// Nexus checks for new ones and they are added. A check that fails
+/// leaves the list as it was.
+class EmailFolder {
+  const EmailFolder({
+    this.emails = const [],
+    this.loaded = false,
+    this.checking = false,
+    this.error,
+  });
+  final List<Email> emails;
+
+  /// The kept emails have been read (an empty list means none yet).
+  final bool loaded;
+  final bool checking;
+  final String? error;
+}
+
+class EmailFolderNotifier extends Notifier<EmailFolder> {
+  EmailFolderNotifier(this.folder);
+  final String folder;
+
+  @override
+  EmailFolder build() {
+    Future.microtask(_start);
+    return const EmailFolder();
+  }
+
+  Future<void> _start() async {
+    try {
+      final agent = await ref.read(emailAgentProvider.future);
+      final kept = await agent.kept(folder);
+      state = EmailFolder(emails: kept, loaded: true);
+    } catch (_) {
+      state = const EmailFolder(loaded: true);
+    }
+    await check();
+  }
+
+  /// Asks Nexus for new mail and adds it to the list.
+  Future<void> check() async {
+    if (state.checking) return;
+    state = EmailFolder(
+      emails: state.emails,
+      loaded: state.loaded,
+      checking: true,
+    );
+    try {
+      final agent = await ref.read(emailAgentProvider.future);
+      final emails = await agent.check(folder);
+      state = EmailFolder(emails: emails, loaded: true);
+    } catch (e) {
+      state = EmailFolder(emails: state.emails, loaded: true, error: '$e');
+    }
+  }
+}
+
+final emailFolderProvider =
+    NotifierProvider.family<EmailFolderNotifier, EmailFolder, String>(
+      EmailFolderNotifier.new,
+    );
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -162,58 +215,52 @@ class _EmailList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final list = ref.watch(emailListProvider(folder));
+    final box = ref.watch(emailFolderProvider(folder));
+    final notifier = ref.read(emailFolderProvider(folder).notifier);
+    final muted = context.nexus.muted;
+    final emails = box.emails;
+    final waitText = folder == 'sent'
+        ? 'Nexus is reading what was sent…'
+        : 'Nexus is checking your inbox…';
     return RefreshIndicator(
-      onRefresh: () => ref.refresh(emailListProvider(folder).future),
-      child: list.when(
-        loading: () => ListView(
-          children: [
-            SizedBox(
-              height: 320,
-              child: _Waiting(
-                folder == 'sent'
-                    ? 'Nexus is reading what was sent…'
-                    : 'Nexus is checking your inbox…',
-              ),
-            ),
-          ],
+      onRefresh: notifier.check,
+      child: ListView(
+        padding: EdgeInsets.fromLTRB(
+          readingInset(context, 0),
+          0,
+          readingInset(context, 0),
+          96,
         ),
-        error: (e, _) => ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            Text('Couldn\'t get your email.\n\n$e'),
-            const SizedBox(height: 12),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: FilledButton(
-                onPressed: () => ref.invalidate(emailListProvider(folder)),
-                child: const Text('Try again'),
+        children: [
+          if (box.checking && emails.isNotEmpty)
+            const LinearProgressIndicator(minHeight: 2),
+          if (box.error != null)
+            MaterialBanner(
+              content: Text(
+                emails.isEmpty
+                    ? 'Couldn\'t get your email.\n\n${box.error}'
+                    : 'Couldn\'t check for new email. These are the ones '
+                          'kept from before.\n\n${box.error}',
               ),
-            ),
-          ],
-        ),
-        data: (emails) => emails.isEmpty
-            ? ListView(
-                padding: const EdgeInsets.all(24),
-                children: [
-                  Text(
-                    'Nothing here.',
-                    style: TextStyle(color: context.nexus.muted),
-                  ),
-                ],
-              )
-            : ListView.separated(
-                padding: EdgeInsets.fromLTRB(
-                  readingInset(context, 0),
-                  4,
-                  readingInset(context, 0),
-                  96,
+              actions: [
+                TextButton(
+                  onPressed: notifier.check,
+                  child: const Text('Try again'),
                 ),
-                itemCount: emails.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (_, i) =>
-                    EmailTile(email: emails[i], sent: folder == 'sent'),
-              ),
+              ],
+            ),
+          if (emails.isEmpty && (box.checking || !box.loaded))
+            SizedBox(height: 320, child: _Waiting(waitText))
+          else if (emails.isEmpty && box.error == null)
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text('Nothing here.', style: TextStyle(color: muted)),
+            ),
+          for (final (i, e) in emails.indexed) ...[
+            if (i > 0) const Divider(height: 1),
+            EmailTile(email: e, sent: folder == 'sent'),
+          ],
+        ],
       ),
     );
   }
@@ -378,8 +425,15 @@ class EmailView extends ConsumerStatefulWidget {
 class _EmailViewState extends ConsumerState<EmailView> {
   late Future<OpenedEmail> _opened = _open();
 
-  Future<OpenedEmail> _open() async =>
-      (await ref.read(emailAgentProvider.future)).open(widget.email);
+  /// Shows what Nexus said when it was opened before; [fresh] asks again.
+  Future<OpenedEmail> _open({bool fresh = false}) async {
+    final agent = await ref.read(emailAgentProvider.future);
+    if (!fresh) {
+      final kept = await agent.keptOpen(widget.email);
+      if (kept != null) return kept;
+    }
+    return agent.openAndKeep(widget.email);
+  }
 
   Future<void> _reply(OpenedEmail o, {String text = ''}) async {
     final sent = await Navigator.push<bool>(
@@ -388,7 +442,9 @@ class _EmailViewState extends ConsumerState<EmailView> {
         builder: (_) => ReplyEditor(replyTo: o, text: text),
       ),
     );
-    if (sent == true && mounted) ref.invalidate(emailListProvider('sent'));
+    if (sent == true && mounted) {
+      unawaited(ref.read(emailFolderProvider('sent').notifier).check());
+    }
   }
 
   @override
@@ -403,6 +459,13 @@ class _EmailViewState extends ConsumerState<EmailView> {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Ask Nexus to open it again',
+            icon: const Icon(Icons.refresh),
+            onPressed: () => setState(() => _opened = _open(fresh: true)),
+          ),
+        ],
       ),
       body: FutureBuilder<OpenedEmail>(
         future: _opened,
@@ -686,7 +749,7 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
       }
       if (!mounted) return;
       _say(context, 'Sent');
-      ref.invalidate(emailListProvider('sent'));
+      ref.read(emailFolderProvider('sent').notifier).check();
       Navigator.pop(context, true);
     } catch (e) {
       if (!mounted) return;
