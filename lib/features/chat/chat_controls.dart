@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'chat_controller.dart';
 
 Future<void> showChatControls(BuildContext context) =>
@@ -155,6 +156,7 @@ class _ChatControlsState extends ConsumerState<_ChatControls> {
             _choice('function_calling', 'Tool calling', const [
               'native',
             ], params),
+            ..._valves(heading),
           ],
         ),
       ),
@@ -272,6 +274,50 @@ class _ChatControlsState extends ConsumerState<_ChatControls> {
         ],
       ),
     );
+  }
+
+  /// Your own settings for the tools and filters this chat uses, as the
+  /// web's Valves section has. They're yours, so they apply in every chat.
+  List<Widget> _valves(Widget Function(String) heading) {
+    final state = ref.watch(chatControllerProvider);
+    final model = ref
+        .watch(modelsProvider)
+        .value
+        ?.where((m) => m.id == state.modelId)
+        .firstOrNull;
+    final names = {
+      for (final t in ref.watch(toolsProvider).value ?? const []) t.id: t.name,
+    };
+    final tools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
+    final filters = model?.defaultFilterIds ?? const [];
+    if (tools.isEmpty && filters.isEmpty) return const [];
+    Widget tile(String name, String base) => ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: const Icon(Icons.tune),
+      title: Text(name),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ValvesScreen(
+            title: name,
+            specPath: '$base/valves/user/spec',
+            valuesPath: '$base/valves/user',
+            savePath: '$base/valves/user/update',
+          ),
+        ),
+      ),
+    );
+    return [
+      heading('Valves'),
+      Text(
+        'Your settings for the tools this chat uses. They apply wherever '
+        'you use the tool.',
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+      for (final id in tools) tile(names[id] ?? id, '/api/v1/tools/id/$id'),
+      for (final id in filters) tile(id, '/api/v1/functions/id/$id'),
+    ];
   }
 
   static String _fmt(double v) =>
