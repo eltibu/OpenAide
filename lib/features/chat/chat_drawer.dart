@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import '../calendar/calendar_screen.dart';
 import '../server/server_page.dart';
 import '../terminal/terminal_screen.dart';
 import '../update/update_screen.dart';
@@ -556,8 +557,6 @@ class _Places extends ConsumerWidget {
       if (features['enable_notes'] == true)
         (Icons.sticky_note_2_outlined, 'Notes', '/notes'),
       (Icons.grid_view, 'Workspace', '/workspace'),
-      if (features['enable_calendar'] == true)
-        (Icons.calendar_month_outlined, 'Calendar', '/calendar'),
       if (features['enable_automations'] == true)
         (Icons.schedule, 'Automations', '/automations'),
       if (admin) (Icons.code, 'Playground', '/playground'),
@@ -580,6 +579,13 @@ class _Places extends ConsumerWidget {
             () => TerminalScreen(server: server, startInFiles: true),
           ),
         ],
+        if (features['enable_calendar'] == true)
+          _tile(
+            context,
+            Icons.calendar_month_outlined,
+            'Calendar',
+            () => const CalendarScreen(),
+          ),
         Theme(
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
