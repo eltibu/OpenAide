@@ -1088,16 +1088,19 @@ class _ComposerState extends ConsumerState<_Composer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Stop',
             icon: const Icon(Icons.stop_rounded),
             onPressed: controller.stop,
           ),
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Steer: stop the reply and send this now',
             icon: const Icon(Icons.turn_right),
             onPressed: _steer,
           ),
           IconButton.filled(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Queue: send this when the reply is done',
             icon: const Icon(Icons.arrow_upward),
             onPressed: _queue,
@@ -1106,12 +1109,14 @@ class _ComposerState extends ConsumerState<_Composer> {
       );
     } else if (widget.streaming) {
       action = IconButton.filled(
+        visualDensity: VisualDensity.compact,
         tooltip: 'Stop',
         icon: const Icon(Icons.stop_rounded),
         onPressed: controller.stop,
       );
     } else if (_hasText || hasFiles) {
       action = IconButton.filled(
+        visualDensity: VisualDensity.compact,
         tooltip: 'Send',
         icon: const Icon(Icons.arrow_upward),
         onPressed: ready ? _send : null,
@@ -1121,11 +1126,13 @@ class _ComposerState extends ConsumerState<_Composer> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Record a voice note',
             icon: const Icon(Icons.mic_none),
             onPressed: ready ? () => setState(() => _recording = true) : null,
           ),
           IconButton.filled(
+            visualDensity: VisualDensity.compact,
             tooltip: 'Voice call',
             icon: const Icon(Icons.graphic_eq),
             onPressed: ready
@@ -1142,14 +1149,14 @@ class _ComposerState extends ConsumerState<_Composer> {
       top: false,
       child: Container(
         margin: EdgeInsets.fromLTRB(
-          readingInset(context, 10),
-          4,
-          readingInset(context, 10),
-          10,
+          readingInset(context, 8),
+          2,
+          readingInset(context, 8),
+          8,
         ),
         decoration: BoxDecoration(
           color: colors.composer,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(color: colors.composerBorder),
           boxShadow: [
             BoxShadow(
@@ -1196,11 +1203,13 @@ class _ComposerState extends ConsumerState<_Composer> {
                 decoration: InputDecoration(
                   hintText: empty ? 'Chat with Nexus' : 'Reply to Nexus',
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
                 ),
               ),
+              // One slim row of small buttons under the text, as on the web.
               Padding(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
                 child: Row(
                   children: [
                     const AttachButton(),

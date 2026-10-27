@@ -175,16 +175,27 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                 refreshChatLists(ref.invalidate);
                 ref.invalidate(channelListProvider);
               },
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                children: _query.isNotEmpty
-                    ? _results(ref.watch(chatSearchProvider(_query)))
-                    : [
-                        if (features['enable_channels'] == true) ..._channels(),
-                        ..._folders(),
-                        ..._pinned(),
-                        ..._chats(),
-                      ],
+              // Slim rows, as on the web, so more chats fit.
+              child: ListTileTheme(
+                data: ListTileTheme.of(context).copyWith(
+                  dense: true,
+                  minTileHeight: 38,
+                  minVerticalPadding: 0,
+                  visualDensity: VisualDensity.compact,
+                  titleTextStyle: Theme.of(context).textTheme.bodyMedium,
+                ),
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                  children: _query.isNotEmpty
+                      ? _results(ref.watch(chatSearchProvider(_query)))
+                      : [
+                          if (features['enable_channels'] == true)
+                            ..._channels(),
+                          ..._folders(),
+                          ..._pinned(),
+                          ..._chats(),
+                        ],
+                ),
               ),
             ),
           ),
@@ -999,6 +1010,11 @@ Widget workspaceScreen() => WorkspaceScreen(
   ],
 );
 
+final _menuItem = MenuItemButton.styleFrom(
+  minimumSize: const Size(200, 40),
+  visualDensity: VisualDensity.compact,
+);
+
 /// You, at the bottom of the sidebar. Tap for the web UI's menu: the
 /// server's other sections, Settings and Sign out.
 class _Account extends ConsumerWidget {
@@ -1017,6 +1033,7 @@ class _Account extends ConsumerWidget {
 
     MenuItemButton item(IconData icon, String label, WidgetBuilder page) =>
         MenuItemButton(
+          style: _menuItem,
           leadingIcon: Icon(icon, size: 20),
           onPressed: () => openPlace(context, page),
           child: Text(label),
@@ -1082,6 +1099,7 @@ class _Account extends ConsumerWidget {
           (_) => const SettingsScreen(),
         ),
         MenuItemButton(
+          style: _menuItem,
           leadingIcon: const Icon(Icons.logout, size: 20),
           onPressed: () async {
             final ok =
