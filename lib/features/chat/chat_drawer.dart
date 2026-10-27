@@ -11,6 +11,7 @@ import '../calendar/calendar_screen.dart';
 import '../channels/channels_screen.dart';
 import '../notes/notes_screen.dart';
 import '../playground/playground_screen.dart';
+import '../server/server_page.dart';
 import '../terminal/terminal_screen.dart';
 import '../workspace/knowledge_screen.dart';
 import '../workspace/models_screen.dart';
@@ -529,6 +530,9 @@ void _showError(BuildContext context, Object e) =>
 
 /// You, at the bottom of the menu, with app updates and sign-out.
 /// Channels the person is in, for the drawer.
+/// Rosanna's Lessons Studio, behind the same portal login as the server.
+const lessonsStudioUrl = 'https://casadelamota.xyz/lessons/studio';
+
 final channelsProvider = FutureProvider<List<({String id, String name})>>((
   ref,
 ) async {
@@ -637,6 +641,13 @@ class _Places extends ConsumerWidget {
             'Automations',
             () => const AutomationsScreen(),
           ),
+        _tile(
+          context,
+          Icons.school_outlined,
+          'Lessons Studio',
+          () =>
+              const ServerPage(title: 'Lessons Studio', url: lessonsStudioUrl),
+        ),
         if (admin) ...[
           _tile(
             context,

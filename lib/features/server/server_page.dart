@@ -11,11 +11,15 @@ import '../../core/auth/session.dart';
 /// app, signed in as the user. A stand-in until each section is native:
 /// it always matches the server, including features added later.
 class ServerPage extends ConsumerStatefulWidget {
-  const ServerPage({super.key, required this.title, required this.path});
+  const ServerPage({super.key, required this.title, this.path = '', this.url});
   final String title;
 
   /// Where on the server, such as `/notes`.
   final String path;
+
+  /// Another site of the person's own instead (such as Rosanna's Lessons
+  /// Studio): opened as it is, keeping its own sign-in.
+  final String? url;
 
   @override
   ConsumerState<ServerPage> createState() => _ServerPageState();
@@ -33,7 +37,15 @@ class _ServerPageState extends ConsumerState<ServerPage> {
   void initState() {
     super.initState();
     final client = ref.read(clientProvider);
-    final base = Uri.parse(client.baseUrl);
+    final base = Uri.parse(widget.url ?? client.baseUrl);
+    // A site behind a sign-in portal sends the person to its login page on
+    // a sibling address (auth.example.com): those stay here too.
+    final site = base.host.split('.').length > 2
+        ? base.host.split('.').skip(base.host.split('.').length - 2).join('.')
+        : base.host;
+    bool ours(Uri to) =>
+        to.host == base.host ||
+        (widget.url != null && (to.host == site || to.host.endsWith('.$site')));
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setNavigationDelegate(
@@ -52,7 +64,7 @@ class _ServerPageState extends ConsumerState<ServerPage> {
             if (to == null ||
                 to.scheme == 'about' ||
                 to.scheme == 'data' ||
-                to.host == base.host) {
+                ours(to)) {
               return NavigationDecision.navigate;
             }
             launchUrl(to, mode: LaunchMode.externalApplication);
@@ -60,7 +72,11 @@ class _ServerPageState extends ConsumerState<ServerPage> {
           },
         ),
       );
-    _open(client.baseUrl, client.token, client.cookie, base);
+    if (widget.url != null) {
+      _web.loadRequest(base);
+    } else {
+      _open(client.baseUrl, client.token, client.cookie, base);
+    }
   }
 
   Future<void> _open(

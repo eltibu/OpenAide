@@ -372,6 +372,8 @@ class ChatController extends Notifier<ChatState> {
     if (!state.attachments.any((a) => a.key == key)) return;
     state = state.copyWith(
       attachments: [for (final a in state.attachments) a.key == key ? done : a],
+      // Say why, not just a red mark on the tile.
+      error: done.error == null ? null : "Couldn't attach $name: ${done.error}",
     );
   }
 
@@ -676,6 +678,15 @@ class ChatController extends Notifier<ChatState> {
         if (files.isEmpty) return;
         final kept = (reply.extra['files'] as List? ?? const []).toList();
         reply.extra['files'] = [...kept, ...files];
+      case 'embeds' when data is Map:
+        // A tool's player or chart, shown as it arrives.
+        final embeds = (data['embeds'] as List? ?? const [])
+            .whereType<String>();
+        if (embeds.isEmpty) return;
+        final kept = data['replace'] == true
+            ? const []
+            : (reply.extra['embeds'] as List? ?? const []);
+        reply.extra['embeds'] = [...embeds, ...kept];
       case 'chat:tasks:cancel':
         run.finish();
       case 'chat:title' when data is String:

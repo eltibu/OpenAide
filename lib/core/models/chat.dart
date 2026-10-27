@@ -105,6 +105,27 @@ class ChatMessage {
     ];
   }
 
+  /// Interactive results a tool showed in the reply (a video player, a
+  /// chart...): HTML to show, or an address to open, as the web's embeds.
+  List<String> get embeds {
+    final out = <String>[];
+    void add(Object? list) {
+      if (list is! List) return;
+      for (final e in list) {
+        if (e is String && e.trim().isNotEmpty && !out.contains(e)) out.add(e);
+      }
+    }
+
+    add(extra['embeds']);
+    final output = extra['output'];
+    if (output is List) {
+      for (final item in output.whereType<Map>()) {
+        add(item['embeds']);
+      }
+    }
+    return out;
+  }
+
   /// Photos and files sent with this message.
   List<Attachment> get attachments => [
     for (final f in (extra['files'] as List? ?? const []).whereType<Map>())

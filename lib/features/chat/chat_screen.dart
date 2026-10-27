@@ -16,6 +16,7 @@ import '../workspace/prompts_api.dart' show Prompt;
 import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
+import 'embeds_view.dart';
 import 'chat_controller.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
@@ -221,6 +222,7 @@ class _MessageList extends ConsumerWidget {
               if (m.toolCalls.isNotEmpty) _ToolCalls(calls: m.toolCalls),
               if (m.attachments.isNotEmpty)
                 MessageAttachments(attachments: m.attachments, alignEnd: false),
+              for (final e in m.embeds) EmbedView(key: ValueKey(e), embed: e),
               if (m.content.isNotEmpty)
                 MarkdownBlock(data: m.content, config: mdConfig)
               else if (live)
