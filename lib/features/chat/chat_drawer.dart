@@ -11,6 +11,10 @@ import '../channels/channels_screen.dart';
 import '../notes/notes_screen.dart';
 import '../server/server_page.dart';
 import '../terminal/terminal_screen.dart';
+import '../workspace/knowledge_screen.dart';
+import '../workspace/models_screen.dart';
+import '../workspace/prompts_screen.dart';
+import '../workspace/tools_skills.dart';
 import '../update/update_screen.dart';
 import '../../core/theme.dart';
 import 'chat_controller.dart';
@@ -554,7 +558,6 @@ class _Places extends ConsumerWidget {
         const {};
     final admin = ref.watch(sessionProvider).value?.user?['role'] == 'admin';
     final sections = <(IconData, String, String)>[
-      (Icons.grid_view, 'Workspace', '/workspace'),
       if (admin) (Icons.code, 'Playground', '/playground'),
       if (admin) (Icons.admin_panel_settings_outlined, 'Admin Panel', '/admin'),
     ];
@@ -575,6 +578,45 @@ class _Places extends ConsumerWidget {
             () => TerminalScreen(server: server, startInFiles: true),
           ),
         ],
+        _tile(
+          context,
+          Icons.grid_view,
+          'Workspace',
+          () => WorkspaceScreen(
+            sections: [
+              (
+                Icons.auto_awesome_outlined,
+                'Models',
+                'Your own models: instructions, knowledge, tools',
+                () => const ModelsScreen(),
+              ),
+              (
+                Icons.menu_book_outlined,
+                'Knowledge',
+                'Documents models can search',
+                () => const KnowledgeScreen(),
+              ),
+              (
+                Icons.bolt,
+                'Prompts',
+                'Saved prompts you type with /',
+                () => const PromptsScreen(),
+              ),
+              (
+                Icons.build_outlined,
+                'Tools',
+                'What models can do, and their settings',
+                () => const ToolsScreen(),
+              ),
+              (
+                Icons.psychology_outlined,
+                'Skills',
+                'Know-how models can use',
+                () => const SkillsScreen(),
+              ),
+            ],
+          ),
+        ),
         if (features['enable_channels'] == true)
           _tile(context, Icons.tag, 'Channels', () => const ChannelsScreen()),
         if (features['enable_notes'] == true)

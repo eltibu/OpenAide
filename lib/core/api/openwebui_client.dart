@@ -534,6 +534,12 @@ class OpenWebUiClient {
   /// Where an uploaded file's bytes are served (needs [authHeaders]).
   Uri fileContentUri(String id) => _uri('/api/v1/files/$id/content');
 
+  /// A path on the server (such as `/api/v1/files/<id>/content` or
+  /// `/static/...`) as a full address; full addresses are kept.
+  Uri serverUri(String pathOrUrl) => pathOrUrl.startsWith('http')
+      ? Uri.parse(pathOrUrl)
+      : Uri.parse('$baseUrl$pathOrUrl');
+
   /// Sign-in headers alone, for images and uploads.
   Map<String, String> get authHeaders => {
     if (token != null) 'Authorization': 'Bearer $token',

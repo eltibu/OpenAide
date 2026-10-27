@@ -655,6 +655,12 @@ class ChatController extends Notifier<ChatState> {
       case 'chat:message:error' when data is Map:
         reply.extra['error'] = data['error'];
         run.finish();
+      case 'files' || 'chat:message:files' when data is Map:
+        // Pictures the reply made (image generation, tools) show as they come.
+        final files = (data['files'] as List? ?? const []).whereType<Map>();
+        if (files.isEmpty) return;
+        final kept = (reply.extra['files'] as List? ?? const []).toList();
+        reply.extra['files'] = [...kept, ...files];
       case 'chat:tasks:cancel':
         run.finish();
       case 'chat:title' when data is String:

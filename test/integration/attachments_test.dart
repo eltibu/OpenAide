@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
 import 'package:nexus_assistant/core/models/chat.dart';
+import 'package:nexus_assistant/features/chat/attachments.dart';
 
 // A 1x1 PNG.
 const _png =
@@ -95,4 +96,40 @@ void main() {
     skip: skip,
     timeout: const Timeout(Duration(minutes: 2)),
   );
+
+  test('a video goes with a message and plays back from the server', () async {
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    // Not a real film: the server keeps videos as they are, so any bytes
+    // labelled as one take the same path.
+    final bytes = List<int>.generate(4096, (i) => i % 251);
+    final uploaded = await client.uploadFile(
+      bytes,
+      'clip.mp4',
+      contentType: 'video/mp4',
+    );
+    final problem = await client.waitForFile('${uploaded['id']}');
+    expect(problem, isNull);
+    final video = Attachment.uploaded(uploaded, size: bytes.length);
+    expect(video.isVideo, isTrue);
+    expect(video.isImage, isFalse);
+
+    final res = await http.get(
+      attachmentUri(video, client)!,
+      headers: client.authHeaders,
+    );
+    expect(res.statusCode, 200);
+    expect(res.bodyBytes, bytes);
+
+    // A generated picture's entry (only its content path) loads too.
+    final generated = Attachment.fromJson({
+      'type': 'image',
+      'url': '/api/v1/files/${uploaded['id']}/content',
+    });
+    final again = await http.get(
+      attachmentUri(generated, client)!,
+      headers: client.authHeaders,
+    );
+    expect(again.bodyBytes, bytes);
+  }, skip: skip);
 }

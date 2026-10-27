@@ -383,14 +383,35 @@ class Attachment {
     return base.startsWith('image/') && base != 'image/svg+xml';
   }
 
+  /// Videos, played in the app.
+  bool get isVideo {
+    final base = (contentType ?? '').split(';').first.trim().toLowerCase();
+    if (base.startsWith('video/')) return true;
+    return RegExp(
+      r'\.(mp4|m4v|mov|webm|mkv|3gp)$',
+      caseSensitive: false,
+    ).hasMatch(name);
+  }
+
   /// A data: URL to show directly, when the image is inline.
   String? get dataUrl => url != null && url!.startsWith('data:') ? url : null;
 
   /// The server file id to fetch the bytes from, if it lives on the server.
+  /// Generated images carry only their content path
+  /// (`/api/v1/files/<id>/content`), so the id is read from that.
   String? get fileId {
     if (id != null) return id;
     final u = url;
     if (u == null || u.startsWith('data:') || u.startsWith('http')) {
+      return null;
+    }
+    return fileIdFromPath(u) ?? (u.startsWith('/') ? null : u);
+  }
+
+  /// A server path (starting with `/`) that isn't a file's content.
+  String? get serverPath {
+    final u = url;
+    if (u == null || !u.startsWith('/') || fileIdFromPath(u) != null) {
       return null;
     }
     return u;
@@ -398,3 +419,7 @@ class Attachment {
 
   Map<String, dynamic> toJson() => raw;
 }
+
+/// The file id in a server content path such as `/api/v1/files/<id>/content`.
+String? fileIdFromPath(String path) =>
+    RegExp(r'/api/v1/files/([^/?#]+)').firstMatch(path)?.group(1);

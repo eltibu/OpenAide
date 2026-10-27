@@ -12,6 +12,8 @@ import '../../core/theme.dart';
 import '../update/update_screen.dart';
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'artifacts_view.dart';
+import '../workspace/prompts_api.dart' show Prompt;
+import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
 import 'chat_controller.dart';
@@ -159,9 +161,15 @@ class _MessageList extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final mdConfig = dark
-        ? MarkdownConfig.darkConfig
-        : MarkdownConfig.defaultConfig;
+    // Pictures in replies load from the server signed in, like the web.
+    final images = ImgConfig(
+      builder: (url, attributes) =>
+          MarkdownImage(url: url, alt: attributes['alt'] ?? ''),
+    );
+    final mdConfig =
+        (dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig).copy(
+          configs: [images],
+        );
     final body = Theme.of(context).textTheme.bodyLarge;
     final artifacts = artifactsOfChat(messages);
     return ListView.builder(
@@ -211,6 +219,8 @@ class _MessageList extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (m.toolCalls.isNotEmpty) _ToolCalls(calls: m.toolCalls),
+              if (m.attachments.isNotEmpty)
+                MessageAttachments(attachments: m.attachments, alignEnd: false),
               if (m.content.isNotEmpty)
                 MarkdownBlock(data: m.content, config: mdConfig)
               else if (live)
@@ -476,10 +486,24 @@ class _ComposerState extends ConsumerState<_Composer> {
     _text.addListener(() {
       final has = _text.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
+      // "/" at the start offers the person's saved prompts, as on the web.
+      final slash = RegExp(r'^/(\S*)$').firstMatch(_text.text)?.group(1);
+      if (slash != _slash) setState(() => _slash = slash);
     });
   }
 
   bool _hasText = false;
+  String? _slash;
+
+  Future<void> _usePrompt(Prompt p) async {
+    setState(() => _slash = null);
+    final text = await resolvePrompt(context, ref, p);
+    if (text == null) return;
+    _text.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -551,6 +575,8 @@ class _ComposerState extends ConsumerState<_Composer> {
           mainAxisSize: MainAxisSize.min,
           children: [
             const PendingAttachments(),
+            if (_slash != null)
+              PromptSuggestions(query: _slash!, onPick: _usePrompt),
             TextField(
               controller: _text,
               minLines: 1,
