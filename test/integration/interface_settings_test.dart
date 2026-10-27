@@ -60,4 +60,53 @@ void main() {
     controller.newChat();
     expect(container.read(chatControllerProvider).temporary, true);
   }, skip: skip);
+
+  test('Settings > Interface: a finished reply is copied when asked', () async {
+    HttpOverrides.global = null;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(
+      const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+      (_) async => null,
+    );
+    String? copied;
+    var taps = 0;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') {
+        copied = (call.arguments as Map)['text'] as String?;
+      }
+      if (call.method == 'HapticFeedback.vibrate') taps++;
+      return null;
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+    );
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    final container = ProviderContainer(
+      overrides: [
+        sessionProvider.overrideWith(
+          () => _Session(Session(serverUrl: url, token: client.token!)),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(sessionProvider.future);
+    final api = container.read(settingsApiProvider);
+    await api.patchUi({'responseAutoCopy': true, 'hapticFeedback': true});
+    addTearDown(
+      () => api.patchUi({'responseAutoCopy': null, 'hapticFeedback': null}),
+    );
+    final models = await container.read(modelsProvider.future);
+    final controller = container.read(chatControllerProvider.notifier)
+      ..selectModel(models.first.id)
+      ..newChat(temporary: true);
+    await controller.send('Copy me please');
+    for (var i = 0; i < 200 && copied == null; i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(copied, isNotNull);
+    expect(copied, isNotEmpty);
+    expect(taps, greaterThan(0));
+  }, skip: skip);
 }

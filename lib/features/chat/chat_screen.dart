@@ -28,6 +28,7 @@ import 'reply_parts.dart';
 import 'reply_steps.dart';
 import 'side_panel.dart';
 import 'chat_controller.dart';
+import 'reply_notify.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
 import 'tool_approval.dart';
@@ -49,6 +50,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Keeps the conversation (and where it is scrolled to) when the panels
   /// around it change or the phone folds.
   final _chatKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    // A tapped reply notification opens its chat.
+    listenForReplyTaps((id) {
+      if (!mounted) return;
+      Navigator.of(context).popUntil((r) => r.isFirst);
+      ref.read(chatControllerProvider.notifier).open(id);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

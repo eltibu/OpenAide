@@ -17,6 +17,7 @@ import java.io.File
 
 class MainActivity : FlutterActivity() {
     private var voice: VoiceAudio? = null
+    private var notifier: ReplyNotifier? = null
     private var speech: MediaPlayer? = null
     private var speechDone: MethodChannel.Result? = null
 
@@ -70,6 +71,12 @@ class MainActivity : FlutterActivity() {
                 }
             }
 
+        // Reply notifications, see ReplyNotifier.
+        val replies = notifier ?: ReplyNotifier(this).also { notifier = it }
+        replies.channel = MethodChannel(messenger, "nexus/notify").also {
+            it.setMethodCallHandler(replies)
+        }
+
         // In-app updates: Dart downloads the APK to [apkPath], then [install]
         // hands it to Android's installer.
         MethodChannel(messenger, "nexus/updates")
@@ -89,12 +96,29 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+        super.onCreate(savedInstanceState)
+        // A cold start from a reply notification: Dart asks for the chat.
+        notifier?.rememberInitial(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        notifier?.handleIntent(intent)
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
         grantResults: IntArray,
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == ReplyNotifier.PERMISSION_REQUEST) {
+            notifier?.onPermission(
+                grantResults.isNotEmpty() &&
+                    grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED,
+            )
+        }
         if (requestCode == VoiceAudio.PERMISSION_REQUEST) {
             voice?.onPermission(
                 grantResults.isNotEmpty() &&

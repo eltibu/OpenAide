@@ -10,6 +10,7 @@ import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
 import 'data_controls.dart';
+import 'notification_settings.dart';
 import 'settings_api.dart';
 import 'usage_screen.dart';
 
@@ -145,6 +146,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Audio'),
             subtitle: const Text('Voice, speed, dictation and read aloud'),
             onTap: () => open(const AudioSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: const Text('Notifications'),
+            subtitle: const Text('When a reply is ready, and webhooks'),
+            onTap: () => open(const NotificationSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.storage_outlined),
