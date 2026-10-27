@@ -11,6 +11,8 @@ import '../../core/models/chat.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/nexus_logo.dart';
 import '../update/update_screen.dart';
+import '../terminal/file_links.dart' show FileRef;
+import '../terminal/file_open.dart';
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'artifacts_view.dart';
 import '../workspace/prompts_api.dart' show Prompt;
@@ -435,13 +437,32 @@ class _MessageList extends ConsumerWidget {
       builder: (url, attributes) =>
           MarkdownImage(url: url, alt: attributes['alt'] ?? ''),
     );
-    final mdConfig = withReplyCode(
-      (dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig).copy(
-        configs: [images],
+    // A file a reply names opens in Files, on the chat's terminal.
+    void openFile(FileRef file) {
+      final chat = ref.read(chatControllerProvider);
+      final model = ref
+          .read(modelsProvider)
+          .value
+          ?.where((m) => m.id == chat.modelId)
+          .firstOrNull;
+      openFileRef(
+        context,
+        ref,
+        file,
+        terminalId: chat.terminalId ?? model?.terminalId,
+      );
+    }
+
+    final mdConfig = withFileLinks(
+      withReplyCode(
+        (dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig).copy(
+          configs: [images],
+        ),
+        dark,
       ),
-      dark,
+      openFile,
     );
-    final generator = replyMarkdownGenerator();
+    final generator = withFileTaps(replyMarkdownGenerator(), openFile);
     final body = Theme.of(context).textTheme.bodyLarge;
     final artifacts = artifactsOfChat(messages);
     return ListView.builder(

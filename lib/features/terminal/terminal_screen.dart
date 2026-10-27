@@ -26,9 +26,19 @@ final terminalServersProvider = FutureProvider<List<TerminalServer>>((
 /// A terminal server's shell and files, like the web UI's terminal panel:
 /// a real shell on one tab, a file browser on the other.
 class TerminalScreen extends ConsumerStatefulWidget {
-  const TerminalScreen({super.key, required this.server, this.startInFiles});
+  const TerminalScreen({
+    super.key,
+    required this.server,
+    this.startInFiles,
+    this.openPath,
+    this.openIsDir = false,
+  });
   final TerminalServer server;
   final bool? startInFiles;
+
+  /// A file (opened, in its folder) or folder to show in Files at once.
+  final String? openPath;
+  final bool openIsDir;
 
   @override
   ConsumerState<TerminalScreen> createState() => _TerminalScreenState();
@@ -43,7 +53,9 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
   late final TabController _tabs = TabController(
     length: 2,
     vsync: this,
-    initialIndex: widget.startInFiles == true ? 1 : 0,
+    initialIndex: widget.startInFiles == true || widget.openPath != null
+        ? 1
+        : 0,
   );
   final _shell = GlobalKey<_ShellViewState>();
 
@@ -76,7 +88,12 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
         physics: const NeverScrollableScrollPhysics(),
         children: [
           _ShellView(key: _shell, api: _api),
-          FileBrowser(api: _api, onOpenInTerminal: _cdInShell),
+          FileBrowser(
+            api: _api,
+            onOpenInTerminal: _cdInShell,
+            openPath: widget.openPath,
+            openIsDir: widget.openIsDir,
+          ),
         ],
       ),
     );
@@ -330,9 +347,20 @@ class _TerminalSink implements Sink<String> {
 
 /// Browses, opens, edits, uploads and organizes the terminal server's files.
 class FileBrowser extends StatefulWidget {
-  const FileBrowser({super.key, required this.api, this.onOpenInTerminal});
+  const FileBrowser({
+    super.key,
+    required this.api,
+    this.onOpenInTerminal,
+    this.openPath,
+    this.openIsDir = false,
+  });
   final TerminalApi api;
   final void Function(String dir)? onOpenInTerminal;
+
+  /// Where to start instead of the server's own folder: a folder, or a file
+  /// that opens on top of its folder (with its row marked).
+  final String? openPath;
+  final bool openIsDir;
 
   @override
   State<FileBrowser> createState() => _FileBrowserState();
@@ -345,6 +373,9 @@ class _FileBrowserState extends State<FileBrowser>
   TerminalListing? _listing;
   Object? _error;
   bool _busy = true;
+
+  /// The file a reply pointed at, marked in its folder.
+  String? _marked;
 
   @override
   bool get wantKeepAlive => true;
@@ -359,7 +390,18 @@ class _FileBrowserState extends State<FileBrowser>
     try {
       final at = await widget.api.cwd();
       _home = at.home;
-      await _open(at.cwd);
+      final target = widget.openPath;
+      if (target == null) {
+        await _open(at.cwd);
+      } else if (widget.openIsDir) {
+        await _open(target);
+      } else {
+        _marked = target;
+        await _open(parentPath(target));
+        if (mounted && _dir != null) {
+          await _openFile(target, target.split('/').last);
+        }
+      }
     } catch (e) {
       if (mounted) {
         setState(() {
@@ -686,6 +728,7 @@ class _FileBrowserState extends State<FileBrowser>
                           ),
                         for (final e in listing.entries)
                           ListTile(
+                            selected: e.path == _marked,
                             leading: Icon(
                               e.isDir ? Icons.folder : _iconFor(e.name),
                               color: e.isDir ? NexusColors.accent : muted,
@@ -868,6 +911,16 @@ class _FileViewerState extends State<FileViewer> {
         appBar: AppBar(
           title: Text(widget.name),
           actions: [
+            IconButton(
+              tooltip: 'Copy path',
+              icon: const Icon(Icons.link),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: widget.path));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Copied ${widget.path}')),
+                );
+              },
+            ),
             if (_text != null)
               IconButton(
                 tooltip: 'Copy all',
