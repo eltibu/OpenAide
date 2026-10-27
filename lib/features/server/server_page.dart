@@ -99,6 +99,13 @@ class _ServerPageState extends ConsumerState<ServerPage> {
         ),
       );
     }
+    // Pages the server serves itself (a terminal's port preview) sign in
+    // with the token cookie, as the web's own sign-in sets it.
+    if (token != null && token.isNotEmpty) {
+      await jar.setCookie(
+        WebViewCookie(name: 'token', value: token, domain: base.host),
+      );
+    }
     // Open WebUI's web app keeps its sign-in in localStorage: put the app's
     // token there from a page on the same origin, then go to the section.
     final target = '$baseUrl${widget.path}';

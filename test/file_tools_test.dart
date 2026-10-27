@@ -50,6 +50,30 @@ class _FakeApi extends TerminalApi {
 
   @override
   Future<void> delete(String path) async => deleted.add(path);
+
+  final ran = <int>[];
+
+  @override
+  Future<String> startNotebook(String path) async => 'k1';
+
+  @override
+  Future<Map<String, dynamic>> runCell(
+    String session,
+    int index,
+    String source,
+  ) async {
+    ran.add(index);
+    return {
+      'status': 'ok',
+      'execution_count': 7,
+      'outputs': [
+        {'output_type': 'stream', 'text': 'ran $source'},
+      ],
+    };
+  }
+
+  @override
+  Future<void> stopNotebook(String session) async {}
 }
 
 void main() {
@@ -156,5 +180,28 @@ void main() {
     expect(find.text('In [1]'), findsOneWidget);
     expect(find.text('print(1)'), findsOneWidget);
     expect(find.text('1\n'), findsOneWidget);
+  });
+
+  testWidgets('notebook cells run on the server', (tester) async {
+    final api = _FakeApi();
+    final nb = jsonEncode({
+      'cells': [
+        {'cell_type': 'markdown', 'source': 'Hi'},
+        {'cell_type': 'code', 'source': 'x = 1', 'outputs': []},
+        {'cell_type': 'code', 'source': 'print(x)', 'outputs': []},
+      ],
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: NotebookView(source: nb, api: api, path: '/h/n.ipynb'),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Run all'));
+    await tester.pumpAndSettle();
+    expect(api.ran, [1, 2]);
+    expect(find.text('ran print(x)'), findsOneWidget);
+    expect(find.text('In [7]'), findsNWidgets(2));
   });
 }

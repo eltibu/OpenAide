@@ -238,76 +238,210 @@ class _CompareScreenState extends State<CompareScreen> {
 }
 
 /// A Jupyter notebook's cells: Markdown, code and what the code printed
-/// (text and pictures), read only.
-class NotebookView extends StatelessWidget {
-  const NotebookView({super.key, required this.source});
+/// (text and pictures). With [api] and [path], code cells can be run on the
+/// terminal server's kernel, one at a time or all, as on the web.
+class NotebookView extends StatefulWidget {
+  const NotebookView({super.key, required this.source, this.api, this.path});
   final String source;
+  final TerminalApi? api;
+  final String? path;
+
+  @override
+  State<NotebookView> createState() => _NotebookViewState();
+}
+
+class _NotebookViewState extends State<NotebookView> {
+  List<Map>? _cells;
+  String? _session;
+  final _running = <int>{};
+  bool _stopAll = false;
+  String? _problem;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      final nb = jsonDecode(widget.source) as Map;
+      _cells = [
+        for (final c in (nb['cells'] as List? ?? const []).whereType<Map>())
+          {...c},
+      ];
+    } catch (_) {
+      _cells = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    final s = _session;
+    if (s != null) widget.api?.stopNotebook(s);
+    super.dispose();
+  }
+
+  static String _text(Object? v) => v is List ? v.join() : '${v ?? ''}';
+
+  Future<void> _run(int i) async {
+    final api = widget.api;
+    final cells = _cells;
+    if (api == null || cells == null || widget.path == null) return;
+    setState(() {
+      _running.add(i);
+      _problem = null;
+    });
+    try {
+      _session ??= await api.startNotebook(widget.path!);
+      final r = await api.runCell(_session!, i, _text(cells[i]['source']));
+      if (!mounted) return;
+      setState(() {
+        cells[i]['outputs'] = r['outputs'] ?? const [];
+        if (r['execution_count'] != null) {
+          cells[i]['execution_count'] = r['execution_count'];
+        }
+      });
+    } catch (e) {
+      if (mounted) setState(() => _problem = '$e');
+    } finally {
+      if (mounted) setState(() => _running.remove(i));
+    }
+  }
+
+  Future<void> _runAll() async {
+    _stopAll = false;
+    final cells = _cells ?? const [];
+    for (var i = 0; i < cells.length && !_stopAll && mounted; i++) {
+      if (cells[i]['cell_type'] == 'code') await _run(i);
+      if (_problem != null) break;
+    }
+  }
+
+  Future<void> _restart() async {
+    _stopAll = true;
+    final s = _session;
+    _session = null;
+    if (s != null) await widget.api?.stopNotebook(s);
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
-    final Map<String, dynamic> nb;
-    try {
-      nb = (jsonDecode(source) as Map).cast<String, dynamic>();
-    } catch (_) {
+    final cells = _cells;
+    if (cells == null) {
       return const Center(child: Text("This notebook can't be read."));
     }
-    final cells = (nb['cells'] as List? ?? const []).whereType<Map>().toList();
     final scheme = Theme.of(context).colorScheme;
     final dark = Theme.of(context).brightness == Brightness.dark;
-    String text(Object? v) => v is List ? v.join() : '${v ?? ''}';
-    return ListView.builder(
-      padding: const EdgeInsets.all(12),
-      itemCount: cells.length,
-      itemBuilder: (context, i) {
-        final c = cells[i];
-        final src = text(c['source']);
-        if (c['cell_type'] == 'markdown') {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: MarkdownBlock(
-              data: src,
-              config: dark
-                  ? MarkdownConfig.darkConfig
-                  : MarkdownConfig.defaultConfig,
-            ),
-          );
-        }
-        final outputs = (c['outputs'] as List? ?? const [])
-            .whereType<Map>()
-            .toList();
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (c['execution_count'] != null)
-                Text(
-                  'In [${c['execution_count']}]',
-                  style: TextStyle(color: scheme.primary, fontSize: 11),
+    final canRun = widget.api != null && widget.path != null;
+    return Column(
+      children: [
+        if (canRun)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Run all'),
+                  onPressed: _running.isEmpty ? _runAll : null,
                 ),
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: SelectableText(
-                  src,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12.5,
+                if (_running.isNotEmpty)
+                  TextButton.icon(
+                    icon: const Icon(Icons.stop),
+                    label: const Text('Stop'),
+                    onPressed: () => setState(() => _stopAll = true),
                   ),
+                TextButton.icon(
+                  icon: const Icon(Icons.restart_alt),
+                  label: const Text('Restart'),
+                  onPressed: _session == null ? null : _restart,
                 ),
-              ),
-              for (final o in outputs) _output(o, scheme, text),
-            ],
+              ],
+            ),
           ),
-        );
-      },
+        if (_problem != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text(_problem!, style: TextStyle(color: scheme.error)),
+          ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(12),
+            itemCount: cells.length,
+            itemBuilder: (context, i) {
+              final c = cells[i];
+              final src = _text(c['source']);
+              if (c['cell_type'] == 'markdown') {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: MarkdownBlock(
+                    data: src,
+                    config: dark
+                        ? MarkdownConfig.darkConfig
+                        : MarkdownConfig.defaultConfig,
+                  ),
+                );
+              }
+              final outputs = (c['outputs'] as List? ?? const [])
+                  .whereType<Map>()
+                  .toList();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          c['execution_count'] != null
+                              ? 'In [${c['execution_count']}]'
+                              : 'In [ ]',
+                          style: TextStyle(color: scheme.primary, fontSize: 11),
+                        ),
+                        const Spacer(),
+                        if (canRun)
+                          _running.contains(i)
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: SizedBox.square(
+                                    dimension: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                )
+                              : IconButton(
+                                  tooltip: 'Run cell',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(Icons.play_arrow, size: 18),
+                                  onPressed: () => _run(i),
+                                ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHigh,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: SelectableText(
+                        src,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12.5,
+                        ),
+                      ),
+                    ),
+                    for (final o in outputs) _output(o, scheme),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _output(Map o, ColorScheme scheme, String Function(Object?) text) {
+  Widget _output(Map o, ColorScheme scheme) {
     final data = o['data'] is Map ? o['data'] as Map : const {};
     final png = data['image/png'];
     if (png != null) {
@@ -315,7 +449,7 @@ class NotebookView extends StatelessWidget {
         return Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Image.memory(
-            base64Decode(text(png).replaceAll('\n', '')),
+            base64Decode(_text(png).replaceAll('\n', '')),
             fit: BoxFit.contain,
           ),
         );
@@ -324,7 +458,7 @@ class NotebookView extends StatelessWidget {
     final error = o['output_type'] == 'error';
     final body = error
         ? '${o['ename']}: ${o['evalue']}'
-        : text(o['text'] ?? data['text/plain']);
+        : _text(o['text'] ?? data['text/plain']);
     if (body.trim().isEmpty) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 4, left: 4),

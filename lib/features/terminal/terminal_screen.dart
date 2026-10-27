@@ -10,6 +10,7 @@ import 'package:xterm/xterm.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../server/server_page.dart';
 import 'file_tools.dart';
 import 'terminal_api.dart';
 
@@ -749,6 +750,78 @@ class _FileBrowserState extends State<FileBrowser>
     );
   }
 
+  /// What's serving on the server's ports, each openable in the app
+  /// through Open WebUI (the web's port preview).
+  Future<void> _ports() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: FutureBuilder(
+          future: widget.api.ports(),
+          builder: (context, snap) {
+            if (snap.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('${snap.error}'),
+              );
+            }
+            final list = snap.data;
+            if (list == null) {
+              return const Padding(
+                padding: EdgeInsets.all(32),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (list.isEmpty) {
+              return const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text(
+                  'Nothing is listening on a port. Start a server in the '
+                  'terminal (for example python -m http.server 8000).',
+                ),
+              );
+            }
+            return ListView(
+              shrinkWrap: true,
+              children: [
+                for (final p in list)
+                  ListTile(
+                    leading: const Icon(Icons.public),
+                    title: Text('Port ${p.port}'),
+                    subtitle: p.process.isEmpty ? null : Text(p.process),
+                    trailing: IconButton(
+                      tooltip: 'Copy address',
+                      icon: const Icon(Icons.link),
+                      onPressed: () => Clipboard.setData(
+                        ClipboardData(
+                          text: widget.api.client
+                              .uri(widget.api.proxyPath(p.port))
+                              .toString(),
+                        ),
+                      ),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        this.context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => ServerPage(
+                            title: 'Port ${p.port}',
+                            path: widget.api.proxyPath(p.port),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
   Widget _viewMenu() => PopupMenuButton<String>(
     tooltip: 'Sort and show',
     icon: const Icon(Icons.sort),
@@ -761,6 +834,8 @@ class _FileBrowserState extends State<FileBrowser>
         case 'select':
           final first = _shown.firstOrNull;
           if (first != null) _picked.add(first.path);
+        case 'ports':
+          _ports();
         default:
           _sortBy = FileSort.values.byName(v);
       }
@@ -788,6 +863,7 @@ class _FileBrowserState extends State<FileBrowser>
         child: const Text('Show hidden files'),
       ),
       const PopupMenuItem(value: 'select', child: Text('Select…')),
+      const PopupMenuItem(value: 'ports', child: Text('Running web pages')),
     ],
   );
 
@@ -1250,7 +1326,11 @@ class _FileViewerState extends State<FileViewer> {
                 ),
               )
             : _notebook && !_raw
-            ? NotebookView(source: _edit.text)
+            ? NotebookView(
+                source: _edit.text,
+                api: widget.api,
+                path: widget.path,
+              )
             : TextField(
                 controller: _edit,
                 maxLines: null,

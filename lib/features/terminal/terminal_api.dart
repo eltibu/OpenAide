@@ -190,6 +190,53 @@ class TerminalApi {
     body: {'source': from, 'destination': to},
   );
 
+  /// Programs listening on the server's ports (port, pid, process).
+  Future<List<({int port, String process})>> ports() async {
+    final j = await client.send('GET', '$_base/ports');
+    final list = (j is Map ? j['ports'] : j) as List? ?? const [];
+    return [
+      for (final p in list.whereType<Map>())
+        if (p['port'] is num)
+          (port: (p['port'] as num).toInt(), process: '${p['process'] ?? ''}'),
+    ];
+  }
+
+  /// Where a port's web page is reached through Open WebUI, signed in.
+  String proxyPath(int port) => '$_base/proxy/$port/';
+
+  /// Starts a kernel for the notebook at [path]; returns its session id.
+  Future<String> startNotebook(String path) async {
+    final j = await client.send(
+      'POST',
+      '$_base/notebooks',
+      body: {'path': path},
+    );
+    return '${(j as Map)['id']}';
+  }
+
+  /// Runs one cell ([source] as it is now) and returns its result:
+  /// status, execution_count and outputs.
+  Future<Map<String, dynamic>> runCell(
+    String session,
+    int index,
+    String source,
+  ) async {
+    final j = await client.send(
+      'POST',
+      '$_base/notebooks/$session/execute',
+      body: {'cell_index': index, 'source': source},
+    );
+    return (j as Map).cast<String, dynamic>();
+  }
+
+  Future<void> stopNotebook(String session) async {
+    try {
+      await client.send('DELETE', '$_base/notebooks/$session');
+    } catch (_) {
+      // Already stopped.
+    }
+  }
+
   /// Starts a shell and returns its id.
   Future<String> openShell() async {
     final j = await client.send('POST', '$_base/api/terminals') as Map;
