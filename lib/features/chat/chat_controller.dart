@@ -1682,7 +1682,7 @@ class ChatController extends Notifier<ChatState> {
 
   /// Hands read aloud what is newly ready to say, when it is on.
   void _speak(_Run run, String text, {bool done = false}) {
-    if (voiceCall || !ref.read(readAloudOnProvider)) return;
+    if (!classicCall && (voiceCall || !ref.read(readAloudOnProvider))) return;
     // Comparing: only the chosen model's reply is read aloud.
     if ((run.reply.extra['modelIdx'] ?? 0) != 0) return;
     if (run.spoken > text.length) run.spoken = text.length;
@@ -1701,6 +1701,9 @@ class ChatController extends Notifier<ChatState> {
   /// True during a voice call: replies are asked for in a spoken style
   /// (the web UI's `voice` feature).
   bool voiceCall = false;
+
+  /// True during a classic voice call: every reply is read aloud.
+  bool classicCall = false;
 
   Map<String, dynamic> _withVoice(Map<String, dynamic> options) {
     if (!voiceCall) return options;

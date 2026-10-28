@@ -8,6 +8,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../chat/chat_controller.dart';
 import 'call_audio.dart';
+import 'classic_call_view.dart';
 import 'realtime_call.dart';
 
 /// The chat as the call sees it, and the chat actions it takes.
@@ -117,6 +118,7 @@ class CallScreen extends ConsumerStatefulWidget {
 class _CallScreenState extends ConsumerState<CallScreen> {
   RealtimeCall? _call;
   String? _notice;
+  bool _classic = false;
   late final ChatController _controller;
 
   bool get _realtimeOn {
@@ -137,13 +139,9 @@ class _CallScreenState extends ConsumerState<CallScreen> {
       await ref.read(serverConfigProvider.future);
     } catch (_) {}
     if (!mounted) return;
+    // No Realtime calls on this server: the classic call, as on the web.
     if (!_realtimeOn) {
-      setState(
-        () => _notice =
-            'Voice calls use Open WebUI\'s Realtime calls, and they are off '
-            'on this server. An admin can switch them on in Admin '
-            'Settings > Audio.',
-      );
+      setState(() => _classic = true);
       return;
     }
     final client = ref.read(clientProvider);
@@ -171,6 +169,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_classic) return const ClassicCallView();
     // Every change in the chat may be the chat model's answer.
     ref.listen(chatControllerProvider, (_, _) => _call?.update());
     final model = ref
