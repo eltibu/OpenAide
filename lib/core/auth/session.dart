@@ -222,6 +222,8 @@ class SessionNotifier extends AsyncNotifier<Session?> {
     await clearBrowserCookies();
     await _storage.delete(key: _kToken);
     await _storage.delete(key: _kCookie);
+    // Your saved copies go with you.
+    await OpenWebUiClient.offline?.clear();
     state = const AsyncData(null);
   }
 }

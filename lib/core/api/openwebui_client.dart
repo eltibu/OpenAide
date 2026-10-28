@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../models/chat.dart';
+import '../offline/offline_cache.dart';
 import '../models/model_info.dart';
 import 'sse.dart';
 
@@ -63,7 +65,37 @@ class OpenWebUiClient {
   Uri _uri(String path, [Map<String, String>? query]) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: query);
 
+  /// Saved copies of reads, for when the server can't be reached; set
+  /// once at start (null keeps nothing).
+  static OfflineStore? offline;
+
   Future<dynamic> _send(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) async {
+    final store = offline;
+    if (method != 'GET' || store == null || !offlineCacheable(path)) {
+      return _sendLive(method, path, body: body, query: query);
+    }
+    final key = '$baseUrl ${offlineKey(path, query)}';
+    try {
+      final res = await _sendLive(method, path, query: query);
+      offlineNotice.value = false;
+      unawaited(store.put(key, jsonEncode(res)));
+      return res;
+    } on ApiException catch (e) {
+      // Only when the server can't be reached at all.
+      if (e.statusCode != 0) rethrow;
+      final saved = await store.get(key);
+      if (saved == null) rethrow;
+      offlineNotice.value = true;
+      return jsonDecode(saved);
+    }
+  }
+
+  Future<dynamic> _sendLive(
     String method,
     String path, {
     Object? body,

@@ -1,4 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'core/api/openwebui_client.dart';
+import 'core/offline/offline_cache.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/session.dart';
@@ -11,7 +18,17 @@ import 'features/chat/chat_screen.dart';
 import 'features/chat/in_app_toasts.dart';
 import 'features/phone/app_lock.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Saved copies of your chats, for opening them with no connection.
+  try {
+    final support = await getApplicationSupportDirectory();
+    OpenWebUiClient.offline = FileOfflineStore(
+      Directory('${support.path}/offline'),
+    );
+  } catch (_) {
+    // No saved copies; everything still loads from the server.
+  }
   runApp(const ProviderScope(child: NexusApp()));
 }
 
@@ -25,7 +42,8 @@ class NexusApp extends ConsumerWidget {
       title: 'Nexus Assistant',
       debugShowCheckedModeBanner: false,
       // Settings > Phone and assistant > App lock.
-      builder: (context, child) => AppLockGate(child: child!),
+      builder: (context, child) =>
+          AppLockGate(child: OfflineStrip(child: child!)),
       theme: nexusTheme(Brightness.light),
       darkTheme: nexusTheme(Brightness.dark),
       // Settings > Theme, kept on the server with the rest.
