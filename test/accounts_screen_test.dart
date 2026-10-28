@@ -32,6 +32,7 @@ void main() {
     expect(find.text('joel@gmail.com'), findsOneWidget);
     expect(find.text('Gmail · shown in Email'), findsOneWidget);
     expect(find.text('Add an email account'), findsOneWidget);
+    expect(find.text('AI providers'), findsOneWidget);
   });
 
   testWidgets('a Gmail address shows how to make an app password', (

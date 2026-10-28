@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/theme.dart';
 import '../email/direct_mail.dart' show DirectMailStore;
+import '../providers/ai_providers_screen.dart';
 import 'mail_accounts.dart';
 
 void _say(BuildContext context, String text) =>
@@ -95,6 +96,13 @@ class AccountsScreen extends ConsumerWidget {
             title: const Text('Add an email account'),
             subtitle: const Text('Gmail, iCloud, Yahoo, Fastmail or any IMAP'),
             onTap: () => open(const AddMailAccount()),
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.hub_outlined),
+            title: const Text('AI providers'),
+            subtitle: const Text('OpenRouter, Claude and OpenAI'),
+            onTap: () => open(const AiProvidersScreen()),
           ),
         ],
       ),
