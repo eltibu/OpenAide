@@ -140,6 +140,14 @@ class LocalModels extends AsyncNotifier<List<LocalModel>> {
     list.removeWhere((x) => x.repo == m.repo && x.name == m.name);
     final file = _fileName(m, list);
     final id = await startDownload(m, file);
+    // The list now, not the one from before the waits: a model may have
+    // been added or removed meanwhile.
+    list
+      ..clear()
+      ..addAll([
+        for (final x in [...?state.value])
+          if (!(x.repo == m.repo && x.name == m.name)) x,
+      ]);
     list.add(
       LocalModel(
         file: file,
@@ -159,7 +167,20 @@ class LocalModels extends AsyncNotifier<List<LocalModel>> {
     _poll ??= Timer.periodic(const Duration(seconds: 1), (_) => _check());
   }
 
+  bool _checking = false;
+
   Future<void> _check() async {
+    // A slow check must not overlap the next tick.
+    if (_checking) return;
+    _checking = true;
+    try {
+      await _checkOnce();
+    } finally {
+      _checking = false;
+    }
+  }
+
+  Future<void> _checkOnce() async {
     final list = [...?state.value];
     final running = [
       for (final m in list)
@@ -204,10 +225,13 @@ class LocalModels extends AsyncNotifier<List<LocalModel>> {
           finished = true;
       }
     }
+    // The models changed above are the same objects as in the list now;
+    // keep models added or removed during the waits.
+    final now = [...?state.value];
     if (finished) {
-      _set(list);
+      _set(now);
     } else {
-      state = AsyncData(list);
+      state = AsyncData(now);
     }
   }
 

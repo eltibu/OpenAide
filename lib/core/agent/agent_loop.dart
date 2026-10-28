@@ -100,7 +100,9 @@ Stream<AgentEvent> runAgent({
   List<AgentTool> tools = const [],
   bool nativeTools = true,
   int maxSteps = 12,
-  Duration toolTimeout = const Duration(seconds: 90),
+  // Longer than an MCP call's own 120 seconds, so the server's answer
+  // (or its error) arrives first.
+  Duration toolTimeout = const Duration(seconds: 130),
 }) async* {
   final byName = {for (final t in tools) t.name: t};
   final turns = <AiToolTurn>[];
@@ -169,7 +171,11 @@ Stream<AgentEvent> runAgent({
               .run(toolArguments(c.arguments))
               .timeout(toolTimeout);
         } on TimeoutException {
-          output = '${c.name} took too long and was stopped.';
+          // The call may still finish (an email sent, a file written), so
+          // the model must not try it again on its own.
+          output =
+              "${c.name} didn't answer in time. It may still finish, so "
+              "don't run it again unless the user asks.";
           failed = true;
         } catch (e) {
           output = 'Error: $e';
