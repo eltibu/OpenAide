@@ -11,6 +11,7 @@ import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/api/chat_socket.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/models/chat.dart';
 
@@ -326,7 +327,7 @@ class EmailAgentError implements Exception {
 const _rules =
     'You are helping the OpenAide app show my email. Use your Gmail access '
     '(the same tools you use when I ask you about email in chat). Answer '
-    'with the JSON asked for and nothing else: no words before or after it, '
+    'in the layout asked for and nothing else: no words before or after it, '
     'no code fence. If you can\'t reach Gmail, answer {"error": "what went '
     'wrong"}.';
 
@@ -345,15 +346,89 @@ String listRequest({
     'false, "note": one short sentence from you on what it is and whether '
     'I need to do anything}.';
 
+/// Asks for the thread as plain text, not JSON, so it can show while it
+/// is still being written: each message is a `=== From: ... | To: ... |
+/// Date: ...` line and its text, then `=== SUMMARY` and `=== REPLY`.
 String openRequest(Email e) =>
     'Open the email with Gmail message id ${e.id}'
     '${e.thread.isEmpty ? '' : ' (thread ${e.thread})'}, subject '
-    '"${e.subject}". Answer with a JSON object: {"messages": every message '
-    'of its thread, oldest first, each {"from", "to", "date": ISO 8601, '
-    '"body": the full text as plain text}, "summary": two or three '
-    'sentences on what it is about and what is asked of me, '
-    '"suggested_reply": the reply you would send for me, or "" if it needs '
-    'none}.';
+    '"${e.subject}". Answer in exactly this layout, with no JSON and no code '
+    'fence:\n'
+    '=== From: Name <address> | To: Name <address> | Date: ISO 8601 date '
+    'and time\n'
+    'the message as Markdown, keeping its paragraphs, headings, lists, bold '
+    'text and every link as [text](url); leave out tracking pixels, '
+    'layout-only text and text quoted from earlier messages\n'
+    '(one such block for every message of its thread, oldest first)\n'
+    '=== SUMMARY\n'
+    'two or three sentences on what it is about and what is asked of me\n'
+    '=== REPLY\n'
+    'the reply you would send for me, or nothing if it needs none';
+
+/// The thread in an answer to [openRequest], also while it is still being
+/// written; null when it has no message yet.
+OpenedEmail? openedFromText(String text, Email e) {
+  final messages = <EmailMessage>[];
+  var head = <String, String>{};
+  final body = StringBuffer();
+  var summary = StringBuffer();
+  var reply = StringBuffer();
+  var into = '';
+  void endMessage() {
+    if (into != 'message') return;
+    messages.add(
+      EmailMessage(
+        from: head['from'] ?? '',
+        to: head['to'] ?? '',
+        date: DateTime.tryParse(head['date'] ?? '')?.toLocal(),
+        body: body.toString().trim(),
+      ),
+    );
+    body.clear();
+  }
+
+  for (final line in text.replaceAll('\r\n', '\n').split('\n')) {
+    final m = RegExp(r'^\s*===\s*(.*)$').firstMatch(line);
+    if (m == null) {
+      if (line.trim().startsWith('```')) continue;
+      switch (into) {
+        case 'message':
+          body.writeln(line);
+        case 'summary':
+          summary.writeln(line);
+        case 'reply':
+          reply.writeln(line);
+      }
+      continue;
+    }
+    endMessage();
+    final what = m.group(1)!.trim();
+    if (what.toUpperCase().startsWith('SUMMARY')) {
+      into = 'summary';
+      summary = StringBuffer();
+    } else if (what.toUpperCase().startsWith('REPLY')) {
+      into = 'reply';
+      reply = StringBuffer();
+    } else {
+      into = 'message';
+      head = {
+        for (final part in what.split('|'))
+          if (part.contains(':'))
+            part.substring(0, part.indexOf(':')).trim().toLowerCase(): part
+                .substring(part.indexOf(':') + 1)
+                .trim(),
+      };
+    }
+  }
+  endMessage();
+  if (messages.isEmpty) return null;
+  return OpenedEmail(
+    email: e,
+    messages: messages,
+    summary: summary.toString().trim(),
+    suggestedReply: reply.toString().trim(),
+  );
+}
 
 String sendRequest(Email e, String text, {bool all = false}) =>
     'Send this reply now, as me, in the same thread as the email with Gmail '
@@ -389,7 +464,13 @@ abstract interface class MailSource {
   Future<OpenedEmail?> keptOpen(Email e);
   Future<void> setRead(Email e, {bool read = true});
   Future<List<Email>> check(String folder);
-  Future<OpenedEmail> openAndKeep(Email e);
+
+  /// Opens [e] and keeps it. [onProgress] gets the thread as far as it has
+  /// come while it is still being read, where the source can tell.
+  Future<OpenedEmail> openAndKeep(
+    Email e, {
+    void Function(OpenedEmail partial)? onProgress,
+  });
   Future<List<Email>> list({String folder = 'inbox', String query = ''});
   Future<void> reply(Email e, String text, {bool all = false});
   Future<void> compose({
@@ -460,9 +541,14 @@ class EmailAgent implements MailSource {
     required this.model,
     required this.options,
     this.cache = const EmailCache(),
+    this.socket,
   });
 
   final OpenWebUiClient client;
+
+  /// The live channel, so answers show as they are written and are known
+  /// to be done at once. Without it the chat is checked every 2 seconds.
+  final ChatSocket? socket;
   final String model;
 
   /// What a chat with [model] sends (its tools, features...), so Nexus
@@ -613,13 +699,64 @@ class EmailAgent implements MailSource {
         folder: DateTime.now().toUtc().toIso8601String(),
       };
     });
-    return keptIn(await _store(), folder);
+    final kept = keptIn(await _store(), folder);
+    if (folder == 'inbox') unawaited(_prefetch(kept));
+    return kept;
   }
 
-  /// Opens [e] with Nexus and keeps what it showed.
+  bool _prefetching = false;
+
+  /// Reads the newest few emails nobody opened yet ahead of time, one at a
+  /// time, so tapping them shows them at once.
+  Future<void> _prefetch(List<Email> emails, {int count = 3}) async {
+    if (_prefetching) return;
+    _prefetching = true;
+    try {
+      final opened = (await _store())['opened'] as Map? ?? const {};
+      for (final e
+          in emails.where((e) => !opened.containsKey(e.id)).take(count)) {
+        try {
+          await openAndKeep(e);
+        } catch (_) {
+          return; // Nexus can't now; the next check tries again.
+        }
+      }
+    } finally {
+      _prefetching = false;
+    }
+  }
+
+  final _opening = <String, Future<OpenedEmail>>{};
+  final _watching = <String, void Function(OpenedEmail)>{};
+  final _sofar = <String, OpenedEmail>{};
+
+  /// Opens [e] with Nexus and keeps what it showed. Opening one that is
+  /// already being read (ahead of time) waits for that instead.
   @override
-  Future<OpenedEmail> openAndKeep(Email e) async {
-    final opened = await open(e);
+  Future<OpenedEmail> openAndKeep(
+    Email e, {
+    void Function(OpenedEmail partial)? onProgress,
+  }) {
+    if (onProgress != null) {
+      _watching[e.id] = onProgress;
+      final sofar = _sofar[e.id];
+      if (sofar != null) onProgress(sofar);
+    }
+    return _opening[e.id] ??= _openAndKeep(e).whenComplete(() {
+      _opening.remove(e.id);
+      _watching.remove(e.id);
+      _sofar.remove(e.id);
+    });
+  }
+
+  Future<OpenedEmail> _openAndKeep(Email e) async {
+    final opened = await open(
+      e,
+      onProgress: (o) {
+        _sofar[e.id] = o;
+        _watching[e.id]?.call(o);
+      },
+    );
     await _save((s) {
       final all = Map<String, dynamic>.from(s['opened'] as Map? ?? const {});
       all.remove(e.id);
@@ -637,6 +774,7 @@ class EmailAgent implements MailSource {
   Future<String> ask(
     String request, {
     Duration timeout = const Duration(minutes: 4),
+    void Function(String sofar)? onText,
   }) async {
     _chatId ??= await _savedChatId();
     Chat? chat;
@@ -654,6 +792,63 @@ class EmailAgent implements MailSource {
       parentId: chat?.currentId,
     );
     final replyId = _uuid.v4();
+    // The answer as it is written, and the moment it is done, over the
+    // live channel.
+    final sessionId = await socket?.ready();
+    final finished = Completer<void>();
+    var live = '';
+    final sub = sessionId == null
+        ? null
+        : socket!.events.where((ev) => ev['message_id'] == replyId).listen((
+            ev,
+          ) {
+            final outer = ev['data'];
+            if (outer is! Map) return;
+            final data = outer['data'];
+            if (data is! Map) return;
+            if (outer['type'] == 'response:completion' &&
+                data['type'] == 'response.output_text.delta' &&
+                data['delta'] is String) {
+              live += data['delta'] as String;
+              onText?.call(live);
+            } else if (outer['type'] == 'chat:completion') {
+              final text = data['content'] is String
+                  ? data['content'] as String
+                  : ChatMessage.outputText(data['output']);
+              if (text.isNotEmpty && text != live) {
+                live = text;
+                onText?.call(live);
+              }
+              if ((data['done'] == true || data['error'] != null) &&
+                  !finished.isCompleted) {
+                finished.complete();
+              }
+            }
+          });
+    try {
+      return await _answer(
+        request,
+        chat: chat,
+        user: user,
+        replyId: replyId,
+        sessionId: sessionId,
+        finished: finished.future,
+        timeout: timeout,
+      );
+    } finally {
+      await sub?.cancel();
+    }
+  }
+
+  Future<String> _answer(
+    String request, {
+    required Chat? chat,
+    required ChatMessage user,
+    required String replyId,
+    required String? sessionId,
+    required Future<void> finished,
+    required Duration timeout,
+  }) async {
     final turn = await client.startTurn(
       model: model,
       chatId: _chatId,
@@ -664,7 +859,7 @@ class EmailAgent implements MailSource {
         {'role': 'system', 'content': _rules},
         {'role': 'user', 'content': request},
       ],
-      sessionId: 'nexus-app-email-${_uuid.v4()}',
+      sessionId: sessionId ?? 'nexus-app-email-${_uuid.v4()}',
       options: {...options, 'background_tasks': const {}},
     );
     if (_chatId != turn.chatId) {
@@ -672,8 +867,17 @@ class EmailAgent implements MailSource {
       unawaited(_remember(turn.chatId));
     }
     final until = DateTime.now().add(timeout);
+    var done = false;
+    unawaited(finished.then((_) => done = true));
     while (DateTime.now().isBefore(until)) {
-      await Future<void>.delayed(const Duration(seconds: 2));
+      // Done over the live channel: the saved answer is read at once (and
+      // again each second until the server has saved it).
+      await Future.any([
+        Future<void>.delayed(
+          Duration(seconds: done ? 1 : (sessionId == null ? 2 : 4)),
+        ),
+        if (!done) finished,
+      ]);
       final ChatMessage? reply;
       try {
         reply = (await client.chat(turn.chatId)).messages[replyId];
@@ -734,13 +938,37 @@ class EmailAgent implements MailSource {
     ];
   }
 
-  Future<OpenedEmail> open(Email e) async {
-    final json = await _askJson(openRequest(e));
+  Future<OpenedEmail> open(
+    Email e, {
+    void Function(OpenedEmail partial)? onProgress,
+  }) async {
+    final text = await ask(
+      openRequest(e),
+      onText: onProgress == null
+          ? null
+          : (sofar) {
+              final o = openedFromText(sofar, e);
+              if (o != null) onProgress(o);
+            },
+    );
+    final opened = openedFromText(text, e);
+    if (opened != null) return opened;
+    // Answered the way it used to, as JSON, or with an error.
+    final json = answerJson(text);
     final j = json is Map ? json : const {};
+    if (j['error'] is String && '${j['error']}'.isNotEmpty) {
+      throw EmailAgentError('${j['error']}');
+    }
     final messages = [
       for (final m in (j['messages'] as List? ?? const []).whereType<Map>())
         EmailMessage.fromJson(m),
     ];
+    if (messages.isEmpty && j['body'] == null) {
+      throw const EmailAgentError(
+        "OpenAide's answer wasn't the email. Try again, and check that its "
+        'model can use your email tool.',
+      );
+    }
     return OpenedEmail(
       email: e,
       messages: messages.isEmpty
@@ -749,7 +977,7 @@ class EmailAgent implements MailSource {
                 from: e.from,
                 to: e.to,
                 date: e.date,
-                body: '${j['body'] ?? e.snippet}',
+                body: '${j['body']}',
               ),
             ]
           : messages,
@@ -758,7 +986,6 @@ class EmailAgent implements MailSource {
     );
   }
 
-  /// Sends; throws with Nexus's reason when it didn't.
   @override
   Future<void> reply(Email e, String text, {bool all = false}) async =>
       _sent(await _askJson(sendRequest(e, text, all: all)));

@@ -5,7 +5,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/widgets/nexus_logo.dart';
 import 'updater.dart';
 
-/// Settings page: GitHub token, current build, check and install.
+/// Settings page: current build, update channel, optional GitHub token,
+/// check and install.
 class UpdateScreen extends ConsumerStatefulWidget {
   const UpdateScreen({super.key});
 
@@ -17,6 +18,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
   final _token = TextEditingController();
   String _version = '';
   bool _hasToken = false;
+  UpdateChannel? _channel;
 
   @override
   void initState() {
@@ -28,6 +30,17 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
         .read(updaterProvider.notifier)
         .token()
         .then((t) => setState(() => _hasToken = t != null));
+    ref
+        .read(updaterProvider.notifier)
+        .channel()
+        .then((c) => setState(() => _channel = c));
+  }
+
+  Future<void> _setChannel(UpdateChannel c) async {
+    setState(() => _channel = c);
+    final updater = ref.read(updaterProvider.notifier);
+    await updater.setChannel(c);
+    await updater.check();
   }
 
   @override
@@ -73,7 +86,35 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          Text('GitHub token', style: theme.textTheme.titleMedium),
+          Text('Update channel', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (_channel != null)
+            SegmentedButton<UpdateChannel>(
+              segments: const [
+                ButtonSegment(
+                  value: UpdateChannel.stable,
+                  label: Text('Stable'),
+                  icon: Icon(Icons.verified_outlined),
+                ),
+                ButtonSegment(
+                  value: UpdateChannel.dev,
+                  label: Text('Dev builds'),
+                  icon: Icon(Icons.science_outlined),
+                ),
+              ],
+              selected: {_channel!},
+              onSelectionChanged: (s) => _setChannel(s.first),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            _channel == UpdateChannel.dev
+                ? 'Every new build, often several a day. Newest features, '
+                      'less tested.'
+                : 'Public releases only.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 24),
+          Text('GitHub token (optional)', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             builtInToken.isNotEmpty
@@ -81,9 +122,9 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
                       'different token here to override it.'
                 : _hasToken
                 ? 'A token is saved. Paste a new one to replace it.'
-                : 'Not needed: updates come from the public releases of '
-                      '$updateRepo. Only for a private copy of the app, '
-                      'paste a token with read-only "Contents" access.',
+                : 'Not needed: updates come from public GitHub releases. '
+                      'Only if $updateRepo is private, paste a fine-grained '
+                      'token with read-only "Contents" access to it.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),

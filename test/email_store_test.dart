@@ -77,4 +77,41 @@ void main() {
     });
     expect(store['read'], {'a': true, 'b': true});
   });
+
+  group('an opened email read as OpenAide writes it', () {
+    const e = Email(id: 'm1', subject: 'Hi');
+    const answer =
+        '=== From: Ann <ann@x.com> | To: Joel <j@x.com> | Date: 2026-10-28T10:00:00Z\n'
+        '# Hello\n\nSee [the plan](https://x.com/plan).\n'
+        '=== From: Joel <j@x.com> | To: Ann <ann@x.com> | Date: 2026-10-28T11:00:00Z\n'
+        'Thanks!\n'
+        '=== SUMMARY\n'
+        'Ann shared the plan.\n'
+        '=== REPLY\n'
+        'Looks good.';
+
+    test('keeps each message, the summary and the reply', () {
+      final o = openedFromText(answer, e)!;
+      expect(o.messages.length, 2);
+      expect(o.messages.first.from, 'Ann <ann@x.com>');
+      expect(o.messages.first.to, 'Joel <j@x.com>');
+      expect(o.messages.first.date?.toUtc(), DateTime.utc(2026, 10, 28, 10));
+      expect(
+        o.messages.first.body,
+        '# Hello\n\nSee [the plan](https://x.com/plan).',
+      );
+      expect(o.messages.last.body, 'Thanks!');
+      expect(o.summary, 'Ann shared the plan.');
+      expect(o.suggestedReply, 'Looks good.');
+    });
+
+    test('shows what has come while it is still being written', () {
+      final o = openedFromText(answer.substring(0, 100), e)!;
+      expect(o.messages.single.from, 'Ann <ann@x.com>');
+      expect(o.messages.single.body, startsWith('# Hel'));
+      expect(o.summary, isEmpty);
+      expect(openedFromText('Let me open it…', e), isNull);
+      expect(openedFromText('{"messages": []}', e), isNull);
+    });
+  });
 }

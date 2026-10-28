@@ -113,4 +113,24 @@ void main() {
     expect(copilotSignInAvailable, isFalse);
     expect(startGitHubDeviceSignIn(), throwsA(isA<AiException>()));
   });
+
+  test('only sends the token to https Copilot hosts', () {
+    expect(
+      copilotApiBase('https://api.individual.githubcopilot.com/'),
+      'https://api.individual.githubcopilot.com',
+    );
+    expect(
+      copilotApiBase('https://evil.example.com'),
+      'https://api.githubcopilot.com',
+    );
+    expect(
+      copilotApiBase('http://api.githubcopilot.com'),
+      'https://api.githubcopilot.com',
+    );
+    expect(
+      copilotApiBase('https://githubcopilot.com.evil.io'),
+      'https://api.githubcopilot.com',
+    );
+    expect(copilotApiBase(null), 'https://api.githubcopilot.com');
+  });
 }

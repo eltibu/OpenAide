@@ -7,15 +7,27 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
-/// Where CI publishes builds (a GitHub Release per build on the main branch).
+/// Where CI publishes builds: a pre-release per dev build, and a normal
+/// release per public (stable) build.
 const updateRepo = 'eltibu/Nexus-assistant';
-const _assetName = 'nexus-assistant.apk';
 const _kToken = 'github_update_token';
+const _kChannel = 'update_channel';
+
+/// The APK in a release: `nexus-assistant.apk` (dev builds, the name older
+/// apps look for) or `OpenAide-<version>.apk` (public releases).
+bool isAppAsset(String? name) =>
+    name == 'nexus-assistant.apk' ||
+    RegExp(r'^OpenAide[-\w.]*\.apk$').hasMatch(name ?? '');
 
 /// Read-only token baked in at build time from the repo secret
-/// NEXUS_UPDATE_TOKEN, so updates work without typing anything, even after a
-/// reinstall. A token pasted in App updates takes precedence.
+/// NEXUS_UPDATE_TOKEN while the repo is private, so updates work without
+/// typing anything. Public builds have none and read releases without one.
+/// A token pasted in App updates takes precedence.
 const builtInToken = String.fromEnvironment('NEXUS_UPDATE_TOKEN');
+
+/// Stable gets public releases only; dev also gets every dev build
+/// (GitHub pre-releases).
+enum UpdateChannel { stable, dev }
 
 const _storage = FlutterSecureStorage();
 const _channel = MethodChannel('nexus/updates');
@@ -73,15 +85,20 @@ int? buildFromTag(String? tag) {
   return m == null ? null : int.parse(m.group(1)!);
 }
 
-/// The highest-numbered published release that has the app's APK.
-AvailableUpdate? newestRelease(List<dynamic> releases) {
+/// The highest-numbered published release that has the app's APK. Dev
+/// builds are pre-releases, left out unless [includeDev].
+AvailableUpdate? newestRelease(
+  List<dynamic> releases, {
+  bool includeDev = true,
+}) {
   AvailableUpdate? best;
   for (final r in releases.whereType<Map>()) {
     if (r['draft'] == true) continue;
+    if (r['prerelease'] == true && !includeDev) continue;
     final build = buildFromTag(r['tag_name'] as String?);
     final asset = (r['assets'] as List? ?? [])
         .whereType<Map>()
-        .where((a) => a['name'] == _assetName)
+        .where((a) => isAppAsset(a['name'] as String?))
         .firstOrNull;
     if (build == null || asset == null) continue;
     if (best == null || build > best.build) {
@@ -117,47 +134,97 @@ class Updater extends Notifier<UpdateState> {
     }
   }
 
+  /// The saved channel. The first time, dev builds (those with a built-in or
+  /// pasted token) pick dev and keep it, so the phone stays on dev builds
+  /// after the token goes away; everyone else gets stable.
+  Future<UpdateChannel> channel() async {
+    final saved = await _storage.read(key: _kChannel);
+    for (final c in UpdateChannel.values) {
+      if (c.name == saved) return c;
+    }
+    final c = await token() != null ? UpdateChannel.dev : UpdateChannel.stable;
+    await _storage.write(key: _kChannel, value: c.name);
+    return c;
+  }
+
+  Future<void> setChannel(UpdateChannel c) async {
+    await _storage.write(key: _kChannel, value: c.name);
+    state = const UpdateIdle();
+  }
+
   Map<String, String> _headers(String? token) => {
-    'Authorization': ?(token == null ? null : 'Bearer $token'),
+    if (token != null) 'Authorization': 'Bearer $token',
     'X-GitHub-Api-Version': '2022-11-28',
   };
 
-  /// Looks for a newer build. A public repo needs no token; with one that
-  /// GitHub refuses (revoked or expired) it asks again without it.
+  /// Sends [req] with the token, if any. A public repo needs none, so when
+  /// GitHub refuses an expired or revoked token, it tries once without.
+  Future<http.StreamedResponse> _send(
+    http.Client client,
+    http.BaseRequest Function() req,
+    String? token,
+  ) async {
+    final first = req()..headers.addAll(_headers(token));
+    final res = await client.send(first);
+    if (token == null || res.statusCode != 401) return res;
+    await res.stream.drain<void>();
+    return client.send(req()..headers.addAll(_headers(null)));
+  }
+
+  /// Looks for a newer build. Quiet on errors when [quiet] is true, as on
+  /// app start.
   Future<void> check({bool quiet = false}) async {
+    final token = await this.token();
+    final channel = await this.channel();
     state = const UpdateChecking();
+    final client = http.Client();
     try {
       final info = await PackageInfo.fromPlatform();
       final current = int.tryParse(info.buildNumber) ?? 0;
-      // Several builds can finish out of order, so GitHub's "latest" isn't
-      // always the newest: look at recent releases and take the highest.
-      final url = Uri.parse(
-        'https://api.github.com/repos/$updateRepo/releases?per_page=20',
+      final res = await http.Response.fromStream(
+        await _send(
+          client,
+          // Stable: the public release GitHub marks latest. Dev: several
+          // builds can finish out of order, so "latest" isn't always the
+          // newest: look at recent releases and take the highest.
+          () => http.Request(
+            'GET',
+            Uri.parse(
+              channel == UpdateChannel.stable
+                  ? 'https://api.github.com/repos/$updateRepo/releases/latest'
+                  : 'https://api.github.com/repos/$updateRepo/releases?per_page=30',
+            ),
+          )..headers['Accept'] = 'application/vnd.github+json',
+          token,
+        ),
       );
-      Future<http.Response> get(String? token) => http.get(
-        url,
-        headers: {..._headers(token), 'Accept': 'application/vnd.github+json'},
-      );
-      final token = await this.token();
-      var res = await get(token);
-      if (token != null && (res.statusCode == 401 || res.statusCode == 403)) {
-        res = await get(null);
+      // No public release yet.
+      if (channel == UpdateChannel.stable &&
+          res.statusCode == 404 &&
+          token == null) {
+        state = UpToDate(current);
+        return;
       }
-      // A private repo answers 404 to a token that can't read it, so 404 is a
-      // token problem, never "up to date".
+      // A private repo answers 404 to anyone who can't read it, so 404 is an
+      // access problem, never "up to date".
       if (res.statusCode == 401 ||
           res.statusCode == 403 ||
           res.statusCode == 404) {
         throw HttpException(
           token == null
-              ? "Couldn't reach this app's releases on GitHub."
+              ? 'GitHub would not show the releases (${res.statusCode}). '
+                    'Try again later.'
               : 'GitHub refused the token. Check that it can read this repo.',
         );
       }
       if (res.statusCode != 200) {
         throw HttpException('GitHub answered ${res.statusCode}.');
       }
-      final newest = newestRelease(jsonDecode(res.body) as List);
+      final body = jsonDecode(res.body);
+      final newest = newestRelease(
+        body is List ? body : [body],
+        includeDev: channel == UpdateChannel.dev,
+      );
       if (newest == null || newest.build <= current) {
         state = UpToDate(current);
         return;
@@ -165,6 +232,8 @@ class Updater extends Notifier<UpdateState> {
       state = UpdateFound(newest);
     } catch (e) {
       state = quiet ? const UpdateIdle() : UpdateFailed(_message(e));
+    } finally {
+      client.close();
     }
   }
 
@@ -176,19 +245,13 @@ class Updater extends Notifier<UpdateState> {
     try {
       // The asset API answers with a redirect to a short-lived download link
       // that must be fetched without the token.
-      Future<http.StreamedResponse> asset(String? token) => client.send(
-        http.Request('GET', Uri.parse(update.assetApiUrl))
-          ..headers.addAll({
-            ..._headers(token),
-            'Accept': 'application/octet-stream',
-          })
+      var res = await _send(
+        client,
+        () => http.Request('GET', Uri.parse(update.assetApiUrl))
+          ..headers['Accept'] = 'application/octet-stream'
           ..followRedirects = false,
+        token,
       );
-      var res = await asset(token);
-      if (token != null && (res.statusCode == 401 || res.statusCode == 403)) {
-        await res.stream.drain<void>();
-        res = await asset(null);
-      }
       final location = res.headers['location'];
       if (res.isRedirect && location != null) {
         await res.stream.drain<void>();
