@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import 'access_editor.dart' show ItemMenu;
 import '../chat/chat_controller.dart' show skillsProvider;
 
 void _say(BuildContext context, String text) =>
@@ -128,7 +129,13 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
     final admin = ref.read(sessionProvider).value?.user?['role'] == 'admin';
     final specs = (t?['specs'] as List? ?? const []).whereType<Map>();
     return Scaffold(
-      appBar: AppBar(title: Text('${t?['name'] ?? 'Tool'}')),
+      appBar: AppBar(
+        title: Text('${t?['name'] ?? 'Tool'}'),
+        actions: [
+          if (t != null)
+            ItemMenu(kind: 'tool', id: widget.id, name: '${t['name'] ?? ''}'),
+        ],
+      ),
       body: _error != null
           ? Center(child: Text('Couldn\'t load it.\n$_error'))
           : t == null
@@ -529,6 +536,34 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
     }
   }
 
+  /// A copy with its own id, opened to edit.
+  Future<void> _clone() async {
+    final id =
+        '${widget.id}-copy-${DateTime.now().millisecondsSinceEpoch % 100000}';
+    try {
+      await _client.send(
+        'POST',
+        '/api/v1/skills/create',
+        body: {
+          'id': id,
+          'name': '${_name.text} (copy)',
+          'description': _description.text,
+          'content': _content.text,
+          'meta': _s?['meta'] ?? {},
+        },
+      );
+      ref.invalidate(skillsProvider);
+      if (mounted) {
+        await Navigator.pushReplacement(
+          context,
+          MaterialPageRoute<void>(builder: (_) => SkillEditor(id: id)),
+        );
+      }
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
   Future<void> _delete() async {
     final ok = await showDialog<bool>(
       context: context,
@@ -566,6 +601,12 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
             tooltip: 'Delete',
             onPressed: _busy ? null : _delete,
             icon: const Icon(Icons.delete_outline),
+          ),
+          ItemMenu(
+            kind: 'skill',
+            id: widget.id,
+            name: _name.text,
+            onClone: _clone,
           ),
           Padding(
             padding: const EdgeInsets.only(right: 8),

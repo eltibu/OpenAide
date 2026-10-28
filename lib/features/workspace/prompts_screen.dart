@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import 'access_editor.dart' show ItemMenu;
 import 'prompts_api.dart';
 
 final promptsApiProvider = Provider<PromptsApi>(
@@ -306,8 +307,11 @@ class PromptsScreen extends ConsumerWidget {
 }
 
 class PromptEditor extends ConsumerStatefulWidget {
-  const PromptEditor({super.key, this.prompt});
+  const PromptEditor({super.key, this.prompt, this.copyOf});
   final Prompt? prompt;
+
+  /// Starts a new prompt as a copy of this one.
+  final Prompt? copyOf;
 
   @override
   ConsumerState<PromptEditor> createState() => _PromptEditorState();
@@ -315,9 +319,18 @@ class PromptEditor extends ConsumerStatefulWidget {
 
 class _PromptEditorState extends ConsumerState<PromptEditor> {
   late final Prompt? _p = widget.prompt;
-  late final _name = TextEditingController(text: _p?.name ?? '');
-  late final _command = TextEditingController(text: _p?.command ?? '');
-  late final _content = TextEditingController(text: _p?.content ?? '');
+  late final _name = TextEditingController(
+    text: _p?.name ?? _copyName(widget.copyOf?.name),
+  );
+  late final _command = TextEditingController(
+    text: _p?.command ?? _copyName(widget.copyOf?.command, '-copy'),
+  );
+  late final _content = TextEditingController(
+    text: _p?.content ?? widget.copyOf?.content ?? '',
+  );
+
+  static String _copyName(String? s, [String add = ' (copy)']) =>
+      s == null ? '' : '$s$add';
   bool _busy = false;
   bool _commandEdited = false;
 
@@ -345,7 +358,7 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
             command: command,
             name: _name.text.trim(),
             content: _content.text,
-            tags: _p?.tags ?? const [],
+            tags: _p?.tags ?? widget.copyOf?.tags ?? const [],
           );
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -397,6 +410,16 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
             tooltip: 'Delete',
             onPressed: _busy ? null : _delete,
             icon: const Icon(Icons.delete_outline),
+          ),
+        if (_p != null)
+          ItemMenu(
+            kind: 'prompt',
+            id: _p.id,
+            name: _p.name,
+            onClone: () => Navigator.pushReplacement(
+              context,
+              MaterialPageRoute<void>(builder: (_) => PromptEditor(copyOf: _p)),
+            ),
           ),
         Padding(
           padding: const EdgeInsets.only(right: 8),

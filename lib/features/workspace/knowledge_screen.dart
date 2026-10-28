@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import 'access_editor.dart' show editAccess;
 import 'knowledge_api.dart';
 
 final knowledgeApiProvider = Provider<KnowledgeApi>(
@@ -232,6 +233,15 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
   }
 
   Future<void> _menu(String action) async {
+    if (action == 'access') {
+      return editAccess(
+        context,
+        ref,
+        kind: 'knowledge',
+        id: _k.id,
+        name: _k.name,
+      );
+    }
     if (action == 'edit') {
       final v = await _askNameAndDescription(
         context,
@@ -310,6 +320,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                 onSelected: _menu,
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'edit', child: Text('Rename')),
+                  PopupMenuItem(value: 'access', child: Text('Access')),
                   PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
               ),

@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
 import 'knowledge_screen.dart' show knowledgeListProvider;
+import 'access_editor.dart' show ItemMenu;
 import 'models_api.dart';
 
 final modelsApiProvider = Provider<ModelsApi>(
@@ -325,6 +326,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       appBar: AppBar(
         title: Text(_isNew ? 'New model' : 'Edit model'),
         actions: [
+          if (!_isNew && (!_connection || widget.saved) && _m != null)
+            ItemMenu(kind: 'model', id: _m!.id, name: _m!.name),
           if (!_isNew && !_connection)
             IconButton(
               tooltip: 'Clone',

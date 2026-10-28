@@ -11,6 +11,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
+import '../workspace/access_editor.dart' show editAccess;
 import 'notes_api.dart';
 
 /// The server's notes, native: search, pin, write in Markdown.
@@ -404,6 +405,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
 
   Future<void> _menu(String v) async {
     switch (v) {
+      case 'access':
+        await editAccess(
+          context,
+          ref,
+          kind: 'note',
+          id: widget.id,
+          name: _title.text.isEmpty ? 'Note' : _title.text,
+        );
       case 'copy':
         await Clipboard.setData(ClipboardData(text: _body.text));
         _say('Note copied');
@@ -535,6 +544,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   child: ListTile(
                     leading: Icon(Icons.picture_as_pdf_outlined),
                     title: Text('Download PDF'),
+                  ),
+                ),
+                PopupMenuDivider(),
+                PopupMenuItem(
+                  value: 'access',
+                  child: ListTile(
+                    leading: Icon(Icons.lock_outline),
+                    title: Text('Access'),
                   ),
                 ),
               ],
