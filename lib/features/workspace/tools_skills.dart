@@ -133,7 +133,12 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
         title: Text('${t?['name'] ?? 'Tool'}'),
         actions: [
           if (t != null)
-            ItemMenu(kind: 'tool', id: widget.id, name: '${t['name'] ?? ''}'),
+            ItemMenu(
+              kind: 'tool',
+              id: widget.id,
+              name: '${t['name'] ?? ''}',
+              onRestored: _load,
+            ),
         ],
       ),
       body: _error != null
@@ -607,6 +612,7 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
             id: widget.id,
             name: _name.text,
             onClone: _clone,
+            onRestored: _load,
           ),
           Padding(
             padding: const EdgeInsets.only(right: 8),

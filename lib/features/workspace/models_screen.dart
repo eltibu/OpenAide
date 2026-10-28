@@ -344,7 +344,12 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
         title: Text(_isNew ? 'New model' : 'Edit model'),
         actions: [
           if (!_isNew && (!_connection || widget.saved) && _m != null)
-            ItemMenu(kind: 'model', id: _m!.id, name: _m!.name),
+            ItemMenu(
+              kind: 'model',
+              id: _m!.id,
+              name: _m!.name,
+              onRestored: () => Navigator.pop(context),
+            ),
           if (!_isNew && !_connection)
             IconButton(
               tooltip: 'Clone',

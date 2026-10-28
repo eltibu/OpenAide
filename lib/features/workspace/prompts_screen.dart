@@ -429,6 +429,7 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
             kind: 'prompt',
             id: _p.id,
             name: _p.name,
+            onRestored: () => Navigator.pop(context),
             onClone: () => Navigator.pushReplacement(
               context,
               MaterialPageRoute<void>(builder: (_) => PromptEditor(copyOf: _p)),

@@ -14,6 +14,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../channels/channel_manage.dart' show pickPerson;
 import '../channels/channels_api.dart';
+import 'version_history.dart';
 
 /// A grant as the server takes it back (only these three fields).
 typedef Grant = ({String type, String id, String permission});
@@ -129,10 +130,14 @@ class ItemMenu extends ConsumerWidget {
     required this.id,
     required this.name,
     this.onClone,
+    this.onRestored,
   });
 
   final String kind, id, name;
   final VoidCallback? onClone;
+
+  /// After another version was put in use, so the editor reloads.
+  final VoidCallback? onRestored;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => PopupMenuButton<String>(
@@ -141,6 +146,16 @@ class ItemMenu extends ConsumerWidget {
       'access' => editAccess(context, ref, kind: kind, id: id, name: name),
       'export' => exportItem(context, ref, kind: kind, id: id, name: name),
       'clone' => onClone?.call(),
+      'history' => () async {
+        final changed = await Navigator.push<bool>(
+          context,
+          MaterialPageRoute(
+            builder: (_) =>
+                VersionHistoryScreen(kind: kind, id: id, name: name),
+          ),
+        );
+        if (changed == true) onRestored?.call();
+      }(),
       _ => null,
     },
     itemBuilder: (_) => [
@@ -148,6 +163,7 @@ class ItemMenu extends ConsumerWidget {
       if (onClone != null)
         const PopupMenuItem(value: 'clone', child: Text('Clone')),
       const PopupMenuItem(value: 'export', child: Text('Export')),
+      const PopupMenuItem(value: 'history', child: Text('Version history')),
     ],
   );
 }

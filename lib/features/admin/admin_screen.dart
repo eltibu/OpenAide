@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +9,7 @@ import '../../core/theme.dart';
 import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
+import '../workspace/version_history.dart';
 import 'admin_api.dart';
 import 'admin_models_screen.dart';
 import 'analytics_screen.dart';
@@ -671,6 +675,36 @@ class FunctionsScreen extends ConsumerWidget {
                           ),
                         ),
                       ),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.history),
+                      title: const Text('Version history'),
+                      onTap: () async {
+                        final changed = await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => VersionHistoryScreen(
+                              kind: 'function',
+                              id: f.id,
+                              name: f.name,
+                            ),
+                          ),
+                        );
+                        if (changed == true) ref.invalidate(functionsProvider);
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.ios_share),
+                      title: const Text('Export'),
+                      onTap: () => run(() async {
+                        final one = await ref
+                            .read(clientProvider)
+                            .send('GET', '/api/v1/functions/id/${f.id}');
+                        await FilePicker.saveFile(
+                          fileName: 'function-${f.id}-export.json',
+                          bytes: utf8.encode(jsonEncode([one])),
+                        );
+                      }),
                     ),
                     ListTile(
                       leading: Icon(
