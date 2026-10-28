@@ -2,12 +2,22 @@ name: Feature tests
 
 # Checks the app's features end to end against a throwaway Open WebUI with
 # a fake AI provider (tool/e2e). Separate from Build, so a failing check
-# never holds back an update; the results show on the pull request and in
-# the run's summary.
+# never holds back an update; the results show in the run's summary.
+#
+# The runner is one PC that also builds every update, so this runs when
+# the shared branches move, once a night, by hand, and on pull requests
+# that change the tests themselves, not on every pull request.
 on:
   push:
-    branches: [Main-Repository]
+    branches: [Main-Repository, claude/project-thread-io206b]
   pull_request:
+    paths:
+      - tool/e2e/**
+      - integration_test/**
+      - test/integration/**
+      - .github/workflows/e2e.yml
+  schedule:
+    - cron: '30 7 * * *'
   workflow_dispatch:
 
 concurrency:
