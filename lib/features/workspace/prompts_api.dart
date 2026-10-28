@@ -233,6 +233,40 @@ String fillSystemVariables(
       .replaceAll('{{CURRENT_WEEKDAY}}', weekdays[t.weekday - 1]);
 }
 
+/// The values the web sends with every chat as `variables`, which the
+/// server fills into the system prompt (a model's or the person's own).
+Map<String, String> promptVariables({
+  String? userName,
+  String? userEmail,
+  String? location,
+  String language = 'en-US',
+  DateTime? now,
+}) {
+  const keys = [
+    'USER_NAME',
+    'USER_EMAIL',
+    'CURRENT_DATETIME',
+    'CURRENT_DATE',
+    'CURRENT_TIME',
+    'CURRENT_WEEKDAY',
+    'CURRENT_TIMEZONE',
+    'USER_LANGUAGE',
+  ];
+  return {
+    for (final k in keys)
+      '{{$k}}': fillSystemVariables(
+        '{{$k}}',
+        userName: userName,
+        userEmail: userEmail ?? '',
+        language: language,
+        now: now,
+      ),
+    '{{USER_LOCATION}}': location == null || location.isEmpty
+        ? 'Unknown'
+        : location,
+  };
+}
+
 /// Puts the person's answers in place of the placeholders.
 String fillInputVariables(String text, Map<String, String> values) => text
     .replaceAllMapped(_typed, (m) => values[m[1]!.trim()] ?? m[0]!)

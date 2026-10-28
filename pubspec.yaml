@@ -59,6 +59,7 @@ dependencies:
   sqlite3: ^2.7.5
   sqlite3_flutter_libs: ^0.5.32
   camera: ^0.12.2
+  geolocator: ^14.0.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

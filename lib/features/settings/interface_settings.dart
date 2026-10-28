@@ -9,7 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show userSettingsProvider;
+import '../../core/auth/session.dart';
 import 'settings_screen.dart' show settingsApiProvider, uiSettingsProvider;
+import 'user_location.dart';
 
 /// A switch: the setting's key, its default, label and what it does.
 typedef UiSwitch = (String key, bool start, String label, String help);
@@ -268,6 +270,37 @@ class InterfaceSettings extends ConsumerWidget {
                     onChanged: (on) => set({key: on}),
                   ),
                 if (group.key == 'Chat') ...[
+                  SwitchListTile(
+                    title: const Text('Allow User Location'),
+                    subtitle: Text(
+                      'Models can use where you are ({{USER_LOCATION}}).',
+                      style: TextStyle(color: muted),
+                    ),
+                    value: userLocationOn(ui),
+                    onChanged: (on) async {
+                      if (on) {
+                        final messenger = ScaffoldMessenger.of(context);
+                        String? where;
+                        try {
+                          where = await updateUserLocation(
+                            ref.read(clientProvider),
+                          );
+                        } catch (_) {}
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              where == null
+                                  ? "Couldn't get your location. Is it "
+                                        'allowed for Nexus?'
+                                  : 'User location successfully retrieved.',
+                            ),
+                          ),
+                        );
+                        if (where == null) return;
+                      }
+                      await set({userLocationKey: on});
+                    },
+                  ),
                   SwitchListTile(
                     title: const Text('Quick Actions'),
                     subtitle: Text(

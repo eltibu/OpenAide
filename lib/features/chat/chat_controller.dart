@@ -13,7 +13,9 @@ import '../../core/models/model_info.dart';
 import '../studio/listen.dart' show transcribe;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../voice/realtime_call.dart' show BridgeSubmission;
-import '../workspace/prompts_api.dart' show fillSystemVariables;
+import '../settings/user_location.dart';
+import '../workspace/prompts_api.dart'
+    show fillSystemVariables, promptVariables;
 import 'read_aloud.dart';
 import 'reply_parts.dart';
 import 'reply_notify.dart';
@@ -1382,6 +1384,12 @@ class ChatController extends Notifier<ChatState> {
             rate: speechRate(settings),
           );
       final me = ref.read(sessionProvider).value?.user;
+      // As the web: where you are, fresh for each message, when allowed.
+      final where = userLocationOn(settings?['ui'] as Map?)
+          ? await updateUserLocation(client)
+                .timeout(const Duration(seconds: 10))
+                .catchError((_) => null)
+          : null;
       final turn = await client.startTurn(
         model: modelId,
         chatId: temporary
@@ -1422,6 +1430,11 @@ class ChatController extends Notifier<ChatState> {
             ),
           ),
           'files': ?_documents(chat),
+          'variables': promptVariables(
+            userName: me?['name'] as String?,
+            userEmail: me?['email'] as String?,
+            location: where,
+          ),
           if (chat.id.isEmpty && !temporary) 'folder_id': ?state.folderId,
           // Not saved on the server yet: the answers go with the request.
           if ((temporary || chat.id.isEmpty) && state.variables.isNotEmpty)
