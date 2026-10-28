@@ -68,6 +68,7 @@ Map<String, dynamic> requestOptions(
   Set<String>? skillIds,
   String? terminalId,
   Map<String, dynamic> chatParams = const {},
+  List<Map<String, dynamic>> toolServers = const [],
 }) {
   final ui = (settings?['ui'] as Map?) ?? const {};
   final enabled = (config?['features'] as Map?) ?? const {};
@@ -99,7 +100,11 @@ Map<String, dynamic> requestOptions(
   final memory = ui['memory'] ?? enabled['enable_memories'] ?? true;
   if (memory == true) features['memory'] = true;
 
-  final tools = toolIds?.toList() ?? model?.toolIds ?? const <String>[];
+  // Your own servers (direct_server:…) go as tool_servers instead.
+  final tools = [
+    for (final id in toolIds ?? model?.toolIds ?? const <String>[])
+      if (!id.startsWith('direct_server:')) id,
+  ];
   final terminal = terminalId ?? model?.terminalId;
   return {
     if (tools.isNotEmpty && enabled['enable_tools'] != false) 'tool_ids': tools,
@@ -108,6 +113,8 @@ Map<String, dynamic> requestOptions(
       'filter_ids': model.defaultFilterIds,
     if (terminal != null && terminal.isNotEmpty) 'terminal_id': terminal,
     'features': features,
+    if (toolServers.isNotEmpty && enabled['enable_tool_servers'] == true)
+      'tool_servers': toolServers,
     // One of your own connections: the server hands the request back to
     // this phone, which needs the model as the list had it.
     if (model?.raw['direct'] == true) 'model_item': model!.raw,

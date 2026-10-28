@@ -14,6 +14,7 @@ import '../studio/listen.dart' show transcribe;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../voice/realtime_call.dart' show BridgeSubmission;
 import '../settings/direct_connections.dart';
+import '../settings/tool_servers.dart';
 import '../settings/user_location.dart';
 import '../workspace/prompts_api.dart'
     show fillSystemVariables, promptVariables;
@@ -1463,6 +1464,9 @@ class ChatController extends Notifier<ChatState> {
               skillIds: state.skillIds,
               terminalId: state.terminalId,
               chatParams: chatParams,
+              toolServers: await _toolServers(
+                models.where((m) => m.id == modelId).firstOrNull,
+              ),
             ),
           ),
           'files': ?_documents(chat),
@@ -1985,6 +1989,23 @@ class ChatController extends Notifier<ChatState> {
         await Clipboard.setData(ClipboardData(text: text));
       }
     } catch (_) {}
+  }
+
+  /// Your own tool servers picked for this chat, and your terminals, as
+  /// the web sends them (the phone runs their tools when asked).
+  Future<List<Map<String, dynamic>>> _toolServers(ModelInfo? model) async {
+    Future<List<Map<String, dynamic>>> read(
+      FutureProvider<List<Map<String, dynamic>>> p,
+    ) => ref.read(p.future).catchError((_) => <Map<String, dynamic>>[]);
+    final picked = state.toolIds ?? model?.toolIds.toSet() ?? const {};
+    return chatToolServers(
+      picked,
+      picked.any((id) => id.startsWith(directServerPrefix))
+          ? await read(userToolServersDataProvider)
+          : const [],
+      await read(userTerminalsDataProvider),
+      terminal: model?.capabilities['terminal'] != false,
+    );
   }
 
   Future<Map<String, dynamic>?> _optional(

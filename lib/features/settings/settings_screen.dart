@@ -15,6 +15,7 @@ import 'audio_settings.dart';
 import 'account_extras.dart';
 import 'data_controls.dart';
 import 'direct_connections.dart';
+import 'tool_servers.dart';
 import 'interface_settings.dart';
 import 'notification_settings.dart';
 import 'settings_api.dart';
@@ -195,6 +196,13 @@ class SettingsScreen extends ConsumerWidget {
               title: const Text('Connections'),
               subtitle: const Text('Your own OpenAI-compatible servers'),
               onTap: () => open(const DirectConnectionsScreen()),
+            ),
+          if (directIntegrationsOn(ref.watch(serverConfigProvider).value))
+            ListTile(
+              leading: const Icon(Icons.extension_outlined),
+              title: const Text('Integrations'),
+              subtitle: const Text('Your own OpenAPI tool servers'),
+              onTap: () => open(const ToolServersScreen()),
             ),
           ListTile(
             leading: const Icon(Icons.terminal),

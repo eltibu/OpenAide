@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'advanced_params.dart';
 import 'chat_controller.dart';
+import '../settings/tool_servers.dart' show chatToolsProvider;
 
 Future<void> showChatControls(BuildContext context) =>
     showModalBottomSheet<void>(
@@ -134,7 +135,8 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
         ?.where((m) => m.id == state.modelId)
         .firstOrNull;
     final names = {
-      for (final t in ref.watch(toolsProvider).value ?? const []) t.id: t.name,
+      for (final t in ref.watch(chatToolsProvider).value ?? const [])
+        t.id: t.name,
     };
     final tools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
     final filters = model?.defaultFilterIds ?? const [];

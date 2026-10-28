@@ -50,9 +50,8 @@ void main() {
     final ui = Map<String, dynamic>.of((settings['ui'] as Map?)?.cast() ?? {});
     final saved = ui[directConnectionsKey];
     final mine = Connection(url: fake, key: 'k', config: {'prefix_id': 'me'});
-    ui[directConnectionsKey] = writeConnections(openAiConnections, true, [
-      mine,
-    ])..remove(openAiConnections.enableKey);
+    ui[directConnectionsKey] = writeConnections(openAiConnections, true, [mine])
+      ..remove(openAiConnections.enableKey);
     await client.send(
       'POST',
       '/api/v1/users/user/settings/update',

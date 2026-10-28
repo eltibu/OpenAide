@@ -49,6 +49,7 @@ import 'tool_auth.dart';
 import 'tool_approval.dart';
 import 'voice_note.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
+import '../settings/tool_servers.dart' show chatToolsProvider;
 import '../admin/ollama_pulls.dart';
 import '../admin/connections_screen.dart' show ConnectionsScreen;
 import '../../core/models/model_info.dart';
@@ -2433,7 +2434,7 @@ class _FeaturesButton extends ConsumerWidget {
         .firstOrNull;
     final config = ref.watch(serverConfigProvider).value;
     final features = availableFeatures(model, config);
-    final tools = ref.watch(toolsProvider).value ?? const [];
+    final tools = ref.watch(chatToolsProvider).value ?? const [];
     final skills = ref.watch(skillsProvider).value ?? const [];
     final terminals = ref.watch(terminalServersProvider).value ?? const [];
     if (features.isEmpty &&
@@ -2680,7 +2681,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
         .firstOrNull;
     final config = ref.watch(serverConfigProvider).value;
     final features = availableFeatures(model, config);
-    final tools = ref.watch(toolsProvider).value ?? const <Pickable>[];
+    final tools = ref.watch(chatToolsProvider).value ?? const <Pickable>[];
     final skills = ref.watch(skillsProvider).value ?? const <Pickable>[];
     final terminals = ref.watch(terminalServersProvider).value ?? const [];
     final activeTools = state.toolIds ?? model?.toolIds.toSet() ?? const {};

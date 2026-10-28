@@ -15,6 +15,9 @@ import '../../core/api/chat_socket.dart';
 import '../../core/auth/session.dart';
 import 'tool_approval.dart';
 import '../settings/direct_connections.dart';
+import '../settings/tool_servers.dart';
+import '../terminal/terminal_api.dart' show TerminalServer;
+import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'chat_controller.dart' show serverConfigProvider, userSettingsProvider;
 
 /// What the app answers for events it can't do (running JavaScript, or a
@@ -159,9 +162,16 @@ class _ServerAsksState extends ConsumerState<ServerAsks> {
   Widget build(BuildContext context) => widget.child;
 
   void _onCall(SocketCall call) {
-    if (call.type == 'request:chat:completion') {
-      _direct(call);
-      return;
+    switch (call.type) {
+      case 'request:chat:completion':
+        _direct(call);
+        return;
+      case 'execute:tool':
+        _tool(call);
+        return;
+      case 'request:terminal':
+        _terminal(call);
+        return;
     }
     if (!askTypes.contains(call.type)) {
       call.reply(cantRunHere);
@@ -179,6 +189,54 @@ class _ServerAsksState extends ConsumerState<ServerAsks> {
         await ref.read(serverConfigProvider.future),
       );
       await runDirectCompletion(call, list, ref.read(chatSocketProvider).emit);
+    } catch (e) {
+      call.reply({'error': '$e'});
+    }
+  }
+
+  /// One of your own tool servers' (or terminals') tools: the phone runs it.
+  Future<void> _tool(SocketCall call) async {
+    try {
+      final config = await ref.read(serverConfigProvider.future);
+      if ((config['features'] as Map?)?['enable_tool_servers'] != true) {
+        call.reply({'error': 'Tool servers are disabled'});
+        return;
+      }
+      final settings = await ref.read(userSettingsProvider.future);
+      List<Map<String, dynamic>> data;
+      try {
+        data = [
+          ...await ref.read(userToolServersDataProvider.future),
+          ...await ref.read(userTerminalsDataProvider.future),
+        ];
+      } catch (_) {
+        data = const [];
+      }
+      await answerExecuteTool(
+        call,
+        ui: settings['ui'] as Map?,
+        sessionToken: ref.read(sessionProvider).value?.token,
+        data: data,
+      );
+    } catch (e) {
+      call.reply({'error': '$e'});
+    }
+  }
+
+  Future<void> _terminal(SocketCall call) async {
+    try {
+      final settings = await ref.read(userSettingsProvider.future);
+      final session = ref.read(sessionProvider).value;
+      final system = await ref
+          .read(terminalServersProvider.future)
+          .catchError((_) => const <TerminalServer>[]);
+      await answerTerminalRequest(
+        call,
+        ui: settings['ui'] as Map?,
+        serverUrl: session?.serverUrl ?? '',
+        sessionToken: session?.token,
+        systemTerminal: system.any((t) => t.id == call.body['terminal_id']),
+      );
     } catch (e) {
       call.reply({'error': '$e'});
     }
