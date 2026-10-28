@@ -12,6 +12,7 @@ import '../../core/auth/session.dart';
 import '../calendar/calendar_screen.dart';
 import '../channels/channels_api.dart';
 import '../channels/channels_screen.dart';
+import '../settings/about_screen.dart' show adminStartupNotes;
 import 'chat_controller.dart';
 import 'reply_notify.dart' show notificationText;
 
@@ -122,6 +123,9 @@ class _InAppToastsState extends ConsumerState<InAppToasts> {
     } catch (_) {
       // Signed out.
     }
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => mounted ? adminStartupNotes(context, ref) : null,
+    );
   }
 
   @override

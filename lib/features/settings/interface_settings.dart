@@ -157,6 +157,20 @@ const interfaceSwitches = <String, List<UiSwitch>>{
       'The model shows an emoji for how it feels while talking.',
     ),
   ],
+  'Admin': [
+    (
+      'showUpdateToast',
+      true,
+      'Note new Open WebUI versions',
+      'Admins: say so when a newer Open WebUI is out.',
+    ),
+    (
+      'showChangelog',
+      true,
+      'Show "What\'s New" after updates',
+      'Admins: open the release notes once after the server is updated.',
+    ),
+  ],
 };
 
 /// Switches the app already follows; the others change only the web page
@@ -173,6 +187,9 @@ const appFollows = {
   'promptAutocomplete',
   'iframeSandboxAllowScripts',
   'iframeSandboxAllowSameOrigin',
+  'showEmojiInCall',
+  'showUpdateToast',
+  'showChangelog',
 };
 
 class InterfaceSettings extends ConsumerWidget {

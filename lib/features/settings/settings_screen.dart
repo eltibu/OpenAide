@@ -17,6 +17,7 @@ import 'data_controls.dart';
 import 'interface_settings.dart';
 import 'notification_settings.dart';
 import 'settings_api.dart';
+import 'about_screen.dart';
 import 'terminal_connections.dart';
 import 'two_step_settings.dart';
 import 'usage_screen.dart';
@@ -208,6 +209,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Memory'),
             subtitle: const Text('What models remember about you'),
             onTap: () => open(const MemoriesScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('About'),
+            subtitle: const Text("Server version and what's new"),
+            onTap: () => open(const AboutScreen()),
           ),
           const Divider(),
           ListTile(
