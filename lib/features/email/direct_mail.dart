@@ -536,7 +536,10 @@ class DirectMail implements MailSource {
   }
 
   @override
-  Future<OpenedEmail> openAndKeep(Email e) async {
+  Future<OpenedEmail> openAndKeep(
+    Email e, {
+    void Function(OpenedEmail partial)? onProgress,
+  }) async {
     final m = await _session((c) => _fetch(c, e.id));
     final o = _opened(e, m);
     await _save((s) => _keepOpened(s, o));

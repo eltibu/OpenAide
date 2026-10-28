@@ -4,9 +4,11 @@
 library;
 
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' hide BytesBuilder;
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 
 import '../net/local_network.dart';
 
@@ -286,14 +288,18 @@ String htmlText(String html) =>
   return (title: title, text: text);
 }
 
-/// Turns away addresses on the phone or the home network. A page the model
-/// reads can tell it what to open next, so without this a web page could
-/// make it read a router or a home server and pass the text on.
-Future<void> _checkPublic(
+/// Turns away addresses on the phone or the home network, and returns the
+/// checked addresses for the connection to use. A page the model reads can
+/// tell it what to open next, so without this a web page could make it read
+/// a router or a home server and pass the text on.
+Future<List<InternetAddress>> _checkPublic(
   Uri u,
   Future<List<InternetAddress>> Function(String host) lookup,
 ) async {
-  final host = u.host.toLowerCase();
+  var host = u.host.toLowerCase();
+  if (host.startsWith('[') && host.endsWith(']')) {
+    host = host.substring(1, host.length - 1);
+  }
   final literal = InternetAddress.tryParse(host);
   List<InternetAddress> addresses;
   if (literal != null) {
@@ -304,19 +310,44 @@ Future<void> _checkPublic(
     try {
       addresses = await lookup(host);
     } on SocketException {
-      return; // The request itself says the name doesn't resolve.
+      throw Exception("Couldn't find $host. Check the address.");
     }
   }
+  if (addresses.isEmpty) throw Exception("Couldn't find $host.");
   if (addresses.any(isLocalAddress)) {
     throw Exception(
       "$host is on this phone or your home network. For safety, the "
       "assistant only reads public web pages.",
     );
   }
+  return addresses;
 }
 
+/// A client that connects only to [addresses], the ones just checked, so a
+/// name can't resolve to a public address for the check and to a home one
+/// for the connection. TLS still checks the certificate for the name.
+http.Client _pinnedClient(List<InternetAddress> addresses) {
+  final io = HttpClient()
+    ..connectionFactory = (url, proxyHost, proxyPort) async {
+      final plain = Socket.connect(
+        addresses.first,
+        url.port,
+        timeout: const Duration(seconds: 15),
+      );
+      final socket = url.scheme == 'https'
+          ? plain.then((s) => SecureSocket.secure(s, host: url.host))
+          : plain;
+      return ConnectionTask.fromSocket(socket, () {});
+    };
+  return IOClient(io);
+}
+
+/// The most of a page the assistant reads; past it, the rest is dropped.
+const _maxPageBytes = 2 * 1024 * 1024;
+
 /// A page's text for the model: HTML made readable, JSON and plain text as
-/// they are. Only public addresses, and every redirect is checked too.
+/// they are. Only public addresses, every redirect is checked too, and at
+/// most [_maxPageBytes] are read.
 Future<String> fetchPage(
   String url, {
   http.Client? httpClient,
@@ -330,12 +361,16 @@ Future<String> fetchPage(
     throw Exception('That is not a web address: $url');
   }
   final resolve = lookup ?? InternetAddress.lookup;
-  final client = httpClient ?? http.Client();
   var at = u;
+  late http.StreamedResponse r;
+  http.Client? client;
   try {
-    late http.Response r;
     for (var hops = 0; ; hops++) {
-      await _checkPublic(at, resolve);
+      final addresses = await _checkPublic(at, resolve);
+      if (httpClient == null) {
+        client?.close();
+        client = _pinnedClient(addresses);
+      }
       final req = http.Request('GET', at)
         ..followRedirects = false
         ..headers.addAll({
@@ -344,12 +379,14 @@ Future<String> fetchPage(
               'text/html,application/xhtml+xml,application/json,'
               'text/plain;q=0.9,*/*;q=0.5',
         });
-      r = await http.Response.fromStream(await client.send(req))
+      r = await (httpClient ?? client!)
+          .send(req)
           .timeout(const Duration(seconds: 30));
       final location = r.headers['location'];
       if (r.statusCode < 300 || r.statusCode >= 400 || location == null) {
         break;
       }
+      await r.stream.drain<void>().catchError((_) {});
       if (hops >= 5) throw Exception('The page redirects too many times');
       at = at.resolve(location);
       if (!(at.scheme == 'http' || at.scheme == 'https')) {
@@ -360,11 +397,6 @@ Future<String> fetchPage(
       throw Exception('The page answered ${r.statusCode}');
     }
     final type = r.headers['content-type'] ?? '';
-    final body = utf8.decode(r.bodyBytes, allowMalformed: true);
-    if (type.contains('html') || body.trimLeft().startsWith('<')) {
-      final p = pageText(body);
-      return '${p.title.isEmpty ? '' : '# ${p.title}\n'}$at\n\n${p.text}';
-    }
     if (type.startsWith('image/') ||
         type.startsWith('video/') ||
         type.startsWith('audio/') ||
@@ -372,8 +404,28 @@ Future<String> fetchPage(
         type.contains('pdf')) {
       return "$at is a file ($type), not a page I can read.";
     }
+    final bytes = await _readUpTo(r.stream, _maxPageBytes);
+    final body = utf8.decode(bytes, allowMalformed: true);
+    if (type.contains('html') || body.trimLeft().startsWith('<')) {
+      final p = pageText(body);
+      return '${p.title.isEmpty ? '' : '# ${p.title}\n'}$at\n\n${p.text}';
+    }
     return body;
   } finally {
-    if (httpClient == null) client.close();
+    client?.close();
   }
+}
+
+/// The first [limit] bytes of [stream]; the download stops there.
+Future<List<int>> _readUpTo(Stream<List<int>> stream, int limit) async {
+  final out = BytesBuilder(copy: false);
+  await for (final chunk in stream.timeout(const Duration(seconds: 30))) {
+    final room = limit - out.length;
+    if (chunk.length >= room) {
+      out.add(chunk.sublist(0, room));
+      break;
+    }
+    out.add(chunk);
+  }
+  return out.takeBytes();
 }

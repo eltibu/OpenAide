@@ -23,6 +23,8 @@ void main() {
       expect(calculate('sqrt(16) + abs(-2)'), 6);
       expect(calculate('max(3, 9, 4)'), 9);
       expect(calculate('5!'), 120);
+      // Past 20! a whole number would overflow.
+      expect(calculate('25!'), closeTo(1.5511210043e25, 1e15));
       expect(calculate('1,250 * 2'), 2500);
       expect(formatNumber(calculate('10 / 4')), '2.5');
       expect(formatNumber(calculate('pi')), '3.14159265359');

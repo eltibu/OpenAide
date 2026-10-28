@@ -1,0 +1,26 @@
+name: Mark old builds as dev builds
+
+# One-off, before the first public release: every build so far was published
+# as a normal release, so the stable channel and /releases/latest would point
+# at a dev build. This marks them all as pre-releases (dev channel only).
+# Nothing is deleted; a release can be switched back on its GitHub page.
+on:
+  workflow_dispatch:
+
+jobs:
+  mark:
+    runs-on: [self-hosted, nexus-build]
+    permissions:
+      contents: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          N=0
+          for id in $(gh api --paginate "repos/$REPO/releases?per_page=100" \
+              --jq '.[] | select(.prerelease == false and .draft == false) | .id'); do
+            gh api -X PATCH "repos/$REPO/releases/$id" -F prerelease=true -f make_latest=false >/dev/null
+            N=$((N + 1))
+          done
+          echo "::notice::Marked $N releases as dev builds (pre-releases)."

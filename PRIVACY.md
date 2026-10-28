@@ -36,7 +36,7 @@ Uninstalling the app deletes all of it.
 | Permission | Used for |
 | --- | --- |
 | Microphone | Voice calls, dictation and note recording, only while you use them. |
-| Contacts | Finding who you mean when you ask the assistant to call or text someone. Contacts are looked up on the phone; only the name you asked about goes into the chat. |
+| Contacts | Finding who you mean when you ask the assistant to call or text someone. Contacts are looked up on the phone. The chat gets the name you asked about and, when several contacts match, their names and the last two digits of each number so you can pick. Whole numbers and other contacts stay on the phone. |
 | Approximate location | Only if you turn it on, to tell the assistant roughly where you are (for example for the weather). |
 | Notifications | Telling you when a reply or message arrives. |
 | Install apps | Installing updates of OpenAide itself (not in store versions). |

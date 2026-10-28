@@ -20,8 +20,8 @@ import java.net.URL
  * Settings > Notifications > While the app is closed: about every 15
  * minutes Android lets this ask the server for chats with a new, unread
  * reply and channels with unread messages, and posts a notification for
- * each. Nothing is kept but the time of the last check; the server stays
- * the source of truth. Dart hands over the address and sign-in through
+ * each. Nothing is kept but the time of the last check and the sign-in
+ * (sealed by [KeystoreBox]); the server stays the source of truth. Dart hands over the address and sign-in through
  * [configure] (see reply_notify.dart).
  */
 class BackgroundCheck : JobService() {
@@ -52,8 +52,8 @@ class BackgroundCheck : JobService() {
             }
             val edit = prefs.edit()
                 .putString("baseUrl", baseUrl)
-                .putString("token", token)
-                .putString("cookie", cookie ?: "")
+                .putString("token", KeystoreBox.seal(token))
+                .putString("cookie", KeystoreBox.seal(cookie ?: ""))
             // Start from now: only what arrives later is news.
             if (!prefs.contains("since")) edit.putLong("since", System.currentTimeMillis() / 1000)
             edit.apply()
@@ -105,8 +105,8 @@ class BackgroundCheck : JobService() {
     private fun check() {
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val base = prefs.getString("baseUrl", null) ?: return
-        val token = prefs.getString("token", null) ?: return
-        val cookie = prefs.getString("cookie", "") ?: ""
+        val token = prefs.getString("token", null)?.let(KeystoreBox::open) ?: return
+        val cookie = prefs.getString("cookie", "")?.let(KeystoreBox::open) ?: ""
         val since = prefs.getLong("since", System.currentTimeMillis() / 1000)
         val now = System.currentTimeMillis() / 1000
         if (appVisible) {
