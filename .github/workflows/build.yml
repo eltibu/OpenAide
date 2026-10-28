@@ -10,6 +10,10 @@ on:
         description: Make a NEW signing key (every phone must uninstall once). Only if the old one is lost.
         type: boolean
         default: false
+      tester_build:
+        description: Tester build to share with someone else. No built-in update token, and no release (Joel's phone never sees it).
+        type: boolean
+        default: false
 
 jobs:
   android:
@@ -107,6 +111,7 @@ jobs:
       # The built-in token must be able to see this repo's releases, or the
       # app can never find an update. Never prints the token.
       - name: Check the update token
+        if: ${{ !inputs.tester_build }}
         env:
           NEXUS_UPDATE_TOKEN: ${{ secrets.NEXUS_UPDATE_TOKEN }}
         run: |
@@ -139,8 +144,9 @@ jobs:
       - name: Build APK
         env:
           # Read-only token for the in-app updater (repo secret), so the app
-          # never asks for one.
-          NEXUS_UPDATE_TOKEN: ${{ secrets.NEXUS_UPDATE_TOKEN }}
+          # never asks for one. Left out of tester builds: anyone holding the
+          # APK can read it, and it opens this private repo.
+          NEXUS_UPDATE_TOKEN: ${{ !inputs.tester_build && secrets.NEXUS_UPDATE_TOKEN || '' }}
         run: |
           set -o pipefail
           flutter build apk --release \
@@ -218,12 +224,12 @@ jobs:
           exit 1
       - uses: actions/upload-artifact@v4
         with:
-          name: nexus-assistant-apk
+          name: ${{ inputs.tester_build && 'nexus-tester-apk' || 'nexus-assistant-apk' }}
           path: build/app/outputs/flutter-apk/app-release.apk
       # Each build becomes a GitHub Release tagged v0.1.<run number>; the
       # app's updater installs the newest one.
       - name: Publish build for in-app updates
-        if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ !inputs.tester_build && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message || github.event.pull_request.title }}
