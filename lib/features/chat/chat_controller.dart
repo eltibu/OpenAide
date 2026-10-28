@@ -10,6 +10,7 @@ import '../../core/ai/ai_providers.dart'
     show isProviderModel, parseProviderModel;
 import '../../core/api/openwebui_client.dart' show ApiException;
 import '../../core/auth/session.dart';
+import '../email/email_agent.dart' show appWorkingChats, emailChatTitle;
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
 import '../providers/ai_keys.dart';
@@ -38,11 +39,14 @@ const _uuid = Uuid();
 /// Models from AI providers you signed in to on the phone (Settings > AI
 /// providers) come last.
 final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  // Extra model sources never hold up the server's own list for long.
   final direct = ref
       .watch(directModelsProvider.future)
+      .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
   final providers = ref
       .watch(providerModelsProvider.future)
+      .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
   final server = await ref.watch(clientProvider).models();
   final mine = await direct;
@@ -178,7 +182,11 @@ final chatListProvider = FutureProvider<List<ChatSummary>>((ref) async {
     all.addAll(batch);
     if (batch.length < chatPageSize) break;
   }
-  return all;
+  // The app's own Email chat is its workspace, not a conversation.
+  return [
+    for (final c in all)
+      if (c.title != emailChatTitle && !appWorkingChats.contains(c.id)) c,
+  ];
 });
 
 const chatPageSize = 60;

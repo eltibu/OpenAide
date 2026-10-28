@@ -12,6 +12,8 @@ import '../../core/auth/session.dart';
 import '../calendar/calendar_screen.dart';
 import '../channels/channels_api.dart';
 import '../channels/channels_screen.dart';
+import '../email/email_agent.dart'
+    show appWorkingChats, emailChatKey, emailChatTitle;
 import '../settings/about_screen.dart' show adminStartupNotes;
 import 'chat_controller.dart';
 import 'reply_notify.dart' show notificationText;
@@ -39,7 +41,7 @@ class CalendarToast extends Toast {
 
 /// The toast for a chat event, or null when there's nothing to say: only
 /// finished replies in a chat other than [openChat].
-Toast? chatEventToast(Map event, {String? openChat}) {
+Toast? chatEventToast(Map event, {String? openChat, String? hiddenChat}) {
   final inner = event['data'];
   if (inner is! Map) return null;
   final data = inner['data'];
@@ -59,6 +61,12 @@ Toast? chatEventToast(Map event, {String? openChat}) {
   if (inner['type'] != 'chat:completion' || data['done'] != true) return null;
   if (chatId.isEmpty || chatId == openChat) return null;
   final title = '${data['title'] ?? ''}';
+  // The app's own working chats (Email) aren't anyone's conversation.
+  if (chatId == hiddenChat ||
+      appWorkingChats.contains(chatId) ||
+      title == emailChatTitle) {
+    return null;
+  }
   return ReplyToast(
     title.isEmpty ? 'New Chat' : title,
     notificationText('${data['content'] ?? ''}'),
@@ -143,7 +151,12 @@ class _InAppToastsState extends ConsumerState<InAppToasts> {
     final state = ref.read(chatControllerProvider);
     // The web leaves temporary chats alone too.
     if (state.temporary) return;
-    final toast = chatEventToast(e, openChat: state.chat?.id);
+    final ui = ref.read(userSettingsProvider).value?['ui'];
+    final toast = chatEventToast(
+      e,
+      openChat: state.chat?.id,
+      hiddenChat: ui is Map ? ui[emailChatKey] as String? : null,
+    );
     if (toast != null) _show(toast);
   }
 
@@ -164,7 +177,10 @@ class _InAppToastsState extends ConsumerState<InAppToasts> {
     messenger?.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: toast is CalendarToast ? 30 : 15),
+        // Above the message box, so typing and its buttons stay reachable.
+        margin: const EdgeInsets.fromLTRB(12, 0, 12, 96),
+        dismissDirection: DismissDirection.horizontal,
+        duration: Duration(seconds: toast is CalendarToast ? 30 : 8),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

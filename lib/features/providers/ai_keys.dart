@@ -58,13 +58,18 @@ final aiKeysProvider = AsyncNotifierProvider<AiKeys, Map<AiProvider, String>>(
 /// the phone. A provider that fails is left out rather than hiding the
 /// others.
 final providerModelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  // Time limits, so a slow provider or a stuck phone-models list never
+  // keeps the whole model picker on "Loading…".
   final local = ref
       .watch(localPickerModelsProvider.future)
+      .timeout(const Duration(seconds: 3))
       .catchError((_) => const <ModelInfo>[]);
   final keys = await ref.watch(aiKeysProvider.future);
   final found = await Future.wait([
     for (final e in keys.entries)
-      listProviderModels(e.key, e.value).catchError((_) => const <ModelInfo>[]),
+      listProviderModels(e.key, e.value)
+          .timeout(const Duration(seconds: 10))
+          .catchError((_) => const <ModelInfo>[]),
   ]);
   return [for (final list in found) ...list, ...await local];
 });

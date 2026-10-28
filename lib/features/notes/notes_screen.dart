@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import '../../core/widgets/empty_state.dart';
+
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -15,6 +18,8 @@ import '../chat/file_details.dart' show FileDetailsScreen;
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import '../workspace/access_editor.dart' show editAccess;
 import 'notes_api.dart';
+import '../../core/widgets/markdown_style.dart';
+import '../../core/widgets/search_field.dart';
 
 /// The server's notes, native: search, pin, write in Markdown.
 class NotesScreen extends ConsumerStatefulWidget {
@@ -120,7 +125,6 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     ];
     final pinned = shown.where((n) => n.pinned).toList();
     final rest = shown.where((n) => !n.pinned).toList();
-    final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Notes'),
@@ -143,10 +147,8 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-              child: SearchBar(
-                hintText: 'Search notes',
-                leading: const Icon(Icons.search),
-                elevation: const WidgetStatePropertyAll(0),
+              child: SearchField(
+                hint: 'Search notes',
                 onChanged: (v) => setState(() => _query = v),
               ),
             ),
@@ -156,13 +158,16 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                 child: Text('Couldn\'t load notes.\n$_error'),
               )
             else if (!_loading && shown.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  _query.isEmpty ? 'No notes yet' : 'No notes match',
-                  style: TextStyle(color: muted),
-                ),
-              ),
+              _query.isEmpty
+                  ? const EmptyState(
+                      icon: Icons.sticky_note_2_outlined,
+                      title: 'No notes yet',
+                      message: 'Tap the pencil to write one.',
+                    )
+                  : const EmptyState(
+                      icon: Icons.search_off,
+                      title: 'No notes match',
+                    ),
             if (pinned.isNotEmpty) _Heading('Pinned'),
             for (final n in pinned) _tile(n),
             if (pinned.isNotEmpty && rest.isNotEmpty) _Heading('Notes'),
@@ -527,7 +532,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
@@ -729,9 +733,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     onDoubleTap: () => setState(() => _preview = false),
                     child: MarkdownBlock(
                       data: _body.text,
-                      config: dark
-                          ? MarkdownConfig.darkConfig
-                          : MarkdownConfig.defaultConfig,
+                      config: nexusMarkdown(context),
                     ),
                   )
                 else

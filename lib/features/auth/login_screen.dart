@@ -185,6 +185,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ],
                 const SizedBox(height: 24),
                 FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                   onPressed: session.isLoading ? null : _submit,
                   child: session.isLoading
                       ? const SizedBox.square(
@@ -208,6 +211,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                  ),
                   onPressed: session.isLoading ? null : _signInWithBrowser,
                   icon: const Icon(Icons.open_in_browser),
                   label: const Text('Sign in with browser (SSO)'),

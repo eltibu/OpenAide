@@ -19,6 +19,7 @@ import 'manage_ollama.dart';
 import 'model_defaults.dart';
 import '../workspace/models_screen.dart'
     show ModelEditor, modelsApiProvider, workspaceModelsProvider;
+import '../../core/widgets/search_field.dart';
 
 /// One connection model as the admin page shows it: what the server lists
 /// now, and the changes saved for it (if any).
@@ -533,11 +534,8 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: TextField(
-                      decoration: const InputDecoration(
-                        prefixIcon: Icon(Icons.search),
-                        hintText: 'Search models',
-                      ),
+                    child: SearchField(
+                      hint: 'Search models',
                       onChanged: (v) => setState(() => _query = v),
                     ),
                   ),

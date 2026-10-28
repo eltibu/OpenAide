@@ -4,6 +4,7 @@
 /// noted.
 library;
 
+import '../../core/widgets/markdown_style.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1099,7 +1100,6 @@ class _NoteScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
       appBar: AppBar(
         title: Text('${note['title']}'),
@@ -1149,9 +1149,7 @@ class _NoteScreen extends ConsumerWidget {
         child: MarkdownBlock(
           data: '${note['content']}',
           selectable: true,
-          config: dark
-              ? MarkdownConfig.darkConfig
-              : MarkdownConfig.defaultConfig,
+          config: nexusMarkdown(context),
         ),
       ),
     );

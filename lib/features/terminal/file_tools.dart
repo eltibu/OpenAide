@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 
 import 'terminal_api.dart';
+import '../../core/widgets/markdown_style.dart';
 
 enum FileSort { name, size, modified }
 
@@ -339,7 +340,6 @@ class _NotebookViewState extends State<NotebookView> {
       return const Center(child: Text("This notebook can't be read."));
     }
     final scheme = Theme.of(context).colorScheme;
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final canRun = widget.api != null && widget.path != null;
     return Column(
       children: [
@@ -384,9 +384,7 @@ class _NotebookViewState extends State<NotebookView> {
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: MarkdownBlock(
                     data: src,
-                    config: dark
-                        ? MarkdownConfig.darkConfig
-                        : MarkdownConfig.defaultConfig,
+                    config: nexusMarkdown(context),
                   ),
                 );
               }

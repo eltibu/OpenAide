@@ -2,6 +2,8 @@
 /// in to on the phone, with chats kept on the phone.
 library;
 
+import '../../core/widgets/search_field.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -29,6 +31,7 @@ import '../providers/local_models_screen.dart';
 import '../providers/ai_providers_screen.dart';
 import '../providers/provider_chat.dart';
 import 'local_chats.dart';
+import '../../core/widgets/markdown_style.dart';
 
 const _uuid = Uuid();
 
@@ -530,7 +533,6 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
   }
 
   Widget _message(BuildContext context, ChatMessage m, {required bool last}) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final images = [
       for (final a in attachmentsOf(m))
         if (a.dataUrl != null) a.dataUrl!,
@@ -580,9 +582,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
               MarkdownBlock(
                 data: g.text,
                 selectable: true,
-                config: dark
-                    ? MarkdownConfig.darkConfig
-                    : MarkdownConfig.defaultConfig,
+                config: nexusMarkdown(context),
               )
             else
               ReplySteps(steps: g as List<StepPart>, live: busy),
@@ -765,13 +765,8 @@ class _ModelSheetState extends State<_ModelSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: TextField(
-                autofocus: false,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search a model',
-                  isDense: true,
-                ),
+              child: SearchField(
+                hint: 'Search a model',
                 onChanged: (v) => setState(() => _query = v),
               ),
             ),

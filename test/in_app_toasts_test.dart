@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/features/chat/in_app_toasts.dart';
+import 'package:nexus_assistant/features/email/email_agent.dart'
+    show appWorkingChats;
 
 Map reply(String chat, {bool done = true}) => {
   'chat_id': chat,
@@ -22,6 +24,13 @@ Map message(String channel, {String from = 'u2', String content = 'hi'}) => {
 };
 
 void main() {
+  test("the app's own email chat makes no toast", () {
+    expect(chatEventToast(reply('c2'), hiddenChat: 'c2'), isNull);
+    appWorkingChats.add('c3');
+    expect(chatEventToast(reply('c3')), isNull);
+    appWorkingChats.remove('c3');
+  });
+
   test('finished replies in other chats', () {
     final t = chatEventToast(reply('c2'), openChat: 'c1');
     expect(t, isA<ReplyToast>());

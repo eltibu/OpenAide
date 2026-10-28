@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../core/widgets/empty_state.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
@@ -115,13 +118,10 @@ class _AutomationsScreenState extends ConsumerState<AutomationsScreen> {
                 child: Text('Couldn\'t load automations.\n$_error'),
               )
             else if (!_loading && _items.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(24),
-                child: Text(
-                  'No automations yet. Tap + to have a model run a prompt on '
-                  'a schedule.',
-                  style: TextStyle(color: muted),
-                ),
+              const EmptyState(
+                icon: Icons.schedule,
+                title: 'No automations yet',
+                message: 'Tap + to have a model run a prompt on a schedule.',
               ),
             for (final a in _items)
               ListTile(

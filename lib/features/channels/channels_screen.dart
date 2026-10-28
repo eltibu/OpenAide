@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import '../../core/widgets/empty_state.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +21,7 @@ import 'person_card.dart';
 import '../workspace/access_editor.dart' show editAccess;
 import '../settings/settings_screen.dart' show meProvider;
 import 'channels_api.dart';
+import '../../core/widgets/markdown_style.dart';
 
 final channelsApiProvider = Provider<ChannelsApi>(
   (ref) => ChannelsApi(ref.watch(clientProvider)),
@@ -78,12 +81,10 @@ class ChannelsScreen extends ConsumerWidget {
           data: (list) => ListView(
             children: [
               if (list.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'No channels yet',
-                    style: TextStyle(color: muted),
-                  ),
+                const EmptyState(
+                  icon: Icons.tag,
+                  title: 'No channels yet',
+                  message: 'Channels you join or are added to show here.',
                 ),
               for (final c in list)
                 ListTile(
@@ -1175,7 +1176,6 @@ class _MessageTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final muted = context.nexus.muted;
     final scheme = Theme.of(context).colorScheme;
     final initial = m.author.isEmpty
@@ -1248,9 +1248,7 @@ class _MessageTile extends StatelessWidget {
                     MarkdownBlock(
                       data: showMentions(m.content),
                       selectable: false,
-                      config: dark
-                          ? MarkdownConfig.darkConfig
-                          : MarkdownConfig.defaultConfig,
+                      config: nexusMarkdown(context),
                     ),
                   if (m.files.isNotEmpty)
                     MessageAttachments(attachments: m.files, alignEnd: false),
