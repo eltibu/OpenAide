@@ -48,22 +48,29 @@ Future<String?> resolvePrompt(
   if (!context.mounted) return null;
   final values = await showDialog<Map<String, String>>(
     context: context,
-    builder: (_) => _VariablesDialog(title: prompt.name, vars: vars),
+    builder: (_) => VariablesDialog(title: prompt.name, vars: vars),
   );
   if (values == null) return null;
   return fillInputVariables(text, values);
 }
 
-class _VariablesDialog extends StatefulWidget {
-  const _VariablesDialog({required this.title, required this.vars});
+/// Asks for a prompt's placeholders, or a chat's Chat Variables.
+class VariablesDialog extends StatefulWidget {
+  const VariablesDialog({
+    super.key,
+    required this.title,
+    required this.vars,
+    this.action = 'Use',
+  });
   final String title;
   final List<PromptVariable> vars;
+  final String action;
 
   @override
-  State<_VariablesDialog> createState() => _VariablesDialogState();
+  State<VariablesDialog> createState() => VariablesDialogState();
 }
 
-class _VariablesDialogState extends State<_VariablesDialog> {
+class VariablesDialogState extends State<VariablesDialog> {
   late final Map<String, TextEditingController> _text = {
     for (final v in widget.vars)
       v.name: TextEditingController(
@@ -80,7 +87,13 @@ class _VariablesDialogState extends State<_VariablesDialog> {
         v.name: '${v.initial == true}',
   };
 
-  String _label(String name) => name.replaceAll('_', ' ');
+  String _label(String name) =>
+      widget.vars
+          .where((v) => v.name == name)
+          .firstOrNull
+          ?.props['label']
+          ?.toString() ??
+      name.replaceAll('_', ' ');
 
   @override
   Widget build(BuildContext context) => AlertDialog(
@@ -150,7 +163,7 @@ class _VariablesDialogState extends State<_VariablesDialog> {
               v.name: _picked[v.name] ?? _text[v.name]!.text,
           });
         },
-        child: const Text('Use'),
+        child: Text(widget.action),
       ),
     ],
   );

@@ -276,6 +276,14 @@ class OpenWebUiClient {
     body: {'chat': chat.toServerBody()},
   );
 
+  /// A chat's answers to its model's Chat Variables.
+  Future<void> saveChatVariables(String id, Map<String, dynamic> values) =>
+      _send(
+        'POST',
+        '/api/v1/chats/$id',
+        body: {'chat': <String, dynamic>{}, 'variables': values},
+      );
+
   Future<void> deleteChat(String id) => _send('DELETE', '/api/v1/chats/$id');
 
   /// Saves a chat's own system prompt and model settings (its Controls).

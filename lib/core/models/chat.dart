@@ -297,8 +297,10 @@ class Chat {
     this.currentId,
     List<String>? models,
     Map<String, dynamic>? extra,
+    Map<String, dynamic>? variables,
   }) : models = models ?? [],
-       extra = extra ?? {};
+       extra = extra ?? {},
+       variables = variables ?? {};
 
   /// Builds from a `/api/v1/chats/{id}` response.
   factory Chat.fromServer(Map<String, dynamic> json) {
@@ -316,6 +318,7 @@ class Chat {
       },
       currentId: history['currentId'] as String?,
       models: (body['models'] as List?)?.whereType<String>().toList(),
+      variables: (json['variables'] as Map?)?.cast<String, dynamic>(),
       extra: {
         for (final e in body.entries)
           if (!known.contains(e.key)) e.key: e.value,
@@ -330,6 +333,9 @@ class Chat {
   String? currentId;
   List<String> models;
   final Map<String, dynamic> extra;
+
+  /// Answers to the model's Chat Variables, kept beside the chat.
+  final Map<String, dynamic> variables;
 
   /// The visible conversation: walk from [currentId] up to the root.
   List<ChatMessage> get thread {

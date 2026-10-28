@@ -176,6 +176,7 @@ class ChatState {
     this.queued = const [],
     this.compareIds = const [],
     this.params = const {},
+    this.variables = const {},
     this.revision = 0,
   });
 
@@ -217,6 +218,10 @@ class ChatState {
   /// web), saved with the chat; they win over Settings > General.
   final Map<String, dynamic> params;
 
+  /// This chat's answers to its model's Chat Variables (fields the model's
+  /// system prompt asks for, such as a language or a tone).
+  final Map<String, dynamic> variables;
+
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
 
@@ -241,6 +246,7 @@ class ChatState {
     List<String>? queued,
     List<String>? compareIds,
     Map<String, dynamic>? params,
+    Map<String, dynamic>? variables,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -257,6 +263,7 @@ class ChatState {
     queued: queued ?? this.queued,
     compareIds: compareIds ?? this.compareIds,
     params: params ?? this.params,
+    variables: variables ?? this.variables,
     revision: revision + 1,
   );
 }
@@ -689,12 +696,14 @@ class ChatController extends Notifier<ChatState> {
       temporary: false,
       queued: const [],
       params: const {},
+      variables: const {},
     );
     try {
       final chat = await ref.read(clientProvider).chat(id);
       if (view != _view) return;
       state = state.copyWith(
         chat: chat,
+        variables: chat.variables,
         modelId: chat.models.firstOrNull ?? state.modelId,
         compareIds: chat.models.skip(1).toList(),
         params: {
@@ -950,6 +959,15 @@ class ChatController extends Notifier<ChatState> {
     } catch (e) {
       state = state.copyWith(error: "Couldn't fork the chat: $e");
     }
+  }
+
+  /// Saves this chat's Chat Variables (on the server when it is saved).
+  Future<void> setVariables(Map<String, dynamic> values) async {
+    final merged = {...state.variables, ...values};
+    state = state.copyWith(variables: merged);
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty || state.temporary) return;
+    await ref.read(clientProvider).saveChatVariables(chat.id, merged);
   }
 
   /// Has the server sum up the older part of this chat so it fits the
@@ -1324,6 +1342,9 @@ class ChatController extends Notifier<ChatState> {
             ),
           ),
           'files': ?_documents(chat),
+          // Not saved on the server yet: the answers go with the request.
+          if ((temporary || chat.id.isEmpty) && state.variables.isNotEmpty)
+            'chat_variables': state.variables,
           if (continuing != null) 'assistant_message_id': reply.id,
           'regeneration_prompt': ?hint,
           if (hint != null && redoOf != null)
@@ -1341,6 +1362,13 @@ class ChatController extends Notifier<ChatState> {
         chat.id = turn.chatId;
         // Controls set before the first message are saved with the new
         // chat, as the web does.
+        if (isNew && state.variables.isNotEmpty) {
+          unawaited(
+            client
+                .saveChatVariables(chat.id, state.variables)
+                .catchError((_) {}),
+          );
+        }
         if (isNew && chatParams.isNotEmpty) {
           chat.extra['params'] = chatParams;
           unawaited(

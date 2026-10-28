@@ -44,6 +44,7 @@ import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
 import '../admin/connections_screen.dart' show ConnectionsScreen;
 import '../../core/models/model_info.dart';
 import 'model_pins.dart';
+import 'chat_variables.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -861,7 +862,7 @@ class _ComposerState extends ConsumerState<_Composer> {
     super.dispose();
   }
 
-  void _send() {
+  Future<void> _send() async {
     final value = _text.text;
     final controller = ref.read(chatControllerProvider.notifier);
     final files = ref
@@ -870,8 +871,54 @@ class _ComposerState extends ConsumerState<_Composer> {
         .any((a) => a.uploaded != null);
     // Keep the draft when it can't go anywhere yet, rather than losing it.
     if ((value.trim().isEmpty && !files) || !controller.canSend) return;
+    // The model's Chat Variables come first when unanswered, as on the web.
+    if (chatVariablesNeeded(
+      currentChatVariableFields(ref),
+      ref.read(chatControllerProvider).variables,
+    )) {
+      if (!await editChatVariables(context, ref) || !mounted) return;
+    }
     _text.clear();
     controller.send(value);
+  }
+
+  Future<void> _expand() async {
+    final send = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (c) => Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+              tooltip: 'Collapse',
+              icon: const Icon(Icons.close_fullscreen),
+              onPressed: () => Navigator.pop(c, false),
+            ),
+            title: const Text('Message'),
+            actions: [
+              IconButton(
+                tooltip: 'Send',
+                icon: const Icon(Icons.arrow_upward),
+                onPressed: () => Navigator.pop(c, true),
+              ),
+            ],
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: TextField(
+              controller: _text,
+              autofocus: true,
+              expands: true,
+              maxLines: null,
+              textAlignVertical: TextAlignVertical.top,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(border: InputBorder.none),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (send == true) await _send();
   }
 
   void _queue() {
@@ -1453,6 +1500,20 @@ class _ComposerState extends ConsumerState<_Composer> {
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                  // Long text: write it full screen, as the web's expand.
+                  suffixIcon: ValueListenableBuilder(
+                    valueListenable: _text,
+                    builder: (context, v, _) =>
+                        '\n'.allMatches(v.text).length >= 3 ||
+                            v.text.length > 240
+                        ? IconButton(
+                            tooltip: 'Expand input',
+                            icon: const Icon(Icons.open_in_full, size: 18),
+                            onPressed: _expand,
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  suffixIconConstraints: const BoxConstraints(),
                 ),
               ),
               // One slim row of small buttons under the text, as on the web.
@@ -1462,6 +1523,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                   children: [
                     const AttachButton(),
                     const _FeaturesButton(),
+                    const _ChatVariablesButton(),
                     const SizedBox(width: 4),
                     const Expanded(
                       child: Align(
@@ -1920,6 +1982,30 @@ Future<void> _userMessageMenu(
     )) {
       await ref.read(chatControllerProvider.notifier).deleteMessage(m);
     }
+  }
+}
+
+/// Chat Variables: shown when the chat's model asks for some.
+class _ChatVariablesButton extends ConsumerWidget {
+  const _ChatVariablesButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(chatControllerProvider);
+    final fields = chatVariableFields(
+      ref.watch(modelsProvider).value ?? const [],
+      [?state.modelId, ...state.compareIds],
+    );
+    if (fields.isEmpty) return const SizedBox.shrink();
+    return IconButton(
+      tooltip: 'Chat Variables',
+      visualDensity: VisualDensity.compact,
+      color: chatVariablesNeeded(fields, state.variables)
+          ? context.nexus.muted
+          : NexusColors.accent,
+      icon: const Icon(Icons.data_object),
+      onPressed: () => editChatVariables(context, ref),
+    );
   }
 }
 
