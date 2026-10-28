@@ -27,7 +27,7 @@ class AiProvidersScreen extends StatelessWidget {
 }
 
 /// The providers with their sign-in and key fields; also the first screen
-/// of using Nexus without a server.
+/// of using the app without a server.
 class AiProviderList extends ConsumerWidget {
   const AiProviderList({super.key, this.intro});
 

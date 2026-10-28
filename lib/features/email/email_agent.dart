@@ -33,6 +33,7 @@ class Email {
     this.date,
     this.snippet = '',
     this.unread = false,
+    this.starred = false,
     this.note = '',
   });
 
@@ -45,10 +46,11 @@ class Email {
     date: DateTime.tryParse('${j['date'] ?? ''}')?.toLocal(),
     snippet: '${j['snippet'] ?? ''}',
     unread: j['unread'] == true,
+    starred: j['starred'] == true,
     note: '${j['note'] ?? ''}',
   );
 
-  Email copyWith({bool? unread}) => Email(
+  Email copyWith({bool? unread, bool? starred}) => Email(
     id: id,
     thread: thread,
     from: from,
@@ -57,6 +59,7 @@ class Email {
     date: date,
     snippet: snippet,
     unread: unread ?? this.unread,
+    starred: starred ?? this.starred,
     note: note,
   );
 
@@ -69,6 +72,7 @@ class Email {
     'date': date?.toUtc().toIso8601String(),
     'snippet': snippet,
     'unread': unread,
+    'starred': starred,
     'note': note,
   };
 
@@ -80,6 +84,7 @@ class Email {
   final DateTime? date;
   final String snippet;
   final bool unread;
+  final bool starred;
 
   /// What Nexus says about it.
   final String note;
@@ -93,13 +98,22 @@ class Email {
 
 /// One message of a thread, opened.
 class EmailMessage {
-  const EmailMessage({this.from = '', this.to = '', this.date, this.body = ''});
+  const EmailMessage({
+    this.from = '',
+    this.to = '',
+    this.date,
+    this.body = '',
+    this.html = '',
+    this.attachments = const [],
+  });
 
   factory EmailMessage.fromJson(Map j) => EmailMessage(
     from: '${j['from'] ?? ''}',
     to: '${j['to'] ?? ''}',
     date: DateTime.tryParse('${j['date'] ?? ''}')?.toLocal(),
     body: '${j['body'] ?? j['text'] ?? ''}',
+    html: '${j['html'] ?? ''}',
+    attachments: [for (final a in j['attachments'] as List? ?? const []) '$a'],
   );
 
   final String from;
@@ -107,11 +121,19 @@ class EmailMessage {
   final DateTime? date;
   final String body;
 
+  /// The email as its sender laid it out, when it has an HTML part.
+  final String html;
+
+  /// File names of what came with it.
+  final List<String> attachments;
+
   Map<String, dynamic> toJson() => {
     'from': from,
     'to': to,
     'date': date?.toUtc().toIso8601String(),
     'body': body,
+    if (html.isNotEmpty) 'html': html,
+    if (attachments.isNotEmpty) 'attachments': attachments,
   };
 }
 
@@ -372,7 +394,61 @@ abstract interface class MailSource {
     required String subject,
     required String text,
   });
+
+  /// Sends [e] on to [to], with [text] above it.
+  Future<void> forward(Email e, {required String to, String text = ''});
+
+  /// Out of the inbox, still kept in the account.
+  Future<void> archive(Email e);
+
+  /// To the trash.
+  Future<void> trash(Email e);
+
+  /// To spam.
+  Future<void> spam(Email e);
+
+  Future<void> setStarred(Email e, bool starred);
 }
+
+/// [store] without [id] in any folder, after it was archived or deleted.
+void dropEmail(Map<String, dynamic> store, String id) {
+  for (final folder in ['inbox', 'sent']) {
+    final list = store[folder];
+    if (list is List) {
+      store[folder] = [
+        for (final j in list.whereType<Map>())
+          if (j['id'] != id) j,
+      ];
+    }
+  }
+  final opened = store['opened'];
+  if (opened is Map) opened.remove(id);
+}
+
+/// [store] with [id] starred or not in every folder.
+void starEmail(Map<String, dynamic> store, String id, bool starred) {
+  for (final folder in ['inbox', 'sent']) {
+    final list = store[folder];
+    if (list is List) {
+      store[folder] = [
+        for (final j in list.whereType<Map>())
+          j['id'] == id ? {...j, 'starred': starred} : j,
+      ];
+    }
+  }
+}
+
+String forwardRequest(Email e, {required String to, String text = ''}) =>
+    'Forward the email with Gmail message id ${e.id}, subject '
+    '"${e.subject}", now, as me, to $to'
+    '${text.trim().isEmpty ? '' : ', with exactly this text above it, unchanged:\n<<<\n$text\n>>>\n'}'
+    '. Keep its attachments. Answer with a JSON object: {"sent": true or '
+    'false, "error": "" or what went wrong}.';
+
+String actRequest(Email e, String what) =>
+    'For the email with Gmail message id ${e.id}, subject "${e.subject}": '
+    '$what. Answer with a JSON object: {"done": true or false, "error": "" '
+    'or what went wrong}.';
 
 /// Runs requests as turns in the email chat and waits for the answers.
 class EmailAgent implements MailSource {
@@ -689,6 +765,41 @@ class EmailAgent implements MailSource {
   }) async => _sent(
     await _askJson(composeRequest(to: to, subject: subject, text: text)),
   );
+
+  @override
+  Future<void> forward(Email e, {required String to, String text = ''}) async =>
+      _sent(await _askJson(forwardRequest(e, to: to, text: text)));
+
+  Future<void> _act(Email e, String what) async {
+    final json = await _askJson(actRequest(e, what));
+    if (json is Map && json['done'] == true) return;
+    final why = json is Map ? '${json['error'] ?? ''}' : '';
+    throw EmailAgentError(why.isEmpty ? 'It wasn\'t done.' : why);
+  }
+
+  @override
+  Future<void> archive(Email e) async {
+    await _act(e, 'Archive it (remove it from the inbox, keep it in All Mail)');
+    await _save((s) => dropEmail(s, e.id));
+  }
+
+  @override
+  Future<void> trash(Email e) async {
+    await _act(e, 'Move it to the trash');
+    await _save((s) => dropEmail(s, e.id));
+  }
+
+  @override
+  Future<void> spam(Email e) async {
+    await _act(e, 'Mark it as spam');
+    await _save((s) => dropEmail(s, e.id));
+  }
+
+  @override
+  Future<void> setStarred(Email e, bool starred) async {
+    await _act(e, starred ? 'Star it' : 'Remove its star');
+    await _save((s) => starEmail(s, e.id, starred));
+  }
 
   void _sent(Object? json) {
     if (json is Map && json['sent'] == true) return;
