@@ -63,6 +63,7 @@ import 'model_pins.dart';
 import 'chat_variables.dart';
 import 'compare_text.dart';
 import 'model_controls.dart';
+import '../../core/widgets/markdown_style.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -616,9 +617,7 @@ class _MessageList extends ConsumerWidget {
 
     final mdConfig = withFileLinks(
       withReplyCode(
-        (dark ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig).copy(
-          configs: [images],
-        ),
+        nexusMarkdown(context).copy(configs: [images]),
         dark,
         collapse: ui['collapseCodeBlocks'] == true,
         onSaveCode: (oldCode, newCode) async {
@@ -854,7 +853,11 @@ class _ModelAnswers extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 4),
-                MarkdownBlock(data: '${merged!['content']}', selectable: true),
+                MarkdownBlock(
+                  data: '${merged!['content']}',
+                  selectable: true,
+                  config: nexusMarkdown(context),
+                ),
               ],
             ),
           ),

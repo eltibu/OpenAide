@@ -15,6 +15,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../chat/file_details.dart' show FileDetailsScreen;
 import 'settings_screen.dart';
+import '../../core/widgets/search_field.dart';
 
 /// Chats from an export file: a JSON list (the web's export), one chat, or
 /// one chat per line.
@@ -602,15 +603,9 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: TextField(
+            child: SearchField(
               controller: _search,
-              textInputAction: TextInputAction.search,
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search by name',
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
+              hint: 'Search by name',
               onSubmitted: (_) => _reload(),
             ),
           ),

@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/ai/ai_providers.dart' show isProviderModel;
 import '../../core/api/openwebui_client.dart' show ApiException;
 import '../../core/auth/session.dart';
+import '../email/email_agent.dart' show appWorkingChats, emailChatTitle;
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
 import '../providers/ai_keys.dart';
@@ -176,7 +177,11 @@ final chatListProvider = FutureProvider<List<ChatSummary>>((ref) async {
     all.addAll(batch);
     if (batch.length < chatPageSize) break;
   }
-  return all;
+  // The app's own Email chat is its workspace, not a conversation.
+  return [
+    for (final c in all)
+      if (c.title != emailChatTitle && !appWorkingChats.contains(c.id)) c,
+  ];
 });
 
 const chatPageSize = 60;

@@ -16,6 +16,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../studio/office_preview.dart';
 import 'chat_controller.dart' show userSettingsProvider;
+import '../../core/widgets/markdown_style.dart';
 
 String fileSize(num? bytes) {
   if (bytes == null) return '';
@@ -215,12 +216,7 @@ class _FileDetailsScreenState extends ConsumerState<FileDetailsScreen> {
                     (ref.watch(userSettingsProvider).value?['ui']
                             as Map?)?['renderMarkdownInPreviews'] !=
                         false)
-                  MarkdownBlock(
-                    data: shown,
-                    config: Theme.of(context).brightness == Brightness.dark
-                        ? MarkdownConfig.darkConfig
-                        : MarkdownConfig.defaultConfig,
-                  )
+                  MarkdownBlock(data: shown, config: nexusMarkdown(context))
                 else
                   SelectableText(
                     content.isEmpty ? 'No content' : shown,

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../../core/widgets/empty_state.dart';
+
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -120,13 +122,12 @@ class ModelsScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: 88),
             children: [
               if (items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'No custom models yet. Tap + to give a model its own '
-                    'instructions, knowledge and tools.',
-                    style: TextStyle(color: muted),
-                  ),
+                const EmptyState(
+                  icon: Icons.auto_awesome_outlined,
+                  title: 'No custom models yet',
+                  message:
+                      'Tap + to give a model its own instructions, knowledge '
+                      'and tools.',
                 ),
               for (final m in ownerFiltered(ref, items, (m) => m.userId))
                 ListTile(

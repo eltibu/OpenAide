@@ -5,6 +5,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../core/theme.dart';
 import 'studio_doc.dart';
+import '../../core/widgets/markdown_style.dart';
 
 class AiResult {
   const AiResult(this.instruction, this.text);
@@ -181,9 +182,7 @@ class AiSheetState extends State<AiSheet> {
                     reverse: writing,
                     child: MarkdownBlock(
                       data: cleanAiText(_text!),
-                      config: Theme.of(context).brightness == Brightness.dark
-                          ? MarkdownConfig.darkConfig
-                          : MarkdownConfig.defaultConfig,
+                      config: nexusMarkdown(context),
                     ),
                   ),
                 ),

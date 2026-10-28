@@ -21,6 +21,7 @@ import '../providers/ai_keys.dart';
 import '../providers/ai_providers_screen.dart';
 import '../providers/provider_chat.dart';
 import 'local_chats.dart';
+import '../../core/widgets/markdown_style.dart';
 
 const _uuid = Uuid();
 
@@ -490,7 +491,6 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
   }
 
   Widget _message(BuildContext context, ChatMessage m, {required bool last}) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
     final images = [
       for (final a in attachmentsOf(m))
         if (a.dataUrl != null) a.dataUrl!,
@@ -567,9 +567,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             MarkdownBlock(
               data: m.content,
               selectable: true,
-              config: dark
-                  ? MarkdownConfig.darkConfig
-                  : MarkdownConfig.defaultConfig,
+              config: nexusMarkdown(context),
             ),
           if (m.error != null && !(last && _error != null))
             Text(
