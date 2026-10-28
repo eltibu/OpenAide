@@ -40,6 +40,7 @@ import 'read_aloud.dart';
 import 'reply_actions.dart';
 import 'reply_parts.dart';
 import 'reply_steps.dart';
+import 'rich_input.dart';
 import 'side_panel.dart';
 import 'streaming_fade.dart';
 import 'chat_controller.dart';
@@ -1179,7 +1180,7 @@ class _Composer extends ConsumerStatefulWidget {
 }
 
 class _ComposerState extends ConsumerState<_Composer> {
-  final _text = TextEditingController();
+  final _text = RichInputController();
 
   @override
   void dispose() {
@@ -1705,6 +1706,11 @@ class _ComposerState extends ConsumerState<_Composer> {
 
   @override
   Widget build(BuildContext context) {
+    // Settings > Interface > Rich text input (on unless turned off).
+    _text.rich =
+        (ref.watch(userSettingsProvider).value?['ui']
+            as Map?)?['richTextInput'] !=
+        false;
     final controller = ref.read(chatControllerProvider.notifier);
     final ready = ref.watch(
       chatControllerProvider.select(
