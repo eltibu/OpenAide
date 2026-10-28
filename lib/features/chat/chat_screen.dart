@@ -557,6 +557,7 @@ class _MessageList extends ConsumerWidget {
       itemBuilder: (context, i) {
         final m = messages[messages.length - 1 - i];
         final live = streaming && i == 0;
+        if (m.role == 'user' && isTimerMessage(m)) return _TimerLine(m);
         if (m.role == 'user') {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -797,6 +798,80 @@ class _Sources extends StatelessWidget {
 }
 
 /// Copy, edit or regenerate, and switching between versions of a message.
+/// A timer the model set going off: the server adds it as an internal
+/// message, which the web shows as a small "Timer" line, not your bubble.
+bool isTimerMessage(ChatMessage m) {
+  final meta = m.extra['meta'];
+  return meta is Map && meta['internal'] == true && meta['type'] == 'timer';
+}
+
+class _TimerLine extends StatefulWidget {
+  const _TimerLine(this.message);
+  final ChatMessage message;
+
+  @override
+  State<_TimerLine> createState() => _TimerLineState();
+}
+
+class _TimerLineState extends State<_TimerLine> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.nexus.muted;
+    final small = Theme.of(context).textTheme.bodySmall?.copyWith(color: muted);
+    return InkWell(
+      onTap: () => setState(() => _open = !_open),
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12, bottom: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.timer_outlined, size: 16, color: muted),
+            const SizedBox(width: 6),
+            Text('Timer', style: small?.copyWith(fontWeight: FontWeight.w600)),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                widget.message.content,
+                style: small,
+                maxLines: _open ? null : 1,
+                overflow: _open ? null : TextOverflow.ellipsis,
+              ),
+            ),
+            Icon(
+              _open ? Icons.expand_less : Icons.expand_more,
+              size: 16,
+              color: muted,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A message's time in seconds (or milliseconds) since 1970.
+DateTime messageDate(int timestamp) => DateTime.fromMillisecondsSinceEpoch(
+  timestamp > 1e11 ? timestamp : timestamp * 1000,
+);
+
+/// "Oct 28, 3:04 PM", as the web shows beside a reply.
+String messageTime(BuildContext context, int timestamp) {
+  final l10n = MaterialLocalizations.of(context);
+  final t = messageDate(timestamp);
+  return '${l10n.formatShortMonthDay(t)}, '
+      '${l10n.formatTimeOfDay(TimeOfDay.fromDateTime(t))}';
+}
+
+/// "Tuesday, October 28, 2026, 3:04 PM", when you hold it.
+String messageTimeFull(BuildContext context, int timestamp) {
+  final l10n = MaterialLocalizations.of(context);
+  final t = messageDate(timestamp);
+  return '${l10n.formatFullDate(t)}, '
+      '${l10n.formatTimeOfDay(TimeOfDay.fromDateTime(t))}';
+}
+
 class _MessageActions extends ConsumerWidget {
   const _MessageActions({
     required this.message,
@@ -893,6 +968,18 @@ class _MessageActions extends ConsumerWidget {
             ),
             ReplyMoreButton(reply: message, color: muted, isLast: isLast),
           ],
+          if (!compact && message.timestamp > 0)
+            Padding(
+              padding: const EdgeInsets.only(left: 6, right: 4),
+              child: Tooltip(
+                message: messageTimeFull(context, message.timestamp),
+                child: Text(
+                  messageTime(context, message.timestamp),
+                  style: Theme.of(context).textTheme.labelSmall
+                      ?.copyWith(color: muted),
+                ),
+              ),
+            ),
         ],
       ),
     );
