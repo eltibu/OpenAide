@@ -105,8 +105,22 @@ class ModelsScreen extends ConsumerWidget {
 }
 
 class ModelEditor extends ConsumerStatefulWidget {
-  const ModelEditor({super.key, this.model});
+  const ModelEditor({
+    super.key,
+    this.model,
+    this.copyOf,
+    this.connectionModel = false,
+    this.saved = true,
+  });
   final WorkspaceModel? model;
+
+  /// Starts a new model as a copy of this one.
+  final WorkspaceModel? copyOf;
+
+  /// Admin: [model] is a model from a connection, changed in place (no base
+  /// model). [saved] says whether the server already keeps changes for it.
+  final bool connectionModel;
+  final bool saved;
 
   @override
   ConsumerState<ModelEditor> createState() => _ModelEditorState();
@@ -128,6 +142,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   bool _idEdited = false;
 
   bool get _isNew => widget.model == null;
+  bool get _connection => widget.connectionModel;
 
   @override
   void initState() {
@@ -152,21 +167,19 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _knowledge = {for (final k in m.knowledge) k.$1};
       _tools = m.ids('toolIds').toSet();
       _skills = m.ids('skillIds').toSet();
+    } else if (widget.copyOf case final c?) {
+      _name.text = '${c.name} (copy)';
+      _id.text = modelIdFrom(_name.text);
+      _description.text = c.description;
+      _system.text = c.system;
+      _base = c.baseModelId ?? c.id;
+      _caps = {...c.capabilities};
+      _knowledge = {for (final k in c.knowledge) k.$1};
+      _tools = c.ids('toolIds').toSet();
+      _skills = c.ids('skillIds').toSet();
     } else {
       // A new model starts with the abilities the web turns on by default.
-      _caps = {
-        for (final k in [
-          'vision',
-          'file_upload',
-          'web_search',
-          'image_generation',
-          'code_interpreter',
-          'citations',
-          'status_updates',
-          'builtin_tools',
-        ])
-          k: true,
-      };
+      _caps = {for (final k in defaultModelCapabilities) k: true};
     }
     if (mounted) setState(() => _loading = false);
   }
@@ -174,14 +187,15 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   Future<void> _save() async {
     final name = _name.text.trim();
     final id = _isNew ? modelIdFrom(_id.text.trim()) : _m!.id;
-    if (name.isEmpty || id.isEmpty || _base == null) {
+    if (name.isEmpty || id.isEmpty || (_base == null && !_connection)) {
       _say(context, 'Name, id and base model are needed');
       return;
     }
     final kbs = ref.read(knowledgeListProvider).value ?? const [];
     final old = _m?.json ?? <String, dynamic>{};
-    final meta = {...?_m?.meta};
-    final params = {...?_m?.params};
+    final source = _m ?? widget.copyOf;
+    final meta = {...?source?.meta};
+    final params = {...?source?.params};
     meta['description'] = _description.text.trim();
     meta['capabilities'] = _caps;
     meta['toolIds'] = _tools.toList();
@@ -191,7 +205,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
         () {
           final k = kbs.where((k) => k.id == id).firstOrNull;
           // Keep how the server stored ones the app can't list.
-          final kept = (_m?.meta['knowledge'] as List? ?? const [])
+          final kept = (source?.meta['knowledge'] as List? ?? const [])
               .whereType<Map>()
               .where((m) => m['id'] == id)
               .firstOrNull;
@@ -213,15 +227,17 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     }
     setState(() => _busy = true);
     try {
+      final create = _isNew || (_connection && !widget.saved);
       await ref.read(modelsApiProvider).save({
         ...old,
         'id': id,
         'name': name,
-        'base_model_id': _base,
+        'base_model_id': _connection ? null : _base,
         'meta': meta,
         'params': params,
         'is_active': _m?.active ?? true,
-      }, create: _isNew);
+        if (_connection && create) 'access_grants': publicModelGrants,
+      }, create: create);
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
@@ -235,8 +251,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: Text('Delete ${_m!.name}?'),
-        content: const Text('This can\'t be undone.'),
+        title: Text(_connection ? 'Reset ${_m!.name}?' : 'Delete ${_m!.name}?'),
+        content: Text(
+          _connection
+              ? 'Your changes to it are removed and it goes back to how its '
+                    'connection sends it.'
+              : 'This can\'t be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
@@ -244,7 +265,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: Text(_connection ? 'Reset' : 'Delete'),
           ),
         ],
       ),
@@ -300,11 +321,26 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       appBar: AppBar(
         title: Text(_isNew ? 'New model' : 'Edit model'),
         actions: [
-          if (!_isNew && writable)
+          if (!_isNew && !_connection)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: 'Clone',
+              onPressed: _loading
+                  ? null
+                  : () => Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => ModelEditor(copyOf: _m),
+                      ),
+                    ),
+              icon: const Icon(Icons.copy_all_outlined),
+            ),
+          if (!_isNew && writable && (!_connection || widget.saved))
+            IconButton(
+              tooltip: _connection ? 'Reset to defaults' : 'Delete',
               onPressed: _busy || _loading ? null : _delete,
-              icon: const Icon(Icons.delete_outline),
+              icon: Icon(
+                _connection ? Icons.restart_alt : Icons.delete_outline,
+              ),
             ),
           if (writable)
             Padding(
@@ -339,26 +375,27 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                         onChanged: (_) => _idEdited = true,
                         decoration: const InputDecoration(labelText: 'Id'),
                       ),
-                      DropdownButtonFormField<String>(
-                        initialValue: bases.any((m) => m.id == _base)
-                            ? _base
-                            : null,
-                        isExpanded: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Base model',
-                        ),
-                        items: [
-                          for (final m in bases)
-                            DropdownMenuItem(
-                              value: m.id,
-                              child: Text(
-                                m.name,
-                                overflow: TextOverflow.ellipsis,
+                      if (!_connection)
+                        DropdownButtonFormField<String>(
+                          initialValue: bases.any((m) => m.id == _base)
+                              ? _base
+                              : null,
+                          isExpanded: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Base model',
+                          ),
+                          items: [
+                            for (final m in bases)
+                              DropdownMenuItem(
+                                value: m.id,
+                                child: Text(
+                                  m.name,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                        ],
-                        onChanged: (v) => setState(() => _base = v),
-                      ),
+                          ],
+                          onChanged: (v) => setState(() => _base = v),
+                        ),
                       TextField(
                         controller: _description,
                         maxLines: null,

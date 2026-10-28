@@ -49,6 +49,24 @@ const modelCapabilities = <String, String>{
   'usage': 'Reports token use',
 };
 
+/// The abilities a new model starts with, as on the web.
+const defaultModelCapabilities = [
+  'vision',
+  'file_upload',
+  'web_search',
+  'image_generation',
+  'code_interpreter',
+  'citations',
+  'status_updates',
+  'builtin_tools',
+];
+
+/// Everyone may use it: what the web gives a base model when an admin first
+/// changes it, so it doesn't turn private.
+const publicModelGrants = [
+  {'principal_type': 'user', 'principal_id': '*', 'permission': 'read'},
+];
+
 class ModelsApi {
   ModelsApi(this.client);
   final OpenWebUiClient client;
@@ -81,6 +99,26 @@ class ModelsApi {
         create ? '$_base/create' : '$_base/model/update',
         body: form,
       );
+
+  /// Admin: the saved changes to connection models (records whose id is
+  /// the connection model's own), including switched-off ones.
+  Future<List<WorkspaceModel>> baseRecords() async => [
+    for (final m
+        in (await client.send('GET', '$_base/base') as List? ?? const [])
+            .whereType<Map>())
+      WorkspaceModel(m.cast<String, dynamic>()),
+  ];
+
+  Future<void> import(List<dynamic> models) =>
+      client.send('POST', '$_base/import', body: {'models': models});
+
+  /// Admin: default models, models pinned for everyone and the list order.
+  Future<Map<String, dynamic>> config() async =>
+      ((await client.send('GET', '/api/v1/configs/models')) as Map)
+          .cast<String, dynamic>();
+
+  Future<void> saveConfig(Map<String, dynamic> config) =>
+      client.send('POST', '/api/v1/configs/models', body: config);
 
   Future<void> toggle(String id) =>
       client.send('POST', '$_base/model/toggle', query: {'id': id});

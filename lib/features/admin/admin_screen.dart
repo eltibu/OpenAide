@@ -7,6 +7,7 @@ import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'admin_api.dart';
+import 'admin_models_screen.dart';
 import 'banners_screen.dart';
 import 'config_editor.dart';
 import 'connections_screen.dart';
@@ -92,6 +93,14 @@ class AdminScreen extends StatelessWidget {
             onTap: () => open(const BannersScreen()),
           ),
           ListTile(
+            leading: const Icon(Icons.auto_awesome_outlined),
+            title: const Text('Models'),
+            subtitle: const Text(
+              'Switch on, hide, set up, order and set defaults',
+            ),
+            onTap: () => open(const AdminModelsScreen()),
+          ),
+          ListTile(
             leading: const Icon(Icons.cable),
             title: const Text('Model connections'),
             subtitle: const Text('OpenAI-compatible and Ollama servers'),
@@ -108,9 +117,7 @@ class AdminScreen extends StatelessWidget {
           ListTile(
             leading: const Icon(Icons.settings_applications_outlined),
             title: const Text('More server settings'),
-            subtitle: const Text(
-              'Model connections, models, database and the rest, on the web page',
-            ),
+            subtitle: const Text('Everything else, on the web page'),
             trailing: const Icon(Icons.open_in_new, size: 18),
             onTap: () => open(
               const ServerPage(
