@@ -1,3 +1,5 @@
+import 'events_screen.dart';
+
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -139,6 +141,14 @@ class AdminScreen extends StatelessWidget {
             title: const Text('Pipelines'),
             subtitle: const Text('Install, set up and remove pipelines'),
             onTap: () => open(const PipelinesScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.webhook),
+            title: const Text('Events'),
+            subtitle: const Text(
+              'Webhooks the server calls when things happen',
+            ),
+            onTap: () => open(const EventsScreen()),
           ),
           for (final section in adminConfigSections)
             ListTile(
