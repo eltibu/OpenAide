@@ -8,6 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.IBinder
 
@@ -36,12 +38,45 @@ class MicService : Service() {
             }
         }
 
+        /** A headset or earbud button press during a call. */
+        var onButton: (() -> Unit)? = null
+
         fun stop(context: Context) {
             context.stopService(Intent(context, MicService::class.java))
         }
     }
 
+    private var media: MediaSession? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        media?.release()
+        media = null
+        super.onDestroy()
+    }
+
+    /** Lets the headset button reach Nexus while a call runs. */
+    private fun listenForButton() {
+        if (media != null) return
+        media = MediaSession(this, "Nexus call").apply {
+            setCallback(object : MediaSession.Callback() {
+                override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
+                    @Suppress("DEPRECATION")
+                    val key = mediaButtonIntent.getParcelableExtra<android.view.KeyEvent>(Intent.EXTRA_KEY_EVENT)
+                    if (key?.action == android.view.KeyEvent.ACTION_UP) onButton?.invoke()
+                    return true
+                }
+            })
+            setPlaybackState(
+                PlaybackState.Builder()
+                    .setActions(PlaybackState.ACTION_PLAY_PAUSE)
+                    .setState(PlaybackState.STATE_PLAYING, 0, 1f)
+                    .build(),
+            )
+            isActive = true
+        }
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val call = intent?.getBooleanExtra(EXTRA_CALL, true) ?: true
@@ -80,6 +115,7 @@ class MicService : Service() {
         } catch (e: Exception) {
             stopSelf()
         }
+        if (call) listenForButton()
         return START_NOT_STICKY
     }
 }

@@ -129,4 +129,19 @@ void main() {
     await call.end();
     expect(call.phase, CallPhase.ended);
   });
+
+  test('the headset button stops the answer, then mutes', () async {
+    final (call, events, host) = await started();
+    await speak(events);
+    host.talking.value = true;
+    expect(call.phase, CallPhase.speaking);
+    events.add({'type': 'button'});
+    await pumpEventQueue();
+    expect(host.talking.value, isFalse);
+    expect(call.phase, CallPhase.listening);
+    events.add({'type': 'button'});
+    await pumpEventQueue();
+    expect(call.muted, isTrue);
+    await call.end();
+  });
 }

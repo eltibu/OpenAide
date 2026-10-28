@@ -313,6 +313,9 @@ class RealtimeCall extends ChangeNotifier {
 
   void _audioEvent(Map<String, dynamic> data) {
     switch (data['type']) {
+      case 'button':
+        // Headset button: stops the answer, or mutes and unmutes.
+        speaking ? stopSpeaking() : mute();
       case 'input':
         if (connected && !muted) {
           _send({

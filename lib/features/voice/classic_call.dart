@@ -97,6 +97,11 @@ class ClassicCall extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    if (e['type'] == 'button') {
+      // Headset button: stops the answer, or mutes and unmutes.
+      phase == CallPhase.speaking ? unawaited(interrupt()) : mute();
+      return;
+    }
     if (e['type'] != 'input') return;
     final frame = e['pcm'] as Uint8List;
     level = muted ? 0 : frameLevel(frame);

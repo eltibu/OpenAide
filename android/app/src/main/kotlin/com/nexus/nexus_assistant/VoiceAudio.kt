@@ -193,6 +193,7 @@ class VoiceAudio(private val activity: Activity) :
     private fun startOrError(): String = try {
         start()
         // Keeps listening with the screen locked or another app in front.
+        MicService.onButton = { emit(mapOf("type" to "button")) }
         MicService.start(activity, !recordOnly)
         "started"
     } catch (e: Exception) {
@@ -393,7 +394,10 @@ class VoiceAudio(private val activity: Activity) :
     @Suppress("DEPRECATION")
     fun stop() {
         val wasRunning = running
-        if (wasRunning) MicService.stop(activity)
+        if (wasRunning) {
+            MicService.onButton = null
+            MicService.stop(activity)
+        }
         running = false
         capturing = false
         captureThread?.join(500)
