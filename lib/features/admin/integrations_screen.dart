@@ -5,11 +5,80 @@ library;
 
 import 'dart:convert';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../server/server_page.dart';
+
+/// A connection as the web exports it: one item in a list, without who may
+/// use it or the OAuth client the server registered.
+String exportConnection(Map<String, dynamic> c) {
+  final info = {...?(c['info'] as Map?)?.cast<String, dynamic>()}
+    ..remove('oauth_client_info')
+    ..remove('oauth_client_secret');
+  return jsonEncode([
+    {
+      for (final k in [
+        'type',
+        'url',
+        'spec_type',
+        'spec',
+        'path',
+        'auth_type',
+        'forward_cookies',
+        'headers',
+        'key',
+      ])
+        if (c[k] != null) k: c[k],
+      'info': info,
+    },
+  ]);
+}
+
+/// Fills a connection from an exported file (a list, or one connection),
+/// keeping who may use it. Throws [FormatException] when it isn't one.
+void importConnection(Map<String, dynamic> c, String text) {
+  var data = jsonDecode(text);
+  if (data is List) data = data.isEmpty ? null : data.first;
+  if (data is! Map) throw const FormatException('Not a connection');
+  for (final k in [
+    'type',
+    'url',
+    'spec_type',
+    'spec',
+    'path',
+    'auth_type',
+    'headers',
+    'key',
+  ]) {
+    if (data[k] != null) c[k] = data[k];
+  }
+  c['forward_cookies'] = data['forward_cookies'] == true;
+  final info = data['info'];
+  if (info is Map) {
+    c['info'] = {
+      ...?(c['info'] as Map?)?.cast<String, dynamic>(),
+      ...info.cast<String, dynamic>(),
+    };
+  }
+  final config = data['config'];
+  if (config is Map && config['enable'] != null) {
+    c['config'] = {
+      ...?(c['config'] as Map?)?.cast<String, dynamic>(),
+      'enable': config['enable'],
+    };
+  }
+}
+
+/// A connection id as the web makes one from a name.
+String slugId(String from) => from
+    .toLowerCase()
+    .replaceAll(RegExp(r'^https?://'), '')
+    .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+    .replaceAll(RegExp(r'^-+|-+$'), '');
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -309,16 +378,21 @@ class ServerEditor extends ConsumerStatefulWidget {
 }
 
 class _ServerEditorState extends ConsumerState<ServerEditor> {
-  late final Map<String, dynamic> _c = widget.connection;
+  // A plain copy, so every part of it takes any value.
+  late final Map<String, dynamic> _c =
+      jsonDecode(jsonEncode(widget.connection)) as Map<String, dynamic>;
   bool _verifying = false;
+
+  /// Bumped when an import replaces the fields, so they show the new values.
+  int _form = 0;
 
   bool get _tool => widget.kind == toolServerKind;
 
   Map<String, dynamic> get _info =>
-      (_c['info'] as Map?)?.cast<String, dynamic>() ??
+      (_c['info'] as Map<String, dynamic>?) ??
       (_c['info'] = <String, dynamic>{});
   Map<String, dynamic> get _config =>
-      (_c['config'] as Map?)?.cast<String, dynamic>() ??
+      (_c['config'] as Map<String, dynamic>?) ??
       (_c['config'] = <String, dynamic>{});
 
   Widget _field(
@@ -358,6 +432,101 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
     ),
   );
 
+  bool get _oauth =>
+      _c['type'] == 'mcp' && '${_c['auth_type'] ?? ''}'.startsWith('oauth_2.1');
+
+  /// A new MCP connection takes its id from its name, as on the web.
+  void _ensureId() {
+    if (_c['type'] == 'mcp' &&
+        widget.isNew &&
+        '${_info['id'] ?? ''}'.trim().isEmpty) {
+      final slug = slugId('${_info['name'] ?? ''}');
+      _info['id'] = slug.isEmpty
+          ? 'mcp-${DateTime.now().millisecondsSinceEpoch}'
+          : slug;
+    }
+  }
+
+  Future<void> _register() async {
+    final url = '${_c['url'] ?? ''}'.trim();
+    if (url.isEmpty) return _say(context, 'Add the server\'s URL');
+    final static = _c['auth_type'] == 'oauth_2.1_static';
+    if (static &&
+        ('${_info['oauth_client_id'] ?? ''}'.isEmpty ||
+            '${_info['oauth_client_secret'] ?? ''}'.isEmpty)) {
+      return _say(context, 'Add the client id and secret');
+    }
+    setState(_ensureId);
+    final id = '${_info['id'] ?? ''}'.trim();
+    if (id.isEmpty) return _say(context, 'Add an id to register');
+    setState(() => _verifying = true);
+    try {
+      final scope = '${_info['oauth_scope'] ?? ''}';
+      final res = await ref
+          .read(clientProvider)
+          .send(
+            'POST',
+            '/api/v1/configs/oauth/clients/register',
+            query: {'type': 'mcp'},
+            body: {
+              'url': url,
+              'client_id': id,
+              if (scope.isNotEmpty) 'oauth_scope': scope,
+              if (static) ...{
+                'client_secret': _info['oauth_client_secret'],
+                'oauth_server_url': _info['oauth_server_url'] ?? '',
+              },
+            },
+          );
+      _info['oauth_client_info'] = (res as Map?)?['oauth_client_info'];
+      if (mounted) {
+        _say(context, 'Registered. Save to keep it, and keep the id as it is.');
+      }
+    } catch (e) {
+      if (mounted) _say(context, 'Registration failed: $e');
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
+  Future<void> _authorize() async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => ServerPage(
+          title: 'Sign in',
+          path: '/oauth/clients/mcp:${_info['id']}/authorize',
+          signIn: true,
+        ),
+      ),
+    );
+    if (ok == true && mounted) _say(context, 'Signed in');
+  }
+
+  Future<void> _import() async {
+    final picked = await FilePicker.pickFiles();
+    if (picked.isEmpty) return;
+    try {
+      importConnection(_c, utf8.decode(await picked.first.readAsBytes()));
+      setState(() => _form++);
+      if (mounted) _say(context, 'Imported');
+    } catch (_) {
+      if (mounted) _say(context, 'That isn\'t a connection file');
+    }
+  }
+
+  Future<void> _export() async {
+    final name = '${_info['id'] ?? ''}'.isNotEmpty
+        ? _info['id']
+        : '${_info['name'] ?? ''}'.isNotEmpty
+        ? _info['name']
+        : 'export';
+    await FilePicker.saveFile(
+      fileName: 'tool-server-$name.json',
+      bytes: utf8.encode(exportConnection(_c)),
+    );
+  }
+
   Future<void> _verify() async {
     setState(() => _verifying = true);
     try {
@@ -382,14 +551,34 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
       return;
     }
     _c['url'] = '${_c['url']}'.trim();
+    if (_tool && _c['type'] != 'mcp') {
+      _c['url'] = '${_c['url']}'.replaceAll(RegExp(r'/$'), '');
+    }
     if (!_tool && '${_c['id'] ?? ''}'.isEmpty) {
       // The web's id for a new terminal: from its name, or its address.
       final from = '${_c['name'] ?? ''}'.isNotEmpty ? _c['name'] : _c['url'];
-      _c['id'] = '$from'
-          .toLowerCase()
-          .replaceAll(RegExp(r'^https?://'), '')
-          .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-          .replaceAll(RegExp(r'^-+|-+$'), '');
+      _c['id'] = slugId('$from');
+    }
+    if (_tool) {
+      _ensureId();
+      final id = '${_info['id'] ?? ''}';
+      if (id.contains(':') || id.contains('|')) {
+        _say(context, 'The id can\'t contain ":" or "|"');
+        return;
+      }
+      if (_oauth && _info['oauth_client_info'] == null) {
+        _say(context, 'Register the OAuth client first');
+        return;
+      }
+      if (_c['spec_type'] == 'json') {
+        try {
+          _c['spec'] = const JsonEncoder.withIndent('  ')
+              .convert(jsonDecode('${_c['spec'] ?? ''}'));
+        } catch (_) {
+          _say(context, 'The JSON spec isn\'t valid JSON');
+          return;
+        }
+      }
     }
     Navigator.pop(context, _c);
   }
@@ -410,6 +599,14 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
               onPressed: () => Navigator.pop(context, ServerEditor.delete),
               icon: const Icon(Icons.delete_outline),
             ),
+          if (_tool)
+            PopupMenuButton<String>(
+              onSelected: (v) => v == 'import' ? _import() : _export(),
+              itemBuilder: (_) => const [
+                PopupMenuItem(value: 'import', child: Text('Import')),
+                PopupMenuItem(value: 'export', child: Text('Export')),
+              ],
+            ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(onPressed: _done, child: const Text('Save')),
@@ -417,6 +614,7 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
         ],
       ),
       body: ListView(
+        key: ValueKey(_form),
         padding: const EdgeInsets.only(bottom: 40),
         children: [
           if (_tool)
@@ -425,9 +623,16 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
               'mcp': 'MCP (streamable HTTP)',
             }, (v) => _c['type'] = v),
           _field('URL', _c['url'], (v) => _c['url'] = v),
-          if (!mcp)
+          if (_tool && !mcp)
+            _choice('OpenAPI spec', '${_c['spec_type'] ?? 'url'}', const {
+              'url': 'From a path or URL',
+              'json': 'Pasted JSON',
+            }, (v) => _c['spec_type'] = v),
+          if (!mcp && _c['spec_type'] == 'json')
+            _field('Spec JSON', _c['spec'], (v) => _c['spec'] = v, lines: 4)
+          else if (!mcp)
             _field(
-              _tool ? 'OpenAPI spec' : 'Spec path',
+              _tool ? 'Spec path' : 'Spec path',
               _c['path'],
               (v) => _c['path'] = v,
               hint: 'A path on the server, or a full URL',
@@ -442,15 +647,78 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
           }, (v) => _c['auth_type'] = v),
           if (auth == 'bearer')
             _field('Key', _c['key'], (v) => _c['key'] = v, secret: true),
-          if (auth.startsWith('oauth_2.1'))
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-              child: Text(
-                'Registering the OAuth client and signing in happen on the '
-                'web page the first time.',
+          if (_oauth) ...[
+            if (auth == 'oauth_2.1_static') ...[
+              _field(
+                'Client ID',
+                _info['oauth_client_id'],
+                (v) => _info['oauth_client_id'] = v,
+              ),
+              _field(
+                'Client secret',
+                _info['oauth_client_secret'],
+                (v) => _info['oauth_client_secret'] = v,
+                secret: true,
+              ),
+              _field(
+                'Authorization server URL',
+                _info['oauth_server_url'],
+                (v) => _info['oauth_server_url'] = v,
+                hint: 'Empty finds it from the server',
+              ),
+            ],
+            _field(
+              'Scope',
+              _info['oauth_scope'],
+              (v) => _info['oauth_scope'] = v,
+              hint: 'Empty uses the scopes the server lists',
+            ),
+            _choice(
+              'Resource parameter',
+              '${_info['oauth_resource_parameter'] ?? 'auto'}',
+              const {'auto': 'Automatic', 'include': 'Include', 'omit': 'Omit'},
+              (v) => _info['oauth_resource_parameter'] = v,
+            ),
+            ListTile(
+              leading: Icon(
+                _info['oauth_client_info'] != null
+                    ? Icons.verified_outlined
+                    : Icons.app_registration,
+              ),
+              title: Text(
+                _info['oauth_client_info'] != null
+                    ? 'OAuth client registered'
+                    : 'OAuth client not registered yet',
+              ),
+              subtitle: Text(
+                widget.isNew
+                    ? 'Register, save, then open it again to sign in.'
+                    : 'Sign in once so the tools can act for you.',
                 style: TextStyle(color: muted),
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  OutlinedButton(
+                    onPressed: _verifying ? null : _register,
+                    child: Text(
+                      _info['oauth_client_info'] != null
+                          ? 'Register again'
+                          : 'Register client',
+                    ),
+                  ),
+                  if (!widget.isNew && _info['oauth_client_info'] != null)
+                    FilledButton.tonal(
+                      onPressed: _authorize,
+                      child: const Text('Sign in'),
+                    ),
+                ],
+              ),
+            ),
+          ],
           if (_tool)
             _field(
               'Headers',
@@ -542,7 +810,9 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.wifi_tethering),
-              label: const Text('Check connection'),
+              label: Text(
+                _oauth ? 'Check OAuth discovery' : 'Check connection',
+              ),
             ),
           ),
         ],

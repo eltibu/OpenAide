@@ -11,8 +11,18 @@ import '../../core/auth/session.dart';
 /// app, signed in as the user. A stand-in until each section is native:
 /// it always matches the server, including features added later.
 class ServerPage extends ConsumerStatefulWidget {
-  const ServerPage({super.key, required this.title, this.path = '', this.url});
+  const ServerPage({
+    super.key,
+    required this.title,
+    this.path = '',
+    this.url,
+    this.signIn = false,
+  });
   final String title;
+
+  /// A sign-in with another service (a tool server's OAuth): its pages stay
+  /// here until it comes back to the server, which closes this page.
+  final bool signIn;
 
   /// Where on the server, such as `/notes`.
   final String path;
@@ -32,6 +42,9 @@ class _ServerPageState extends ConsumerState<ServerPage> {
   /// The first server page shown: back from here leaves, never deeper into
   /// the web app's own history.
   String? _start;
+
+  /// Whether a sign-in page went off to the other service yet.
+  bool _left = false;
 
   @override
   void initState() {
@@ -65,6 +78,19 @@ class _ServerPageState extends ConsumerState<ServerPage> {
                 to.scheme == 'about' ||
                 to.scheme == 'data' ||
                 ours(to)) {
+              // Back from the sign-in: the server took it, so close.
+              if (widget.signIn &&
+                  to != null &&
+                  _left &&
+                  to.host == base.host &&
+                  !to.path.contains('/oauth/')) {
+                if (mounted) Navigator.of(context).pop(true);
+                return NavigationDecision.prevent;
+              }
+              return NavigationDecision.navigate;
+            }
+            if (widget.signIn && to.scheme.startsWith('http')) {
+              _left = true;
               return NavigationDecision.navigate;
             }
             launchUrl(to, mode: LaunchMode.externalApplication);
