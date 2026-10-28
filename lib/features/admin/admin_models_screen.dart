@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
+import '../chat/model_pins.dart' show modelLink;
 import '../workspace/models_api.dart';
 import 'manage_ollama.dart';
 import 'model_defaults.dart';
@@ -365,6 +366,14 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
               'copy' => Clipboard.setData(
                 ClipboardData(text: m.id),
               ).then((_) => mounted ? _say(context, 'Copied ${m.id}') : null),
+              'link' => Clipboard.setData(
+                ClipboardData(
+                  text: modelLink(
+                    ref.read(sessionProvider).value?.serverUrl ?? '',
+                    m.id,
+                  ),
+                ),
+              ).then((_) => mounted ? _say(context, 'Copied link') : null),
               'clone' => _clone(m),
               'export' => _export(m),
               _ => null,
@@ -388,6 +397,7 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                 child: Text(pinned ? 'Unpin for everyone' : 'Pin for everyone'),
               ),
               const PopupMenuItem(value: 'copy', child: Text('Copy id')),
+              const PopupMenuItem(value: 'link', child: Text('Copy Link')),
               const PopupMenuItem(value: 'clone', child: Text('Clone')),
               if (m.record != null)
                 const PopupMenuItem(value: 'export', child: Text('Export')),

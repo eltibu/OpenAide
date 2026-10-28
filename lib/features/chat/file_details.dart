@@ -13,6 +13,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../studio/office_preview.dart';
 
 String fileSize(num? bytes) {
   if (bytes == null) return '';
@@ -163,6 +164,27 @@ class _FileDetailsScreenState extends ConsumerState<FileDetailsScreen> {
                           MaterialPageRoute<void>(
                             builder: (_) =>
                                 PdfViewScreen(name: widget.name, bytes: bytes),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                if (isOfficeFile(widget.name))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: OutlinedButton.icon(
+                      icon: const Icon(Icons.description_outlined),
+                      label: const Text('Preview'),
+                      onPressed: () async {
+                        final bytes = await _bytes();
+                        if (!context.mounted) return;
+                        await Navigator.push(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (_) => OfficePreviewScreen(
+                              name: widget.name,
+                              bytes: bytes,
+                            ),
                           ),
                         );
                       },

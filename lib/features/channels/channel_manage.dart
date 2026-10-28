@@ -433,8 +433,8 @@ class _ChannelWebhooksScreenState extends State<ChannelWebhooksScreen> {
                   leading: const Icon(Icons.webhook_outlined),
                   title: Text(h.name),
                   subtitle: Text(
-                    h.url(_base),
-                    maxLines: 1,
+                    [?h.createdLabel, h.url(_base)].join('\n'),
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                   onTap: () async {

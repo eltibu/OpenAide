@@ -16,6 +16,7 @@ import '../server/server_page.dart';
 import 'file_tools.dart';
 import 'sqlite_view.dart';
 import 'terminal_api.dart';
+import '../studio/office_preview.dart';
 
 /// The terminal servers this user may use; empty when none is set up.
 final terminalServersProvider = FutureProvider<List<TerminalServer>>((
@@ -1606,6 +1607,22 @@ class _FileViewerState extends State<FileViewer> {
                     context,
                     MaterialPageRoute<void>(
                       builder: (_) => PdfViewScreen(
+                        name: widget.name,
+                        bytes: Uint8List.fromList(bytes),
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : _text == null && isOfficeFile(widget.name)
+            ? Center(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.description_outlined),
+                  label: Text('Preview (${_size(bytes.length)})'),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => OfficePreviewScreen(
                         name: widget.name,
                         bytes: Uint8List.fromList(bytes),
                       ),

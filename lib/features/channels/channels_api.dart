@@ -224,6 +224,7 @@ class ChannelWebhook {
     required this.name,
     required this.token,
     this.lastUsed,
+    this.created,
   });
 
   factory ChannelWebhook.fromJson(Map j) => ChannelWebhook(
@@ -233,12 +234,27 @@ class ChannelWebhook {
     lastUsed: j['last_used_at'] is num
         ? fromServerTime(j['last_used_at'] as num)
         : null,
+    created: j['created_at'] is num
+        ? fromServerTime(j['created_at'] as num)
+        : null,
   );
 
   final String id;
   final String name;
   final String token;
   final DateTime? lastUsed;
+  final DateTime? created;
+
+  /// "Created on 28 Oct 2026", as the web lists it.
+  String? get createdLabel {
+    final c = created;
+    if (c == null) return null;
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return 'Created on ${c.day} ${months[c.month - 1]} ${c.year}';
+  }
 
   /// The full address to post to, as the web UI shows it.
   String url(String base) =>

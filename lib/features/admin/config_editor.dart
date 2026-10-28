@@ -134,7 +134,19 @@ class ConfigAction {
     this.icon = Icons.play_arrow_outlined,
     this.toFile,
     this.importAs,
+    this.bodyFrom,
+    this.fileInto,
+    this.showIf,
   });
+
+  /// Sends what's on the page now (saved or not), as this body.
+  final Map<String, dynamic> Function(Map<String, dynamic> data)? bodyFrom;
+
+  /// Picks a file and puts its text in this setting (Save keeps it).
+  final String? fileInto;
+
+  /// Shown only when this holds for what's on the page.
+  final bool Function(Map<String, dynamic> data)? showIf;
 
   /// Makes the saved file from the JSON the server sends, instead of
   /// saving what it sends as it is.
@@ -386,7 +398,7 @@ final adminConfigSections = <ConfigSection>[
     },
     help: 'Speech to text, text to speech and live voice.',
   ),
-  const ConfigSection(
+  ConfigSection(
     title: 'Images',
     read: '/api/v1/images/config',
     save: '/api/v1/images/config/update',
@@ -405,6 +417,49 @@ final adminConfigSections = <ConfigSection>[
       },
     },
     help: 'Making and changing pictures.',
+    actions: [
+      for (final (engine, url, key, label) in const [
+        (
+          'automatic1111',
+          'AUTOMATIC1111_BASE_URL',
+          'AUTOMATIC1111_API_AUTH',
+          'Verify Automatic1111 connection',
+        ),
+        (
+          'comfyui',
+          'COMFYUI_BASE_URL',
+          'COMFYUI_API_KEY',
+          'Verify ComfyUI connection',
+        ),
+        (
+          'comfyui',
+          'IMAGES_EDIT_COMFYUI_BASE_URL',
+          'IMAGES_EDIT_COMFYUI_API_KEY',
+          'Verify ComfyUI edit connection',
+        ),
+      ])
+        ConfigAction(
+          label: label,
+          path: '/api/v1/images/verify',
+          icon: Icons.wifi_tethering,
+          showIf: (d) => '${d[url] ?? ''}'.isNotEmpty,
+          bodyFrom: (d) => {'engine': engine, 'url': d[url], 'key': d[key]},
+        ),
+      ConfigAction(
+        label: 'Upload ComfyUI workflow.json',
+        path: '',
+        icon: Icons.upload_file,
+        fileInto: 'COMFYUI_WORKFLOW',
+        showIf: (d) => d['IMAGE_GENERATION_ENGINE'] == 'comfyui',
+      ),
+      ConfigAction(
+        label: 'Upload ComfyUI edit workflow.json',
+        path: '',
+        icon: Icons.upload_file,
+        fileInto: 'IMAGES_EDIT_COMFYUI_WORKFLOW',
+        showIf: (d) => d['IMAGE_EDIT_ENGINE'] == 'comfyui',
+      ),
+    ],
   ),
   const ConfigSection(
     title: 'Code Execution',
@@ -574,7 +629,25 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
     }
     final client = ref.read(clientProvider);
     try {
-      if (a.importAs != null) {
+      if (a.fileInto != null) {
+        final picked = await FilePicker.pickFiles();
+        if (picked.isEmpty) return;
+        var text = utf8.decode(await picked.first.readAsBytes());
+        try {
+          text = const JsonEncoder.withIndent('  ').convert(jsonDecode(text));
+        } catch (_) {
+          if (mounted) _say(context, 'That file isn\'t JSON');
+          return;
+        }
+        setState(() {
+          _set(_data, a.fileInto!, text);
+          _generation++;
+        });
+        if (mounted) _say(context, 'Loaded; Save to keep it');
+      } else if (a.bodyFrom != null) {
+        await client.send(a.method, a.path, body: a.bodyFrom!(_data));
+        if (mounted) _say(context, 'Connection works');
+      } else if (a.importAs != null) {
         final picked = await FilePicker.pickFiles();
         if (picked.isEmpty) return;
         final json = jsonDecode(utf8.decode(await picked.first.readAsBytes()));
@@ -688,11 +761,12 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
                   if (_s.actions.isNotEmpty) ...[
                     const Divider(height: 32),
                     for (final a in _s.actions)
-                      ListTile(
-                        leading: Icon(a.icon),
-                        title: Text(a.label),
-                        onTap: () => _run(a),
-                      ),
+                      if (a.showIf?.call(_data) ?? true)
+                        ListTile(
+                          leading: Icon(a.icon),
+                          title: Text(a.label),
+                          onTap: () => _run(a),
+                        ),
                   ],
                 ],
               ),
