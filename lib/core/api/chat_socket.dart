@@ -42,6 +42,11 @@ class ChatSocket {
           _events.add(data.cast<String, dynamic>());
         }
       })
+      ..on('encryption:available', (data) {
+        if (data is Map && !_encryption.isClosed) {
+          _encryption.add(data.cast<String, dynamic>());
+        }
+      })
       ..on('events:channel', (data) {
         if (data is Map && !_channelEvents.isClosed) {
           _channelEvents.add(data.cast<String, dynamic>());
@@ -55,6 +60,35 @@ class ChatSocket {
   final _events = StreamController<Map<String, dynamic>>.broadcast();
   final _channelEvents = StreamController<Map<String, dynamic>>.broadcast();
   final _waiting = <Completer<String?>>[];
+  final _encryption = StreamController<Map<String, dynamic>>.broadcast();
+
+  /// An encrypted chat started or ended in a channel: {channel, session}.
+  Stream<Map<String, dynamic>> get encryptionAvailable => _encryption.stream;
+
+  /// The encrypted chat going on in [channel] to join, or null for none
+  /// (or when the server doesn't offer encrypted chats).
+  Future<String?> encryptedChatIn(String channel) async {
+    if (!_socket.connected) return null;
+    final done = Completer<String?>();
+    _socket.emitWithAck(
+      'encryption:status',
+      {'channel': channel},
+      ack: (res) {
+        final r = res is List && res.isNotEmpty ? res.first : res;
+        if (!done.isCompleted) {
+          done.complete(
+            r is Map && r['ok'] == true && r['available'] == true
+                ? '${r['session']}'
+                : null,
+          );
+        }
+      },
+    );
+    return done.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => null,
+    );
+  }
 
   Stream<Map<String, dynamic>> get events => _events.stream;
 
@@ -87,5 +121,6 @@ class ChatSocket {
     _socket.dispose();
     _events.close();
     _channelEvents.close();
+    _encryption.close();
   }
 }

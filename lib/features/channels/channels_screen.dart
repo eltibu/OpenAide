@@ -14,6 +14,8 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../studio/record_notes.dart' show dictate;
 import 'channel_manage.dart';
+import 'encrypted_chat.dart';
+import '../settings/settings_screen.dart' show meProvider;
 import 'channels_api.dart';
 
 final channelsApiProvider = Provider<ChannelsApi>(
@@ -225,6 +227,10 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
   bool _more = true;
   bool _sending = false;
 
+  /// The encrypted chat going on here, to join.
+  String? _encrypted;
+  StreamSubscription<Map<String, dynamic>>? _encryptionSub;
+
   /// Uploaded and waiting to go with the next message.
   final _pending = <Attachment>[];
   int _uploading = 0;
@@ -240,15 +246,42 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
     try {
       final socket = ref.read(chatSocketProvider);
       _live = socket.channelEvents.listen(_onEvent);
+      if (!_isThread) {
+        _encryptionSub = socket.encryptionAvailable.listen((e) {
+          if (e['channel'] == _id && mounted) {
+            setState(() => _encrypted = e['session'] as String?);
+          }
+        });
+      }
     } catch (_) {
       // Signed out: nothing live.
     }
+  }
+
+  bool get _canEncrypt =>
+      !_isThread &&
+      encryptionFits(_channel) &&
+      canUseEncryption(
+        ref.read(meProvider).value,
+        ref.read(serverConfigProvider).value?['features'] as Map?,
+      );
+
+  Future<void> _checkEncrypted() async {
+    try {
+      await ref.read(meProvider.future);
+      await ref.read(serverConfigProvider.future);
+      if (!_canEncrypt) return;
+      final session = await ref.read(chatSocketProvider).encryptedChatIn(_id);
+      // Also shows the menu's Encrypted Chat once both are read.
+      if (mounted) setState(() => _encrypted = session);
+    } catch (_) {}
   }
 
   @override
   void dispose() {
     openChannels.remove(_id);
     _live?.cancel();
+    _encryptionSub?.cancel();
     _input.dispose();
     super.dispose();
   }
@@ -268,6 +301,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
       _more = !_isThread && _messages.length >= 50;
       _error = null;
       _loadFiles(_messages);
+      unawaited(_checkEncrypted());
       // Opening a channel joins it; listen to it live from now on.
       try {
         ref.read(chatSocketProvider).joinChannels();
@@ -765,6 +799,8 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
           await _api.deleteChannel(_id);
           ref.invalidate(channelListProvider);
           nav.pop();
+        case 'encrypted':
+          openEncryptedChat(context, _channel, join: false);
         case 'hide':
           await _api.setActive(_id, false);
           ref.invalidate(channelListProvider);
@@ -798,6 +834,25 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                 count == 1 ? '1 member' : '$count members',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
+            if (_encrypted != null && _canEncrypt)
+              InkWell(
+                onTap: () => openEncryptedChat(context, _channel, join: true),
+                child: Text.rich(
+                  TextSpan(
+                    text: 'Encrypted chat in progress · ',
+                    children: [
+                      TextSpan(
+                        text: 'Join',
+                        style: TextStyle(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
           ],
         ),
         actions: _isThread
@@ -825,6 +880,14 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                         ),
                       ),
                     ),
+                    if (_canEncrypt)
+                      const PopupMenuItem(
+                        value: 'encrypted',
+                        child: ListTile(
+                          leading: Icon(Icons.lock_outline),
+                          title: Text('Encrypted Chat'),
+                        ),
+                      ),
                     if (!_channel.isDm)
                       const PopupMenuItem(
                         value: 'members',
