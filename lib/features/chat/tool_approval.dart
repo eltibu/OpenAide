@@ -114,7 +114,7 @@ class PendingCallCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(chatControllerProvider.notifier);
     if (call.asksUser && call.questions.isNotEmpty) {
-      return _AskUserCard(
+      return AskUserCard(
         key: ValueKey(call.callId),
         questions: call.questions,
         onAnswer: (answers) => controller.resolveTool(
@@ -232,8 +232,8 @@ class _ApprovalCard extends StatelessWidget {
 }
 
 /// The model's questions, one at a time, as the web UI asks them.
-class _AskUserCard extends StatefulWidget {
-  const _AskUserCard({
+class AskUserCard extends StatefulWidget {
+  const AskUserCard({
     super.key,
     required this.questions,
     required this.onAnswer,
@@ -244,10 +244,10 @@ class _AskUserCard extends StatefulWidget {
   final VoidCallback onSkip;
 
   @override
-  State<_AskUserCard> createState() => _AskUserCardState();
+  State<AskUserCard> createState() => _AskUserCardState();
 }
 
-class _AskUserCardState extends State<_AskUserCard> {
+class _AskUserCardState extends State<AskUserCard> {
   final _answers = <String, Map<String, dynamic>>{};
   final _other = TextEditingController();
   int _at = 0;

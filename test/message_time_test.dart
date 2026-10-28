@@ -18,16 +18,20 @@ void main() {
       ...extra,
     });
     expect(
-      isTimerMessage(m({
-        'meta': {'internal': true, 'type': 'timer'},
-      })),
+      isTimerMessage(
+        m({
+          'meta': {'internal': true, 'type': 'timer'},
+        }),
+      ),
       isTrue,
     );
     expect(isTimerMessage(m({})), isFalse);
     expect(
-      isTimerMessage(m({
-        'meta': {'type': 'timer'},
-      })),
+      isTimerMessage(
+        m({
+          'meta': {'type': 'timer'},
+        }),
+      ),
       isFalse,
     );
   });

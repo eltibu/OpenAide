@@ -40,6 +40,19 @@ class ChatSocket {
       ..on('events', (data) {
         if (data is Map && !_events.isClosed) {
           _events.add(data.cast<String, dynamic>());
+        } else if (data is List &&
+            data.length > 1 &&
+            data.first is Map &&
+            data.last is Function &&
+            !_calls.isClosed) {
+          // The server waits on an answer: a question, a confirmation or a
+          // form from a tool or function.
+          final reply = data.last as Function;
+          _calls.add(
+            SocketCall((data.first as Map).cast<String, dynamic>(), (v) {
+              reply(v);
+            }),
+          );
         }
       })
       ..on('encryption:available', (data) {
@@ -61,6 +74,10 @@ class ChatSocket {
   final _channelEvents = StreamController<Map<String, dynamic>>.broadcast();
   final _waiting = <Completer<String?>>[];
   final _encryption = StreamController<Map<String, dynamic>>.broadcast();
+  final _calls = StreamController<SocketCall>.broadcast();
+
+  /// Events the server waits on an answer for.
+  Stream<SocketCall> get calls => _calls.stream;
 
   /// An encrypted chat started or ended in a channel: {channel, session}.
   Stream<Map<String, dynamic>> get encryptionAvailable => _encryption.stream;
@@ -122,5 +139,29 @@ class ChatSocket {
     _events.close();
     _channelEvents.close();
     _encryption.close();
+    _calls.close();
+  }
+}
+
+/// An event the server waits on: answer it once with [reply].
+class SocketCall {
+  SocketCall(this.event, this._reply);
+  final Map<String, dynamic> event;
+  final void Function(Object? value) _reply;
+  var _answered = false;
+
+  Map<String, dynamic> get data =>
+      ((event['data'] as Map?) ?? const {}).cast<String, dynamic>();
+  String get type => '${data['type'] ?? ''}';
+  Map<String, dynamic> get body =>
+      ((data['data'] as Map?) ?? const {}).cast<String, dynamic>();
+  String? get chatId => event['chat_id'] as String?;
+  String? get interactionId => body['interaction_id'] as String?;
+  bool get answered => _answered;
+
+  void reply(Object? value) {
+    if (_answered) return;
+    _answered = true;
+    _reply(value);
   }
 }
