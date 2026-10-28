@@ -166,6 +166,15 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
             ),
           ),
           ListTile(
+            leading: const Icon(Icons.widgets_outlined),
+            title: const Text('Home-screen widget'),
+            subtitle: Text(
+              'Long-press your home screen, choose Widgets, then Nexus: Ask '
+              'Nexus, Dictate and Voice call in one bar.',
+              style: TextStyle(color: muted),
+            ),
+          ),
+          ListTile(
             leading: const Icon(Icons.share_outlined),
             title: const Text('Share to Nexus'),
             subtitle: Text(

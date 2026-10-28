@@ -4,4 +4,5 @@
     <string name="shortcut_call">Voice call</string>
     <string name="shortcut_dictate">Dictate</string>
     <string name="ask_nexus">Ask Nexus</string>
+    <string name="widget_description">Ask Nexus, dictate or start a voice call from your home screen.</string>
 </resources>
