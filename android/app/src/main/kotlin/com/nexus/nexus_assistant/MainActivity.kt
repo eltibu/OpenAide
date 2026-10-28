@@ -89,6 +89,26 @@ class MainActivity : FlutterActivity() {
         val doer = actions ?: PhoneActions(this).also { actions = it }
         MethodChannel(messenger, "nexus/actions").setMethodCallHandler(doer)
 
+        // Copy formatted text: the reply as HTML, with its plain text.
+        MethodChannel(messenger, "nexus/clipboard")
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "html" -> {
+                        val clips = getSystemService(CLIPBOARD_SERVICE)
+                            as android.content.ClipboardManager
+                        clips.setPrimaryClip(
+                            android.content.ClipData.newHtmlText(
+                                "Message",
+                                call.argument<String>("text") ?: "",
+                                call.argument<String>("html") ?: "",
+                            ),
+                        )
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+
         // In-app updates: Dart downloads the APK to [apkPath], then [install]
         // hands it to Android's installer.
         MethodChannel(messenger, "nexus/updates")

@@ -230,9 +230,12 @@ class ChatMessage {
         final name = '${m['name'] ?? m['title'] ?? src['name'] ?? url}';
         if (name.isEmpty) continue;
         final key = '$name|$url';
+        final fileId =
+            m['file_id'] ?? (src['type'] == 'file' ? src['id'] : null);
         final source = byKey[key] ??= Source(
           name: name,
           url: url.startsWith('http') ? url : null,
+          fileId: fileId == null ? null : '$fileId',
         );
         if (seen.add(key)) out.add(source);
         final text = i < docs.length ? '${docs[i] ?? ''}'.trim() : '';
@@ -460,9 +463,12 @@ class ToolCall {
 }
 
 class Source {
-  Source({required this.name, this.url});
+  Source({required this.name, this.url, this.fileId});
   final String name;
   final String? url;
+
+  /// The server file it came from, for View source.
+  final String? fileId;
 
   /// The text the model read from it, with how relevant the server found it.
   final List<({String text, double? relevance})> passages = [];

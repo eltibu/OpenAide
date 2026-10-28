@@ -817,21 +817,33 @@ class ChatTile extends ConsumerWidget {
         closeDrawer(context);
         ref.read(chatControllerProvider.notifier).open(chat.id);
       },
-      onLongPress: () => _actions(context, ref),
+      onLongPress: () => showChatActions(context, ref, chat, pinned: pinned),
     );
   }
+}
 
-  Future<void> _actions(BuildContext context, WidgetRef ref) async {
-    final isPinned =
-        pinned ??
-        (ref.read(pinnedChatsProvider).value ?? const []).any(
-          (c) => c.id == chat.id,
-        );
-    final action = await showModalBottomSheet<String>(
-      context: context,
-      showDragHandle: true,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
+/// A chat's actions: rename, star, move, tags, share, export, clone,
+/// archive, delete. From the chat list (long-press) or the chat's title in
+/// the top bar ([inList] false), as the web's chat menus.
+Future<void> showChatActions(
+  BuildContext context,
+  WidgetRef ref,
+  ChatSummary chat, {
+  bool? pinned,
+  bool inList = true,
+}) async {
+  final isPinned =
+      pinned ??
+      (ref.read(pinnedChatsProvider).value ?? const []).any(
+        (c) => c.id == chat.id,
+      );
+  final action = await showModalBottomSheet<String>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    // Scrolls when the screen is short (a folded phone held sideways).
+    builder: (context) => SafeArea(
+      child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -858,7 +870,7 @@ class ChatTile extends ConsumerWidget {
               ('share', Icons.ios_share, 'Share'),
               ('export', Icons.download_outlined, 'Export'),
               ('clone', Icons.copy_all_outlined, 'Clone'),
-              ('select', Icons.checklist, 'Select chats'),
+              if (inList) ('select', Icons.checklist, 'Select chats'),
               ('archive', Icons.archive_outlined, 'Archive'),
               ('delete', Icons.delete_outline, 'Delete'),
             ])
@@ -870,80 +882,79 @@ class ChatTile extends ConsumerWidget {
           ],
         ),
       ),
-    );
-    if (action == null || !context.mounted) return;
-    final controller = ref.read(chatControllerProvider.notifier);
-    try {
-      switch (action) {
-        case 'unread':
-          await ref
-              .read(clientProvider)
-              .send('POST', '/api/v1/chats/${chat.id}/unread');
-          refreshChatLists(ref.invalidate);
-        case 'rename':
-          final title = await _askText(
-            context,
-            'Rename chat',
-            chat.title,
-            generate: () =>
-                generateChatTitle(ref.read(clientProvider), chat.id),
-          );
-          if (title != null) await controller.renameChat(chat.id, title);
-        case 'pin':
-          await controller.togglePin(chat.id);
-        case 'move':
-          final folders = await ref.read(foldersProvider.future);
-          if (!context.mounted) return;
-          final target = await _pickFolder(context, folders);
-          if (target != null) {
-            await controller.moveChat(chat.id, target.isEmpty ? null : target);
-          }
-        case 'tags':
-          await editTags(context, chat.id);
-        case 'share':
-          await shareChat(context, chat.id);
-        case 'export':
-          final kind = await showModalBottomSheet<String>(
-            context: context,
-            showDragHandle: true,
-            builder: (context) => SafeArea(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final (value, label) in [
-                    ('json', 'Chat file (.json), to import again'),
-                    ('txt', 'Plain text (.txt)'),
-                    ('pdf', 'PDF document (.pdf)'),
-                  ])
-                    ListTile(
-                      title: Text(label),
-                      onTap: () => Navigator.pop(context, value),
-                    ),
-                ],
-              ),
+    ),
+  );
+  if (action == null || !context.mounted) return;
+  final controller = ref.read(chatControllerProvider.notifier);
+  try {
+    switch (action) {
+      case 'unread':
+        await ref
+            .read(clientProvider)
+            .send('POST', '/api/v1/chats/${chat.id}/unread');
+        refreshChatLists(ref.invalidate);
+      case 'rename':
+        final title = await _askText(
+          context,
+          'Rename chat',
+          chat.title,
+          generate: () => generateChatTitle(ref.read(clientProvider), chat.id),
+        );
+        if (title != null) await controller.renameChat(chat.id, title);
+      case 'pin':
+        await controller.togglePin(chat.id);
+      case 'move':
+        final folders = await ref.read(foldersProvider.future);
+        if (!context.mounted) return;
+        final target = await _pickFolder(context, folders);
+        if (target != null) {
+          await controller.moveChat(chat.id, target.isEmpty ? null : target);
+        }
+      case 'tags':
+        await editTags(context, chat.id);
+      case 'share':
+        await shareChat(context, chat.id);
+      case 'export':
+        final kind = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (value, label) in [
+                  ('json', 'Chat file (.json), to import again'),
+                  ('txt', 'Plain text (.txt)'),
+                  ('pdf', 'PDF document (.pdf)'),
+                ])
+                  ListTile(
+                    title: Text(label),
+                    onTap: () => Navigator.pop(context, value),
+                  ),
+              ],
             ),
-          );
-          if (kind != null && context.mounted) {
-            await exportChat(context, ref, chat.id, kind);
-          }
-        case 'select':
-          ref.read(chatSelectionProvider.notifier).start(chat.id);
-        case 'clone':
-          closeDrawer(context);
-          await cloneChat(ref, chat.id, chat.title);
-        case 'archive':
-          await controller.archiveChat(chat.id);
-        case 'delete':
-          final ok = await _confirm(
-            context,
-            'Delete this chat?',
-            '"${chat.title}" is deleted from the server for good.',
-          );
-          if (ok) await controller.deleteChat(chat.id);
-      }
-    } catch (e) {
-      if (context.mounted) _showError(context, e);
+          ),
+        );
+        if (kind != null && context.mounted) {
+          await exportChat(context, ref, chat.id, kind);
+        }
+      case 'select':
+        ref.read(chatSelectionProvider.notifier).start(chat.id);
+      case 'clone':
+        closeDrawer(context);
+        await cloneChat(ref, chat.id, chat.title);
+      case 'archive':
+        await controller.archiveChat(chat.id);
+      case 'delete':
+        final ok = await _confirm(
+          context,
+          'Delete this chat?',
+          '"${chat.title}" is deleted from the server for good.',
+        );
+        if (ok) await controller.deleteChat(chat.id);
     }
+  } catch (e) {
+    if (context.mounted) _showError(context, e);
   }
 }
 

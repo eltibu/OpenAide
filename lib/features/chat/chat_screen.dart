@@ -29,6 +29,7 @@ import 'attachments.dart';
 import 'autocomplete.dart';
 import 'attach_more.dart';
 import 'chat_controls.dart';
+import 'copy_text.dart';
 import 'chat_panel.dart';
 import 'emoji.dart';
 import 'formatting_toolbar.dart';
@@ -218,10 +219,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 : Scaffold.of(context).openDrawer(),
           ),
         ),
-        title: Text(
-          title == null || title.isEmpty ? '' : title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+        // Tap the title for the chat's actions, as the web's chat menu.
+        title: GestureDetector(
+          onTap: state.chat == null || state.temporary || state.streaming
+              ? null
+              : () => showChatActions(
+                  context,
+                  ref,
+                  ChatSummary(
+                    id: state.chat!.id,
+                    title: title ?? '',
+                    updatedAt: DateTime.now(),
+                  ),
+                  inList: false,
+                ),
+          child: Text(
+            title == null || title.isEmpty ? '' : title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
         actions: [
           // As on the web: switch a new chat to temporary before it starts.
@@ -855,7 +871,7 @@ class _Sources extends StatelessWidget {
               constraints: const BoxConstraints(maxWidth: 200),
               child: Text(s.name, overflow: TextOverflow.ellipsis),
             ),
-            onPressed: s.passages.isNotEmpty
+            onPressed: s.passages.isNotEmpty || s.fileId != null
                 ? () => showSource(context, s)
                 : s.url == null
                 ? null
@@ -1053,7 +1069,7 @@ class _MessageActions extends ConsumerWidget {
           ],
           if (!compact && message.content.isNotEmpty)
             action(Icons.copy_outlined, 'Copy', () {
-              Clipboard.setData(ClipboardData(text: message.content));
+              copyMessage(ref, message.content);
               ScaffoldMessenger.of(context)
                   .showSnackBar(const SnackBar(content: Text('Copied')));
             }),
@@ -1399,7 +1415,7 @@ class _ComposerState extends ConsumerState<_Composer> {
       if (lastReply.content.isNotEmpty)
         SlashCommand('copy', 'Copy the last reply', Icons.copy_outlined, () {
           run(() {
-            Clipboard.setData(ClipboardData(text: lastReply.content));
+            copyMessage(ref, lastReply.content);
             ScaffoldMessenger.of(context)
                 .showSnackBar(const SnackBar(content: Text('Copied')));
           });
@@ -2394,7 +2410,7 @@ Future<void> _userMessageMenu(
   );
   if (!context.mounted) return;
   if (choice == 'copy') {
-    await Clipboard.setData(ClipboardData(text: m.content));
+    await copyMessage(ref, m.content);
     if (context.mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Copied')));

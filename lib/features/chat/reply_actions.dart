@@ -8,6 +8,7 @@ import '../../core/models/chat.dart';
 import '../notes/notes_api.dart';
 import 'chat_controller.dart';
 import 'composer_draft.dart';
+import 'file_details.dart' show FileDetailsScreen;
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
 
@@ -591,6 +592,24 @@ Future<void> showSource(BuildContext context, Source source) {
               onPressed: () => launchUrl(
                 Uri.parse(source.url!),
                 mode: LaunchMode.externalApplication,
+              ),
+            ),
+          if (source.fileId != null)
+            TextButton.icon(
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.zero,
+                alignment: Alignment.centerLeft,
+              ),
+              icon: const Icon(Icons.description_outlined, size: 16),
+              label: const Text('View source'),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => FileDetailsScreen(
+                    fileId: source.fileId!,
+                    name: source.name,
+                  ),
+                ),
               ),
             ),
           if (source.passages.isEmpty)
