@@ -18,6 +18,7 @@ import '../chat/model_pins.dart'
     show modelLink, pinnedModelsProvider, togglePinnedModel;
 import 'owner_filter.dart';
 import '../settings/audio_settings.dart' show ttsVoicesProvider;
+import '../voice/voice_avatar.dart';
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 
 final modelsApiProvider = Provider<ModelsApi>(
@@ -219,6 +220,9 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   String _voice = '';
   String _terminal = '';
 
+  /// meta.voice_avatar: the 3D avatar its voice calls show.
+  VoiceAvatarConfig? _avatarConfig;
+
   /// The model's starter prompts; null uses the server's defaults.
   List<Map<String, dynamic>>? _suggestions;
   bool _idEdited = false;
@@ -261,6 +265,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _image = m.meta['profile_image_url'] as String?;
       _voice = '${(m.meta['tts'] as Map?)?['voice'] ?? ''}';
       _terminal = '${m.meta['terminalId'] ?? ''}';
+      _avatarConfig = VoiceAvatarConfig.fromMeta(m.meta);
     } else if (widget.copyOf case final c?) {
       _name.text = '${c.name} (copy)';
       _id.text = modelIdFrom(_name.text);
@@ -280,6 +285,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _image = c.meta['profile_image_url'] as String?;
       _voice = '${(c.meta['tts'] as Map?)?['voice'] ?? ''}';
       _terminal = '${c.meta['terminalId'] ?? ''}';
+      _avatarConfig = VoiceAvatarConfig.fromMeta(c.meta);
     } else {
       // A new model starts with the abilities the web turns on by default.
       _caps = {for (final k in defaultModelCapabilities) k: true};
@@ -381,6 +387,11 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       meta.remove('tts');
     } else {
       meta['tts'] = tts;
+    }
+    if (_avatarConfig != null) {
+      meta['voice_avatar'] = _avatarConfig!.toJson();
+    } else if (meta.containsKey('voice_avatar')) {
+      meta['voice_avatar'] = null;
     }
     if (_terminal.isEmpty) {
       meta.remove('terminalId');
@@ -558,6 +569,25 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       ),
     );
   }
+
+  /// The 3D avatar its voice calls show, as the web's Voice avatar.
+  Widget _avatarSetting() => ListTile(
+    contentPadding: const EdgeInsets.symmetric(horizontal: 20),
+    leading: const Icon(Icons.face_retouching_natural),
+    title: const Text('Voice avatar'),
+    subtitle: Text(_avatarConfig == null ? 'Default' : 'Custom avatar'),
+    trailing: const Icon(Icons.chevron_right),
+    onTap: () async {
+      final picked = await editVoiceAvatar(
+        context,
+        ref.read(clientProvider),
+        _avatarConfig,
+      );
+      if (picked != null && mounted) {
+        setState(() => _avatarConfig = picked.$1);
+      }
+    },
+  );
 
   /// The terminal chats with this model start with, as the web's Default
   /// terminal.
@@ -759,6 +789,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                   _actions,
                 ),
                 _voicePicker(),
+                _avatarSetting(),
                 _terminalPicker(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),

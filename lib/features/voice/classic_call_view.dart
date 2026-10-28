@@ -17,6 +17,7 @@ import '../chat/read_aloud.dart';
 import '../studio/listen.dart' as listen;
 import 'call_emoji.dart';
 import 'classic_call.dart';
+import 'voice_avatar.dart';
 
 class _Host implements ClassicCallHost {
   _Host(this.ref, this.camera, this.phone)
@@ -96,6 +97,8 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
   String? _emoji;
   final _emojis = <String, String?>{};
   late final _host = _call.host as _Host;
+  final _avatar = AvatarHandle();
+  String? _avatarProblem;
 
   @override
   void initState() {
@@ -105,6 +108,7 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
       ..classicCall = true;
     unawaited(_call.start());
     _host.saying.addListener(_newPiece);
+    activeAvatar = _avatar;
   }
 
   Future<void> _newPiece() async {
@@ -127,6 +131,7 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
 
   @override
   void dispose() {
+    if (activeAvatar == _avatar) activeAvatar = null;
     _host.saying.removeListener(_newPiece);
     _controller
       ..voiceCall = false
@@ -194,6 +199,9 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
               CallPhase.speaking => 'Speaking — tap to interrupt',
               CallPhase.ended => 'Call ended',
             };
+            final avatar = _avatarProblem != null
+                ? null
+                : VoiceAvatarConfig.fromMeta(model?.meta);
             final level =
                 (call.phase == CallPhase.speaking
                         ? 0.4
@@ -217,7 +225,22 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
                       onTap: call.phase == CallPhase.speaking
                           ? call.interrupt
                           : null,
-                      child: camera != null && camera.value.isInitialized
+                      child: camera == null && avatar != null
+                          ? SizedBox.expand(
+                              child: VoiceAvatarView(
+                                client: ref.read(clientProvider),
+                                config: avatar,
+                                handle: _avatar,
+                                speaking: call.phase == CallPhase.speaking,
+                                listening: call.phase == CallPhase.hearing,
+                                level: call.phase == CallPhase.speaking
+                                    ? 0.4
+                                    : 0,
+                                onFailed: (why) =>
+                                    setState(() => _avatarProblem = why),
+                              ),
+                            )
+                          : camera != null && camera.value.isInitialized
                           ? ClipRRect(
                               borderRadius: BorderRadius.circular(24),
                               child: AspectRatio(
@@ -257,6 +280,15 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
                       overflow: TextOverflow.ellipsis,
                       textAlign: TextAlign.center,
                       style: text.bodyMedium?.copyWith(color: Colors.white60),
+                    ),
+                  ),
+                if (_avatarProblem != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      _avatarProblem!,
+                      textAlign: TextAlign.center,
+                      style: text.bodySmall?.copyWith(color: Colors.white54),
                     ),
                   ),
                 if (call.problem != null)

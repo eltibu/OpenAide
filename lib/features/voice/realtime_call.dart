@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/models/chat.dart';
 import 'call_audio.dart';
+import 'voice_avatar.dart' show activeAvatar;
 
 const _uuid = Uuid();
 
@@ -633,14 +634,26 @@ class RealtimeCall extends ChangeNotifier {
     final response = _responses[responseId];
     final callId = '${item['call_id']}';
     if (item['name'] == 'play_animation') {
-      // No avatar in the app yet: the voice model hears it isn't available.
-      _send({
+      // A gesture on the avatar, when the call shows one.
+      void result(String status) => _send({
         'type': 'bridge.animation.result',
         'call_id': callId,
-        'status': response == null || _interrupted.contains(responseId)
-            ? 'cancelled'
-            : 'unavailable',
+        'status': status,
       });
+      if (response == null || _interrupted.contains(responseId)) {
+        result('cancelled');
+        return;
+      }
+      String? name;
+      try {
+        name = (jsonDecode('${item['arguments']}') as Map?)?['name'] as String?;
+      } catch (_) {}
+      final avatar = activeAvatar;
+      if (avatar == null || name == null) {
+        result('unavailable');
+        return;
+      }
+      avatar.gesture(name).then(result);
       return;
     }
     if (response == null ||

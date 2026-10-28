@@ -9,6 +9,8 @@ import '../../core/models/chat.dart';
 import '../chat/chat_controller.dart';
 import 'call_audio.dart';
 import 'classic_call_view.dart';
+import '../../core/models/model_info.dart';
+import 'voice_avatar.dart';
 import 'realtime_call.dart';
 
 /// The chat as the call sees it, and the chat actions it takes.
@@ -120,6 +122,8 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   String? _notice;
   bool _classic = false;
   late final ChatController _controller;
+  final _avatar = AvatarHandle();
+  bool _avatarFailed = false;
 
   bool get _realtimeOn {
     final config = ref.read(serverConfigProvider).value;
@@ -131,6 +135,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
   void initState() {
     super.initState();
     _controller = ref.read(chatControllerProvider.notifier);
+    activeAvatar = _avatar;
     WidgetsBinding.instance.addPostFrameCallback((_) => _start());
   }
 
@@ -162,6 +167,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
 
   @override
   void dispose() {
+    if (activeAvatar == _avatar) activeAvatar = null;
     _controller.voiceCall = false;
     _call?.dispose();
     super.dispose();
@@ -182,16 +188,20 @@ class _CallScreenState extends ConsumerState<CallScreen> {
       backgroundColor: Colors.black,
       body: SafeArea(
         child: call == null
-            ? _body(context, null, model?.name)
+            ? _body(context, null, model)
             : ListenableBuilder(
                 listenable: call,
-                builder: (context, _) => _body(context, call, model?.name),
+                builder: (context, _) => _body(context, call, model),
               ),
       ),
     );
   }
 
-  Widget _body(BuildContext context, RealtimeCall? call, String? modelName) {
+  Widget _body(BuildContext context, RealtimeCall? call, ModelInfo? model) {
+    final modelName = model?.name;
+    final avatar = _avatarFailed
+        ? null
+        : VoiceAvatarConfig.fromMeta(model?.meta);
     final text = Theme.of(context).textTheme;
     final live = call != null && (call.connected || call.connecting);
     final status = call == null
@@ -227,24 +237,39 @@ class _CallScreenState extends ConsumerState<CallScreen> {
           child: Center(
             child: GestureDetector(
               onTap: call != null && call.speaking ? call.stopSpeaking : null,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                width: 160 + 80 * level,
-                height: 160 + 80 * level,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: RadialGradient(
-                    colors: [
-                      call?.speaking ?? false
-                          ? Colors.lightBlueAccent
-                          : Colors.white,
-                      call?.working ?? false
-                          ? Colors.deepPurple
-                          : Colors.blueGrey.shade800,
-                    ],
-                  ),
-                ),
-              ),
+              child: avatar != null
+                  ? SizedBox.expand(
+                      child: VoiceAvatarView(
+                        client: ref.read(clientProvider),
+                        config: avatar,
+                        handle: _avatar,
+                        speaking: call?.speaking ?? false,
+                        listening: call?.userSpeaking ?? false,
+                        level: (call?.outputLevel ?? 0) * 4,
+                        onFailed: (why) => setState(() {
+                          _avatarFailed = true;
+                          _notice = why;
+                        }),
+                      ),
+                    )
+                  : AnimatedContainer(
+                      duration: const Duration(milliseconds: 120),
+                      width: 160 + 80 * level,
+                      height: 160 + 80 * level,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: RadialGradient(
+                          colors: [
+                            call?.speaking ?? false
+                                ? Colors.lightBlueAccent
+                                : Colors.white,
+                            call?.working ?? false
+                                ? Colors.deepPurple
+                                : Colors.blueGrey.shade800,
+                          ],
+                        ),
+                      ),
+                    ),
             ),
           ),
         ),

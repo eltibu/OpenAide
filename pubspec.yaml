@@ -84,6 +84,7 @@ flutter:
 
   # Roboto, for PDFs the Studio exports (accents, quotes, bullets).
   assets:
+    - assets/avatar/
     - assets/fonts/
     - assets/images/
 

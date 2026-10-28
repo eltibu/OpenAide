@@ -18,6 +18,7 @@ import '../settings/direct_connections.dart';
 import '../settings/tool_servers.dart';
 import '../terminal/terminal_api.dart' show TerminalServer;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
+import '../voice/voice_avatar.dart' show activeAvatar;
 import 'chat_controller.dart' show serverConfigProvider, userSettingsProvider;
 
 /// What the app answers for events it can't do (running JavaScript, or a
@@ -171,6 +172,16 @@ class _ServerAsksState extends ConsumerState<ServerAsks> {
         return;
       case 'request:terminal':
         _terminal(call);
+        return;
+      case 'voice:play_animation':
+        // A gesture for the avatar on the call showing, if one is.
+        final name = '${call.body['name'] ?? ''}';
+        final avatar = activeAvatar;
+        if (avatar == null || name.isEmpty) {
+          call.reply({'status': 'unavailable'});
+        } else {
+          avatar.gesture(name).then((status) => call.reply({'status': status}));
+        }
         return;
     }
     if (!askTypes.contains(call.type)) {
