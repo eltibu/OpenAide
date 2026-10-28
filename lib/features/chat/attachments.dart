@@ -18,7 +18,10 @@ import 'voice_note.dart';
 
 /// The paperclip: photos and videos from the gallery or camera, or any file.
 class AttachButton extends ConsumerWidget {
-  const AttachButton({super.key});
+  const AttachButton({super.key, this.onCompare});
+
+  /// Opens Compare text with the message box's text.
+  final VoidCallback? onCompare;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => IconButton.outlined(
@@ -79,12 +82,21 @@ class AttachButton extends ConsumerWidget {
                   title: const Text('Past chat'),
                   onTap: () => Navigator.pop(context, 'chat'),
                 ),
+                if (onCompare != null) ...[
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.difference_outlined),
+                    title: const Text('Compare text'),
+                    onTap: () => Navigator.pop(context, 'compare'),
+                  ),
+                ],
               ],
             ),
           ),
         ),
       );
       if (choice == null || !context.mounted) return;
+      if (choice == 'compare') return onCompare?.call();
       if (choice == 'web') return attachWebpage(context, ref);
       if (const {'note', 'collection', 'chat'}.contains(choice)) {
         return attachFromServer(context, ref, choice);

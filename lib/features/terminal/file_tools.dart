@@ -53,11 +53,21 @@ typedef DiffLine = ({String kind, String text});
 /// The lines of [a] and [b] lined up (longest common run of lines), as the
 /// web's Compare shows them. [ignoreSpace] treats lines that differ only in
 /// spacing as the same.
-List<DiffLine> lineDiff(String a, String b, {bool ignoreSpace = false}) {
-  final x = const LineSplitter().convert(a);
-  final y = const LineSplitter().convert(b);
-  String key(String s) =>
-      ignoreSpace ? s.replaceAll(RegExp(r'\s+'), ' ').trim() : s;
+List<DiffLine> lineDiff(String a, String b, {bool ignoreSpace = false}) =>
+    diffTokens(
+      const LineSplitter().convert(a),
+      const LineSplitter().convert(b),
+      key: ignoreSpace
+          ? (s) => s.replaceAll(RegExp(r'\s+'), ' ').trim()
+          : (s) => s,
+    );
+
+/// [x] and [y] lined up by their longest common run, comparing [key]s.
+List<DiffLine> diffTokens(
+  List<String> x,
+  List<String> y, {
+  required String Function(String) key,
+}) {
   final kx = x.map(key).toList();
   final ky = y.map(key).toList();
   // Too big to line up: show both whole.

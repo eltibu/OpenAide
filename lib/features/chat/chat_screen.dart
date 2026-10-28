@@ -45,6 +45,7 @@ import '../admin/connections_screen.dart' show ConnectionsScreen;
 import '../../core/models/model_info.dart';
 import 'model_pins.dart';
 import 'chat_variables.dart';
+import 'compare_text.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -882,6 +883,18 @@ class _ComposerState extends ConsumerState<_Composer> {
     controller.send(value);
   }
 
+  /// Compare text: the message beside a revision; the chosen one goes
+  /// back in the box.
+  Future<void> _compare() async {
+    final text = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CompareTextScreen(original: _text.text),
+      ),
+    );
+    if (text != null && mounted) _fill(text);
+  }
+
   Future<void> _expand() async {
     final send = await Navigator.push<bool>(
       context,
@@ -1140,6 +1153,12 @@ class _ComposerState extends ConsumerState<_Composer> {
         'Context usage, queued messages and this chat',
         Icons.info_outline,
         () => run(() => _showStatus(compaction)),
+      ),
+      SlashCommand(
+        'compare',
+        'Compare text: your message beside a revision',
+        Icons.difference_outlined,
+        () => run(_compare),
       ),
       SlashCommand(
         'settings',
@@ -1521,7 +1540,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                 padding: const EdgeInsets.fromLTRB(6, 0, 6, 6),
                 child: Row(
                   children: [
-                    const AttachButton(),
+                    AttachButton(onCompare: _compare),
                     const _FeaturesButton(),
                     const _ChatVariablesButton(),
                     const SizedBox(width: 4),
