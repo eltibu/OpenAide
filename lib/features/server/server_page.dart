@@ -17,8 +17,13 @@ class ServerPage extends ConsumerStatefulWidget {
     this.path = '',
     this.url,
     this.signIn = false,
+    this.browse = false,
   });
   final String title;
+
+  /// A web app of your own (a terminal's port): Back and Forward buttons,
+  /// as the web's port preview.
+  final bool browse;
 
   /// A sign-in with another service (a tool server's OAuth): its pages stay
   /// here until it comes back to the server, which closes this page.
@@ -170,6 +175,22 @@ class _ServerPageState extends ConsumerState<ServerPage> {
           ),
           title: Text(widget.title),
           actions: [
+            if (widget.browse) ...[
+              IconButton(
+                tooltip: 'Back',
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () async {
+                  if (await _web.canGoBack()) await _web.goBack();
+                },
+              ),
+              IconButton(
+                tooltip: 'Forward',
+                icon: const Icon(Icons.arrow_forward),
+                onPressed: () async {
+                  if (await _web.canGoForward()) await _web.goForward();
+                },
+              ),
+            ],
             IconButton(
               tooltip: 'Reload',
               icon: const Icon(Icons.refresh),

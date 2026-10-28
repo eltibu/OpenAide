@@ -30,6 +30,35 @@ List<DiffLine> textDiff(
   return diffTokens(split(a), split(b), key: key);
 }
 
+/// Diff lines as rows of (before, after): unchanged lines on both sides,
+/// each run of removed lines facing the added lines that follow it.
+List<(DiffLine?, DiffLine?)> sideBySide(List<DiffLine> lines) {
+  final rows = <(DiffLine?, DiffLine?)>[];
+  var i = 0;
+  while (i < lines.length) {
+    if (lines[i].kind == ' ') {
+      rows.add((lines[i], lines[i]));
+      i++;
+      continue;
+    }
+    final gone = <DiffLine>[];
+    final added = <DiffLine>[];
+    while (i < lines.length && lines[i].kind == '-') {
+      gone.add(lines[i++]);
+    }
+    while (i < lines.length && lines[i].kind == '+') {
+      added.add(lines[i++]);
+    }
+    for (var j = 0; j < gone.length || j < added.length; j++) {
+      rows.add((
+        j < gone.length ? gone[j] : null,
+        j < added.length ? added[j] : null,
+      ));
+    }
+  }
+  return rows;
+}
+
 class CompareTextScreen extends StatefulWidget {
   const CompareTextScreen({super.key, this.original = '', this.revision = ''});
   final String original;
@@ -47,6 +76,7 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
   bool _ignoreSpace = false;
   bool _ignoreEmphasis = false;
   bool _onlyChanges = false;
+  bool _sideBySide = false;
 
   @override
   void initState() {
@@ -135,6 +165,8 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
                     _ignoreEmphasis = !_ignoreEmphasis;
                   case 'changes':
                     _onlyChanges = !_onlyChanges;
+                  case 'side':
+                    _sideBySide = !_sideBySide;
                 }
               }),
               itemBuilder: (_) => [
@@ -157,6 +189,11 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
                   value: 'changes',
                   checked: _onlyChanges,
                   child: const Text('Only show changes'),
+                ),
+                CheckedPopupMenuItem(
+                  value: 'side',
+                  checked: _sideBySide,
+                  child: const Text('Side by side'),
                 ),
               ],
             ),
@@ -289,6 +326,35 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
     final shown = _onlyChanges
         ? lines.where((l) => l.kind != ' ').toList()
         : lines;
+    if (_sideBySide) {
+      // Diff layout, as the web's split view: before on the left, after on
+      // the right, changed lines facing each other.
+      final rows = sideBySide(shown);
+      Widget cell(DiffLine? l) => Expanded(
+        child: Container(
+          color: l == null ? null : color(l.kind),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+          child: Text(l?.text ?? ''),
+        ),
+      );
+      return ListView.builder(
+        itemCount: rows.length + 1,
+        itemBuilder: (context, i) {
+          if (i == 0) return summary;
+          final (left, right) = rows[i - 1];
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                cell(left),
+                VerticalDivider(width: 1, color: scheme.outlineVariant),
+                cell(right),
+              ],
+            ),
+          );
+        },
+      );
+    }
     return ListView.builder(
       itemCount: shown.length + 1,
       itemBuilder: (context, i) {

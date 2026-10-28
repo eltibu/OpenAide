@@ -930,6 +930,7 @@ class _FileBrowserState extends State<FileBrowser>
                         MaterialPageRoute<void>(
                           builder: (_) => ServerPage(
                             title: 'Port ${p.port}',
+                            browse: true,
                             // Your own terminal: at its own address.
                             path: widget.api.server.direct
                                 ? ''

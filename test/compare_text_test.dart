@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/features/chat/compare_text.dart';
+import 'package:nexus_assistant/features/terminal/file_tools.dart'
+    show DiffLine;
 
 void main() {
   test('by line, by word, ignoring spacing and emphasis', () {
@@ -58,12 +60,34 @@ void main() {
     expect(find.text('+ three'), findsOneWidget);
     await tester.tap(find.byTooltip('Options'));
     await tester.pumpAndSettle();
-    await tester.tap(find.byType(CheckedPopupMenuItem<String>).last);
+    await tester.tap(find.text('Only show changes'));
     await tester.pumpAndSettle();
     expect(find.text('  one'), findsNothing);
     expect(find.text('- two'), findsOneWidget);
+    await tester.tap(find.byTooltip('Options'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Side by side'));
+    await tester.pumpAndSettle();
+    expect(find.text('two'), findsOneWidget);
+    expect(find.text('three'), findsOneWidget);
     await tester.tap(find.text('Use in prompt'));
     await tester.pumpAndSettle();
     expect(used, 'one\nthree');
+  });
+
+  test('side by side puts changed lines face to face', () {
+    final rows = sideBySide([
+      (kind: ' ', text: 'a'),
+      (kind: '-', text: 'b'),
+      (kind: '-', text: 'c'),
+      (kind: '+', text: 'B'),
+      (kind: ' ', text: 'd'),
+      (kind: '+', text: 'e'),
+    ]);
+    String show(DiffLine? l) => l?.text ?? '_';
+    expect(
+      [for (final (l, r) in rows) '${show(l)}|${show(r)}'],
+      ['a|a', 'b|B', 'c|_', 'd|d', '_|e'],
+    );
   });
 }
