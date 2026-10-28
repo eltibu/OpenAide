@@ -17,9 +17,9 @@ const _defaultApi = 'https://api.githubcopilot.com';
 /// Headers Copilot's chat endpoints expect from a client.
 Map<String, String> copilotHeaders(String token) => {
   'Authorization': 'Bearer $token',
-  'Editor-Version': 'NexusAssistant/1.0',
-  'Copilot-Integration-Id': 'nexus-assistant',
-  'User-Agent': 'NexusAssistant',
+  'Editor-Version': 'OpenAide/1.0',
+  'Copilot-Integration-Id': 'openaide',
+  'User-Agent': 'OpenAide',
 };
 
 class CopilotSession {
@@ -49,7 +49,7 @@ Future<CopilotSession> copilotSession(
         headers: {
           'Authorization': 'token $githubToken',
           'Accept': 'application/json',
-          'User-Agent': 'NexusAssistant',
+          'User-Agent': 'OpenAide',
         },
       )
       .timeout(const Duration(seconds: 20));
