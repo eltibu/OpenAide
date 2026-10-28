@@ -20,7 +20,17 @@ Future<String?> tryPhoneAction(
   if (action == null) return null;
   final said = await runPhoneAction(
     action,
-    pick: (people) => showModalBottomSheet<Map>(
+    pick: (people) => pickContactSheet(context, people),
+  );
+  if (said != null && said.isNotEmpty && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(said)));
+  }
+  return said;
+}
+
+/// Asks which of [people] (with the same name) was meant.
+Future<Map?> pickContactSheet(BuildContext context, List<Map> people) =>
+    showModalBottomSheet<Map>(
       context: context,
       showDragHandle: true,
       builder: (c) => SafeArea(
@@ -37,10 +47,4 @@ Future<String?> tryPhoneAction(
           ],
         ),
       ),
-    ),
-  );
-  if (said != null && said.isNotEmpty && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(said)));
-  }
-  return said;
-}
+    );
