@@ -106,6 +106,10 @@ ThemeData nexusTheme(Brightness brightness) {
       surfaceTintColor: Colors.transparent,
     ),
     dividerTheme: DividerThemeData(color: scheme.outlineVariant),
+    snackBarTheme: SnackBarThemeData(
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
     // Chips sized to the text they hold: small type, snug padding, so
     // rows of them fit a phone screen.
     chipTheme: base.chipTheme.copyWith(

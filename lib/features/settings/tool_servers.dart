@@ -6,6 +6,7 @@
 /// (Settings > Terminal connections) go along the same way.
 library;
 
+import '../../core/widgets/empty_state.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -634,10 +635,10 @@ class _ToolServersScreenState extends ConsumerState<ToolServersScreen> {
                   ),
                 ),
                 if (allowed && list.isEmpty)
-                  const ListTile(
-                    leading: Icon(Icons.extension_outlined),
-                    title: Text('No tool servers yet'),
-                    subtitle: Text('Add one with +'),
+                  const EmptyState(
+                    icon: Icons.extension_outlined,
+                    title: 'No tool servers yet',
+                    message: 'Tap + to add one.',
                   ),
                 if (allowed)
                   for (final (i, s) in list.indexed)

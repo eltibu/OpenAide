@@ -24,7 +24,8 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
     private var initialChat: String? = null
 
     companion object {
-        const val PERMISSION_REQUEST = 4711
+        // Not the microphone's 4711: a shared code handed each ask the other's answer.
+        const val PERMISSION_REQUEST = 4721
         const val EXTRA_CHAT = "nexus.chatId"
         private const val SOUND = "replies"
         private const val QUIET = "replies_quiet"

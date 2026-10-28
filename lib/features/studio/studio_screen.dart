@@ -1,4 +1,7 @@
 import 'dart:async';
+
+import '../../core/widgets/empty_state.dart';
+
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -21,6 +24,8 @@ import 'slides_editor.dart';
 import 'studio_api.dart';
 import 'studio_doc.dart';
 import 'studio_export.dart';
+import '../../core/widgets/markdown_style.dart';
+import '../../core/widgets/search_field.dart';
 
 final studioApiProvider = Provider<StudioApi>(
   (ref) => StudioApi(ref.watch(clientProvider)),
@@ -251,11 +256,8 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
               readingInset(context, 16),
               8,
             ),
-            child: TextField(
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search documents',
-              ),
+            child: SearchField(
+              hint: 'Search documents',
               onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
             ),
           ),
@@ -289,18 +291,19 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                     ),
                     children: [
                       if (items.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Text(
-                            all.isEmpty
-                                ? 'Nothing here yet. Tap New for a document, '
-                                      'spreadsheet or presentation, made by '
-                                      'the AI or blank, or open a Word, Excel '
-                                      'or PowerPoint file.'
-                                : 'Nothing matches.',
-                            style: TextStyle(color: muted),
-                          ),
-                        ),
+                        all.isEmpty
+                            ? const EmptyState(
+                                icon: Icons.description_outlined,
+                                title: 'No documents yet',
+                                message:
+                                    'Tap New for a document, spreadsheet or '
+                                    'presentation, or open a Word, Excel or '
+                                    'PowerPoint file.',
+                              )
+                            : const EmptyState(
+                                icon: Icons.search_off,
+                                title: 'Nothing matches',
+                              ),
                       for (final d in items)
                         ListTile(
                           leading: Icon(studioIcon(studioKind(d.markdown))),
@@ -1112,9 +1115,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
                   const SizedBox(height: 12),
                   MarkdownBlock(
                     data: _drafting!,
-                    config: Theme.of(context).brightness == Brightness.dark
-                        ? MarkdownConfig.darkConfig
-                        : MarkdownConfig.defaultConfig,
+                    config: nexusMarkdown(context),
                   ),
                 ] else ...[
                   for (final (i, c) in _cards.indexed)
@@ -1341,10 +1342,7 @@ class _VersionsScreen extends StatelessWidget {
                         const SizedBox(height: 12),
                         MarkdownBlock(
                           data: v.markdown,
-                          config:
-                              Theme.of(context).brightness == Brightness.dark
-                              ? MarkdownConfig.darkConfig
-                              : MarkdownConfig.defaultConfig,
+                          config: nexusMarkdown(context),
                         ),
                       ],
                     ),

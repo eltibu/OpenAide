@@ -8,6 +8,7 @@ import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.provider.AlarmClock
+import android.provider.CalendarContract
 import android.provider.ContactsContract
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
@@ -93,6 +94,28 @@ class PhoneActions(private val activity: Activity) : MethodChannel.MethodCallHan
                 )
             }
             "torch" -> result.success(setTorch(call.argument<Boolean>("on")))
+            // The calendar app opens with the event filled in; you press save.
+            "calendar" -> {
+                val intent = Intent(Intent.ACTION_INSERT)
+                    .setData(CalendarContract.Events.CONTENT_URI)
+                    .putExtra(CalendarContract.Events.TITLE, call.argument<String>("title") ?: "")
+                call.argument<Number>("start")?.let {
+                    intent.putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, it.toLong())
+                }
+                call.argument<Number>("end")?.let {
+                    intent.putExtra(CalendarContract.EXTRA_EVENT_END_TIME, it.toLong())
+                }
+                if (call.argument<Boolean>("allDay") == true) {
+                    intent.putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, true)
+                }
+                call.argument<String>("location")?.let {
+                    intent.putExtra(CalendarContract.Events.EVENT_LOCATION, it)
+                }
+                call.argument<String>("description")?.let {
+                    intent.putExtra(CalendarContract.Events.DESCRIPTION, it)
+                }
+                result.success(start(intent))
+            }
             else -> result.notImplemented()
         }
     }

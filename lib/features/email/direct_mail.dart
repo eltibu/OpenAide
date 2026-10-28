@@ -4,6 +4,7 @@
 /// so Email opens at once.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,7 +17,7 @@ import 'email_agent.dart';
 
 /// Messages up to this size come down whole with the list, so opening one
 /// needs no wait; bigger ones are fetched when opened.
-const _wholeUpTo = 96 * 1024;
+const _wholeUpTo = 200 * 1024;
 
 /// The phone's copy of an account's mail: lists, check times and the
 /// emails opened, in the app's own files (not shared with other apps).
@@ -154,7 +155,40 @@ Email emailFrom(mail.MimeMessage m, String folder) {
     date: m.decodeDate()?.toLocal(),
     snippet: snippet.length > 160 ? '${snippet.substring(0, 160)}…' : snippet,
     unread: !m.isSeen,
+    starred: m.isFlagged,
   );
+}
+
+/// The HTML of [m] with its inline pictures (`cid:`) put in, so it shows
+/// whole without fetching anything else.
+String htmlOf(mail.MimeMessage m) {
+  final html = m.decodeTextHtmlPart();
+  if (html == null || html.trim().isEmpty) return '';
+  return html.replaceAllMapped(RegExp(r'''cid:([^"'\s>)]+)'''), (x) {
+    try {
+      final part = m.getPartWithContentId(x[1]!);
+      final bytes = part?.decodeContentBinary();
+      if (part == null || bytes == null) return x[0]!;
+      final type = part.mediaType.text;
+      return 'data:$type;base64,${base64Encode(bytes)}';
+    } catch (_) {
+      return x[0]!;
+    }
+  });
+}
+
+/// The names of the files that came with [m].
+List<String> attachmentNames(mail.MimeMessage m) {
+  try {
+    return [
+      for (final info in m.findContentInfo(
+        disposition: mail.ContentDisposition.attachment,
+      ))
+        info.fileName ?? 'attachment',
+    ];
+  } catch (_) {
+    return const [];
+  }
 }
 
 /// Each address in `a@b.com, Name <c@d.com>`.
@@ -191,10 +225,13 @@ class DirectMail implements MailSource {
 
   /// Signs in, runs [work], and signs out again: a phone drops idle
   /// connections, so none is kept open between uses.
-  Future<T> _session<T>(Future<T> Function(mail.MailClient c) work) async {
+  Future<T> _session<T>(
+    Future<T> Function(mail.MailClient c) work, {
+    int wholeUpTo = _wholeUpTo,
+  }) async {
     final c = mail.MailClient(
       account.toMailAccount(),
-      downloadSizeLimit: _wholeUpTo,
+      downloadSizeLimit: wholeUpTo,
     );
     try {
       await c.connect(timeout: const Duration(seconds: 25));
@@ -220,19 +257,117 @@ class DirectMail implements MailSource {
   }
 
   /// The Sent folder: the one marked as such, or by its usual names.
-  Future<mail.Mailbox?> _sentBox(mail.MailClient c) async {
+  Future<mail.Mailbox?> _sentBox(mail.MailClient c) => _box(
+    c,
+    [mail.MailboxFlag.sent],
+    const ['sent', 'sent items', 'sent messages', 'sent mail'],
+  );
+
+  /// The first folder with one of [flags], else one with a usual [name].
+  Future<mail.Mailbox?> _box(
+    mail.MailClient c,
+    List<mail.MailboxFlag> flags,
+    List<String> names,
+  ) async {
     final boxes = await c.listMailboxes();
-    return boxes.where((b) => b.isSent).firstOrNull ??
-        boxes
-            .where(
-              (b) => const [
-                'sent',
-                'sent items',
-                'sent messages',
-                'sent mail',
-              ].contains(b.name.toLowerCase()),
+    for (final f in flags) {
+      final box = boxes.where((b) => b.hasFlag(f)).firstOrNull;
+      if (box != null) return box;
+    }
+    return boxes.where((b) => names.contains(b.name.toLowerCase())).firstOrNull;
+  }
+
+  /// Moves [e] to the folder found by [flags] or [names], and drops it
+  /// from the lists kept on the phone.
+  Future<void> _move(
+    Email e,
+    List<mail.MailboxFlag> flags,
+    List<String> names,
+    String missing,
+  ) async {
+    final at = parseDirectId(e.id);
+    if (at == null) throw const EmailAgentError('This email has no id.');
+    await _session((c) async {
+      final target = await _box(c, flags, names);
+      if (target == null) throw EmailAgentError(missing);
+      await _select(c, at.$1);
+      await c.moveMessages(
+        mail.MessageSequence.fromId(at.$2, isUid: true),
+        target,
+      );
+    });
+    await _save((s) => dropEmail(s, e.id));
+  }
+
+  /// Gmail archives by taking the Inbox label off, which IMAP does by
+  /// moving to All Mail; others have an Archive folder.
+  @override
+  Future<void> archive(Email e) => _move(
+    e,
+    [mail.MailboxFlag.archive, mail.MailboxFlag.all],
+    const ['archive', 'archives'],
+    'This account has no Archive folder.',
+  );
+
+  @override
+  Future<void> trash(Email e) => _move(
+    e,
+    [mail.MailboxFlag.trash],
+    const ['trash', 'deleted items', 'deleted messages', 'bin'],
+    'This account has no Trash folder.',
+  );
+
+  @override
+  Future<void> spam(Email e) => _move(
+    e,
+    [mail.MailboxFlag.junk],
+    const ['spam', 'junk', 'junk e-mail', 'junk email', 'bulk mail'],
+    'This account has no Spam folder.',
+  );
+
+  @override
+  Future<void> setStarred(Email e, bool starred) async {
+    await _save((s) => starEmail(s, e.id, starred));
+    final at = parseDirectId(e.id);
+    if (at == null) return;
+    await _session((c) async {
+      await _select(c, at.$1);
+      final seq = mail.MessageSequence.fromId(at.$2, isUid: true);
+      starred ? await c.markFlagged(seq) : await c.markUnflagged(seq);
+    });
+  }
+
+  @override
+  Future<void> forward(Email e, {required String to, String text = ''}) {
+    final List<mail.MailAddress> recipients;
+    try {
+      recipients = parseAddresses(to);
+    } on FormatException {
+      throw EmailAgentError('"$to" isn\'t an email address.');
+    }
+    if (recipients.isEmpty) throw const EmailAgentError('Who is it to?');
+    return _session((c) async {
+      final original = await _fetch(c, e.id);
+      final b =
+          mail.MessageBuilder.prepareForwardMessage(
+              original,
+              from: _from,
+              quoteMessage: false,
             )
-            .firstOrNull;
+            ..to = recipients
+            ..text = [
+              if (text.trim().isNotEmpty) '${text.trim()}\n',
+              '---------- Forwarded message ----------',
+              'From: ${_addresses(original.from)}',
+              if (original.decodeDate() != null)
+                'Date: ${original.decodeDate()!.toLocal()}',
+              'Subject: ${original.decodeSubject() ?? ''}',
+              'To: ${_addresses(original.to)}',
+              '',
+              bodyText(original),
+            ].join('\n');
+      await _send(c, b);
+    });
   }
 
   @override
@@ -259,7 +394,7 @@ class DirectMail implements MailSource {
     final all = Map<String, dynamic>.from(s['opened'] as Map? ?? const {});
     all.remove(o.email.id);
     all[o.email.id] = o.toJson();
-    while (all.length > 150) {
+    while (all.length > 100) {
       all.remove(all.keys.first);
     }
     s['opened'] = all;
@@ -273,6 +408,8 @@ class DirectMail implements MailSource {
         to: _addresses([...?m.to, ...?m.cc]),
         date: m.decodeDate()?.toLocal(),
         body: bodyText(m),
+        html: htmlOf(m),
+        attachments: attachmentNames(m),
       ),
     ],
   );
@@ -327,16 +464,68 @@ class DirectMail implements MailSource {
         }
       }
     });
+    unawaited(_prefetch(folder));
     return keptIn(await _load(), folder);
   }
 
-  Future<mail.MimeMessage> _fetch(mail.MailClient c, String id) async {
+  bool _prefetching = false;
+
+  /// Fetches the newest emails too big to come with the list, in the
+  /// background, so they open at once too.
+  Future<void> _prefetch(String folder) async {
+    if (_prefetching) return;
+    _prefetching = true;
+    try {
+      final s = await _load();
+      final opened = s['opened'] as Map? ?? const {};
+      final missing = [
+        for (final e in keptIn(s, folder).take(15))
+          if (!opened.containsKey(e.id)) e,
+      ];
+      if (missing.isEmpty) return;
+      // Up to 2 MB each, so a big attachment isn't fetched on mobile data
+      // before it's asked for.
+      final got = await _session((c) async {
+        final out = <OpenedEmail>[];
+        for (final e in missing) {
+          try {
+            final m = await _fetch(
+              c,
+              e.id,
+              how: mail.FetchPreference.fullWhenWithinSize,
+            );
+            final o = _opened(e, m);
+            if (o.messages.first.body.isNotEmpty ||
+                o.messages.first.html.isNotEmpty) {
+              out.add(o);
+            }
+          } catch (_) {}
+        }
+        return out;
+      }, wholeUpTo: 2 * 1024 * 1024);
+      await _save((s) {
+        for (final o in got) {
+          _keepOpened(s, o);
+        }
+      });
+    } catch (_) {
+      // Fetched when opened instead.
+    } finally {
+      _prefetching = false;
+    }
+  }
+
+  Future<mail.MimeMessage> _fetch(
+    mail.MailClient c,
+    String id, {
+    mail.FetchPreference how = mail.FetchPreference.full,
+  }) async {
     final at = parseDirectId(id);
     if (at == null) throw const EmailAgentError('This email has no id.');
     await _select(c, at.$1);
     final found = await c.fetchMessageSequence(
       mail.MessageSequence.fromId(at.$2, isUid: true),
-      fetchPreference: mail.FetchPreference.full,
+      fetchPreference: how,
     );
     if (found.isEmpty) {
       throw const EmailAgentError(

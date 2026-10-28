@@ -6,12 +6,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:uuid/uuid.dart';
 
-import '../../core/ai/ai_providers.dart' show isProviderModel;
+import '../../core/ai/ai_providers.dart'
+    show isProviderModel, parseProviderModel;
 import '../../core/api/openwebui_client.dart' show ApiException;
 import '../../core/auth/session.dart';
+import '../email/email_agent.dart' show appWorkingChats, emailChatTitle;
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
 import '../providers/ai_keys.dart';
+import '../agent/agent_tools.dart';
 import '../providers/provider_chat.dart';
 import '../studio/listen.dart' show transcribe;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
@@ -36,11 +39,14 @@ const _uuid = Uuid();
 /// Models from AI providers you signed in to on the phone (Settings > AI
 /// providers) come last.
 final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  // Extra model sources never hold up the server's own list for long.
   final direct = ref
       .watch(directModelsProvider.future)
+      .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
   final providers = ref
       .watch(providerModelsProvider.future)
+      .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
   final server = await ref.watch(clientProvider).models();
   final mine = await direct;
@@ -176,7 +182,11 @@ final chatListProvider = FutureProvider<List<ChatSummary>>((ref) async {
     all.addAll(batch);
     if (batch.length < chatPageSize) break;
   }
-  return all;
+  // The app's own Email chat is its workspace, not a conversation.
+  return [
+    for (final c in all)
+      if (c.title != emailChatTitle && !appWorkingChats.contains(c.id)) c,
+  ];
 });
 
 const chatPageSize = 60;
@@ -1639,36 +1649,43 @@ class ChatController extends Notifier<ChatState> {
     final system =
         '${state.params['system'] ?? (settings?['ui'] as Map?)?['system'] ?? ''}'
             .trim();
-    var thinking = '';
+    final out = AgentOutput();
+    final before = continuing == null ? '' : reply.content;
     String? failed;
     try {
-      final stream = streamDirectReply(
+      final provider = parseProviderModel(reply.model)?.provider;
+      final kit = await buildAgentKit(
+        ref,
+        small: provider != null && usesPromptTools(provider),
+      );
+      final mine = system.isEmpty
+          ? ''
+          : fillSystemVariables(
+              system,
+              userName: me?['name'] as String?,
+              userEmail: me?['email'] as String?,
+            );
+      final stream = streamAgentReply(
         keys: await ref.read(aiKeysProvider.future),
         modelId: reply.model ?? '',
         history: [
           for (final m in history)
             if (m.id != reply.id || continuing != null) m,
         ],
-        system: system.isEmpty
-            ? null
-            : fillSystemVariables(
-                system,
-                userName: me?['name'] as String?,
-                userEmail: me?['email'] as String?,
-              ),
+        tools: kit.tools,
+        system: [
+          if (mine.trim().isNotEmpty) mine.trim(),
+          kit.instructions,
+        ].join('\n\n'),
         params: state.params,
         imageBytes: (a) => client.getBytes('/api/v1/files/${a.fileId}/content'),
       );
-      final sub = stream.listen((c) {
+      final sub = stream.listen((e) {
         if (run.finished.isCompleted) return;
-        reply.content += c.text;
-        thinking += c.thinking;
-        if (thinking.isNotEmpty) {
-          reply.extra['output'] = directOutput(
-            reply.content,
-            thinking,
-            done: false,
-          );
+        out.add(e);
+        reply.content = '$before${out.content}';
+        if (out.hasSteps && before.isEmpty) {
+          reply.extra['output'] = out.output();
         }
         if (view == _view) state = state.copyWith(chat: chat);
         _speak(run, reply.content);
@@ -1682,8 +1699,8 @@ class ChatController extends Notifier<ChatState> {
       run.finish();
       if (identical(_run, run)) _run = null;
     }
-    if (thinking.isNotEmpty) {
-      reply.extra['output'] = directOutput(reply.content, thinking, done: true);
+    if (out.hasSteps && before.isEmpty) {
+      reply.extra['output'] = out.output(done: true);
     }
     reply.extra['done'] = true;
     if (!state.temporary) {

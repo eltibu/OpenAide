@@ -55,7 +55,9 @@ class NotificationSettings extends ConsumerWidget {
     final ui = ref.watch(uiSettingsProvider);
     final hooks = ref.watch(webhooksProvider);
     final muted = context.nexus.muted;
-    final heading = Theme.of(context).textTheme.titleSmall;
+    // Section names in the accent colour, as on every settings page.
+    final heading = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(color: Theme.of(context).colorScheme.primary);
     Future<void> set(Map<String, dynamic> fields) async {
       try {
         await ref.read(settingsApiProvider).patchUi(fields);

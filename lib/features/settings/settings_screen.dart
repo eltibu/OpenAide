@@ -1,4 +1,6 @@
+import '../agent/agent_settings_screen.dart';
 import '../providers/ai_providers_screen.dart';
+import '../providers/local_models_screen.dart';
 import '../phone/phone_settings.dart';
 
 import 'dart:convert';
@@ -203,6 +205,20 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('AI providers'),
             subtitle: const Text('OpenRouter, Claude and OpenAI'),
             onTap: () => open(const AiProvidersScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.phone_android),
+            title: const Text('Models on this phone'),
+            subtitle: const Text('Download models that run offline'),
+            onTap: () => open(const LocalModelsScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.handyman_outlined),
+            title: const Text('Tools and skills on this phone'),
+            subtitle: const Text(
+              'Web, phone, skills and MCP for models without a server',
+            ),
+            onTap: () => open(const AgentSettingsScreen()),
           ),
           if ((ref.watch(serverConfigProvider).value?['features']
                   as Map?)?['enable_direct_connections'] ==

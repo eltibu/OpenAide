@@ -11,6 +11,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import '../../core/theme.dart';
 import 'office.dart';
 import 'slides.dart';
+import '../../core/widgets/markdown_style.dart';
 
 /// The Office files this preview opens.
 bool isOfficeFile(String name) {
@@ -70,10 +71,7 @@ class _OfficePreviewScreenState extends State<OfficePreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final config = dark
-        ? MarkdownConfig.darkConfig
-        : MarkdownConfig.defaultConfig;
+    final config = nexusMarkdown(context);
     final muted = context.nexus.muted;
     Widget md(String text) => MarkdownBlock(data: text, config: config);
     final slides = _slides;

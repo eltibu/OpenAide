@@ -43,6 +43,11 @@ MarkdownConfig withReplyCode(
   return base.copy(
     configs: [
       pre.copy(
+        // Soft panels in the app's own colors, not the package's grey.
+        decoration: BoxDecoration(
+          color: dark ? const Color(0xFF1F1E1D) : const Color(0xFFF0EEE6),
+          borderRadius: BorderRadius.circular(12),
+        ),
         wrapper: (child, code, language) => language == 'mermaid'
             ? MermaidView(code: code, dark: dark)
             : CodeFrame(

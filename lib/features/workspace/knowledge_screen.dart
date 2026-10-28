@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import '../../core/widgets/empty_state.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Uint8List;
@@ -117,12 +119,10 @@ class KnowledgeScreen extends ConsumerWidget {
             padding: const EdgeInsets.only(bottom: 88),
             children: [
               if (items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(
-                    'No knowledge bases yet',
-                    style: TextStyle(color: muted),
-                  ),
+                const EmptyState(
+                  icon: Icons.menu_book_outlined,
+                  title: 'No knowledge bases yet',
+                  message: 'Tap + to add documents models can search.',
                 ),
               for (final k in ownerFiltered(ref, items, (k) => k.userId))
                 ListTile(
