@@ -4,6 +4,7 @@
 /// when you chat with one, and passes the reply on to Open WebUI.
 library;
 
+import '../../core/widgets/empty_state.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -291,10 +292,10 @@ class _DirectConnectionsScreenState
                   ),
                 ),
                 if (allowed && list.isEmpty)
-                  const ListTile(
-                    leading: Icon(Icons.cable),
-                    title: Text('No connections yet'),
-                    subtitle: Text('Add one with +'),
+                  const EmptyState(
+                    icon: Icons.cable,
+                    title: 'No connections yet',
+                    message: 'Tap + to add one.',
                   ),
                 if (allowed)
                   for (final c in list)
