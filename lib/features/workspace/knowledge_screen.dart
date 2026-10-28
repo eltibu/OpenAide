@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Uint8List;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
@@ -386,6 +387,23 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
   }
 
   Future<void> _menu(String action) async {
+    if (action == 'export') {
+      try {
+        final bytes = await ref
+            .read(clientProvider)
+            .getBytes('/api/v1/knowledge/${_k.id}/export');
+        final name =
+            '${_k.name.replaceAll(RegExp(r'[^A-Za-z0-9 _-]'), '_')}.zip';
+        final saved = await FilePicker.saveFile(
+          fileName: name,
+          bytes: Uint8List.fromList(bytes),
+        );
+        if (saved != null && mounted) _say(context, 'Saved $name');
+      } catch (e) {
+        if (mounted) _say(context, '$e');
+      }
+      return;
+    }
     if (action == 'access') {
       return editAccess(
         context,
@@ -471,10 +489,13 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
             if (_k.writable)
               PopupMenuButton<String>(
                 onSelected: _menu,
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'edit', child: Text('Rename')),
-                  PopupMenuItem(value: 'access', child: Text('Access')),
-                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                itemBuilder: (_) => [
+                  const PopupMenuItem(value: 'edit', child: Text('Rename')),
+                  const PopupMenuItem(value: 'access', child: Text('Access')),
+                  // The server lets only admins export.
+                  if (ref.read(sessionProvider).value?.user?['role'] == 'admin')
+                    const PopupMenuItem(value: 'export', child: Text('Export')),
+                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],
               ),
           ],
