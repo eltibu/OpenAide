@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:enough_mail/enough_mail.dart' as mail;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/features/accounts/mail_accounts.dart';
@@ -140,6 +144,67 @@ void main() {
         store: DirectMailStore(account.email, folder: dir),
       ).kept('inbox');
       expect(copy.length, after.length);
+
+      // An HTML email with an inline picture shows as sent, picture in.
+      final client = mail.MailClient(account.toMailAccount());
+      await client.connect();
+      for (final name in ['Trash', 'Archive']) {
+        try {
+          await client.createMailbox(name);
+        } catch (_) {}
+      }
+      final b =
+          mail.MessageBuilder.prepareMultipartAlternativeMessage(
+              plainText: 'Plain version',
+              htmlText: '<p>Hi <b>Joel</b></p><img src="cid:logo@x">',
+            )
+            ..from = [mail.MailAddress('Shop', 'joel@localhost')]
+            ..to = [mail.MailAddress(null, 'joel@localhost')]
+            ..subject = 'Newsletter';
+      b
+          .addBinary(
+            Uint8List.fromList([137, 80, 78, 71]),
+            mail.MediaSubtype.imagePng.mediaType,
+            filename: 'logo.png',
+            disposition: mail.ContentDispositionHeader.from(
+              mail.ContentDisposition.inline,
+            ),
+          )
+          .setHeader('Content-ID', '<logo@x>');
+      b.addBinary(
+        Uint8List.fromList(utf8.encode('a,b')),
+        mail.MediaSubtype.textPlain.mediaType,
+        filename: 'report.csv',
+      );
+      await client.sendMessageBuilder(b, appendToSent: false);
+      await client.disconnect();
+
+      final news = (await box.check('inbox'))
+          .firstWhere((e) => e.subject == 'Newsletter');
+      final shown = (await box.keptOpen(news))!.messages.single;
+      expect(shown.html, contains('<b>Joel</b>'));
+      expect(shown.html, contains('data:image/png;base64,iVBORw=='));
+      expect(shown.attachments, contains('report.csv'));
+      expect(shown.body, 'Plain version');
+
+      await box.setStarred(news, true);
+      expect(
+        (await box.check('inbox')).firstWhere((e) => e.id == news.id).starred,
+        isTrue,
+      );
+
+      await box.forward(news, to: 'joel@localhost', text: 'Look at this');
+      final fwd = (await box.check('inbox'))
+          .firstWhere((e) => e.subject == 'Fwd: Newsletter');
+      expect(
+        (await box.keptOpen(fwd))!.messages.single.body,
+        startsWith('Look at this'),
+      );
+
+      await box.archive(news);
+      await box.trash(fwd);
+      final left = await box.check('inbox');
+      expect(left.any((e) => e.id == news.id || e.id == fwd.id), isFalse);
       await dir.delete(recursive: true);
     },
     skip: cert == null ? 'No test mail server' : false,
