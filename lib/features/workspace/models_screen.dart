@@ -19,6 +19,7 @@ import '../chat/model_pins.dart'
 import 'owner_filter.dart';
 import '../settings/audio_settings.dart' show ttsVoicesProvider;
 import '../voice/voice_avatar.dart';
+import 'model_translations.dart';
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 
 final modelsApiProvider = Provider<ModelsApi>(
@@ -220,6 +221,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   String _voice = '';
   String _terminal = '';
 
+  /// meta.i18n: the name and description in other languages, and the
+  /// language being edited ('' for none).
+  Map<String, dynamic> _i18n = {};
+  String _locale = '';
+  final _locName = TextEditingController();
+  final _locDescription = TextEditingController();
+
   /// meta.voice_avatar: the 3D avatar its voice calls show.
   VoiceAvatarConfig? _avatarConfig;
 
@@ -266,6 +274,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _voice = '${(m.meta['tts'] as Map?)?['voice'] ?? ''}';
       _terminal = '${m.meta['terminalId'] ?? ''}';
       _avatarConfig = VoiceAvatarConfig.fromMeta(m.meta);
+      _i18n = {...?(m.meta['i18n'] as Map?)?.cast<String, dynamic>()};
     } else if (widget.copyOf case final c?) {
       _name.text = '${c.name} (copy)';
       _id.text = modelIdFrom(_name.text);
@@ -286,6 +295,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _voice = '${(c.meta['tts'] as Map?)?['voice'] ?? ''}';
       _terminal = '${c.meta['terminalId'] ?? ''}';
       _avatarConfig = VoiceAvatarConfig.fromMeta(c.meta);
+      _i18n = {...?(c.meta['i18n'] as Map?)?.cast<String, dynamic>()};
     } else {
       // A new model starts with the abilities the web turns on by default.
       _caps = {for (final k in defaultModelCapabilities) k: true};
@@ -342,6 +352,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       if (_controls.isNotEmpty) 'model_controls': writeModelControls(_controls),
     };
     meta['description'] = _description.text.trim();
+    _keepTranslation();
+    final i18n = prunedTranslations(_i18n);
+    if (i18n == null) {
+      meta.remove('i18n');
+    } else {
+      meta['i18n'] = i18n;
+    }
     meta['capabilities'] = _caps;
     meta['toolIds'] = _tools.toList();
     meta['skillIds'] = _skills.toList();
@@ -570,6 +587,71 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     );
   }
 
+  /// Puts what's typed for the language being edited into [_i18n].
+  void _keepTranslation() {
+    if (_locale.isEmpty) return;
+    _i18n[_locale] = {
+      ...?(_i18n[_locale] as Map?)?.cast<String, dynamic>(),
+      'name': _locName.text.trim(),
+      'description': _locDescription.text.trim(),
+    };
+  }
+
+  /// Editing language: the name and description in another language, for
+  /// people whose app is in it.
+  Widget _translations() {
+    final done = {
+      for (final e in (prunedTranslations(_i18n) ?? const {}).keys) e,
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        DropdownButtonFormField<String>(
+          initialValue: _locale,
+          isExpanded: true,
+          decoration: const InputDecoration(
+            labelText: 'Editing language',
+            prefixIcon: Icon(Icons.translate),
+            helperText: 'Translate the name and description; * has one.',
+          ),
+          items: [
+            const DropdownMenuItem(value: '', child: Text('Default')),
+            for (final (code, title) in editingLanguages)
+              DropdownMenuItem(
+                value: code,
+                child: Text('$title${done.contains(code) ? ' *' : ''}'),
+              ),
+          ],
+          onChanged: (v) => setState(() {
+            _keepTranslation();
+            _locale = v ?? '';
+            final t = (_i18n[_locale] as Map?) ?? const {};
+            _locName.text = '${t['name'] ?? ''}';
+            _locDescription.text = '${t['description'] ?? ''}';
+          }),
+        ),
+        if (_locale.isNotEmpty) ...[
+          TextField(
+            controller: _locName,
+            decoration: InputDecoration(
+              labelText: 'Name in this language',
+              hintText: _name.text,
+            ),
+          ),
+          TextField(
+            controller: _locDescription,
+            maxLines: null,
+            decoration: InputDecoration(
+              labelText: 'Description in this language',
+              hintText: _description.text,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   /// The 3D avatar its voice calls show, as the web's Voice avatar.
   Widget _avatarSetting() => ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 20),
@@ -749,6 +831,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                           labelText: 'Description',
                         ),
                       ),
+                      _translations(),
                       const SizedBox(height: 16),
                       TextField(
                         controller: _system,

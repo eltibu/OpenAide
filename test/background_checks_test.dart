@@ -13,8 +13,9 @@ void main() {
           c,
         ) async {
           calls.add(c);
-          if (c.method == 'background')
+          if (c.method == 'background') {
             on = (c.arguments as Map)['enabled'] as bool;
+          }
           if (c.method == 'backgroundOn') return on;
           return null;
         });
