@@ -77,10 +77,14 @@ final providerModelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
 /// A running "Sign in with OpenRouter": the browser is open, and the app
 /// waits on the phone itself (localhost) for OpenRouter to send it back.
 class OpenRouterSignIn {
-  OpenRouterSignIn._(this._servers, this._verifier);
+  OpenRouterSignIn._(this._servers, this._verifier, this._path);
 
   final List<HttpServer> _servers;
   final String _verifier;
+
+  /// A random callback path, so only OpenRouter's redirect is answered,
+  /// not another app guessing the port.
+  final String _path;
   final _done = Completer<String>();
 
   /// The key, once the person approves; an error if they refuse.
@@ -93,12 +97,17 @@ class OpenRouterSignIn {
     try {
       servers.add(await HttpServer.bind(InternetAddress.loopbackIPv6, v4.port));
     } catch (_) {}
-    final sign = OpenRouterSignIn._(servers, newCodeVerifier(Random.secure()));
+    final random = Random.secure();
+    final sign = OpenRouterSignIn._(
+      servers,
+      newCodeVerifier(random),
+      '/callback/${newCodeVerifier(random)}',
+    );
     for (final s in servers) {
       s.listen(sign._onRequest, onError: (_) {});
     }
     final url = openRouterAuthUrl(
-      callback: 'http://localhost:${v4.port}/callback',
+      callback: 'http://localhost:${v4.port}${sign._path}',
       verifier: sign._verifier,
     );
     if (!await launchUrl(url, mode: LaunchMode.inAppBrowserView) &&
@@ -116,7 +125,7 @@ class OpenRouterSignIn {
   }
 
   Future<void> _onRequest(HttpRequest req) async {
-    if (req.uri.path != '/callback' || _done.isCompleted) {
+    if (req.uri.path != _path || _done.isCompleted) {
       req.response.statusCode = HttpStatus.notFound;
       await req.response.close();
       return;
