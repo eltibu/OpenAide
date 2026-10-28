@@ -274,7 +274,7 @@ jobs:
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk nexus-assistant.apk
           gh release create "v0.1.${{ github.run_number }}" nexus-assistant.apk \
-            --title "Nexus Assistant 0.1.${{ github.run_number }}" \
+            --title "OpenAide 0.1.${{ github.run_number }}" \
             --notes "$NOTES" \
             --target "${{ github.event.pull_request.head.sha || github.sha }}" \
             --latest
