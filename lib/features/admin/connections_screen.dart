@@ -285,12 +285,49 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
   );
   late String _authType = '${_c.config['auth_type'] ?? 'bearer'}';
   late bool _local = _c.config['connection_type'] == 'local';
+  late bool _responses = _c.config['api_type'] == 'responses';
+  late bool _cookies = _c.config['forward_cookies'] == true;
+  late String _provider =
+      '${_c.config['provider'] ?? (_c.config['azure'] == true ? 'azure' : '')}';
+  late final _apiVersion = TextEditingController(
+    text: '${_c.config['api_version'] ?? ''}',
+  );
+  late final _headers = TextEditingController(
+    text: _c.config['headers'] is Map
+        ? const JsonEncoder.withIndent('  ').convert(_c.config['headers'])
+        : '',
+  );
+  late final _passthrough = TextEditingController(
+    text: _c.config['passthrough_params'] is List
+        ? (_c.config['passthrough_params'] as List).join(', ')
+        : '${_c.config['passthrough_params'] ?? ''}',
+  );
   bool _hidden = true;
+
+  /// Azure by choice, or by an Azure address with no provider picked.
+  bool get _azure {
+    final url = _url.text;
+    return _provider == 'azure' ||
+        (_provider.isEmpty &&
+            (url.contains('azure.') ||
+                url.contains('cognitive.microsoft.com')) &&
+            !RegExp(r'/openai/v1(/|$)').hasMatch(url));
+  }
+
   bool _checking = false;
 
   @override
   void dispose() {
-    for (final c in [_url, _key, _prefix, _models, _tags]) {
+    for (final c in [
+      _url,
+      _key,
+      _prefix,
+      _models,
+      _tags,
+      _apiVersion,
+      _headers,
+      _passthrough,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -301,7 +338,19 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
       if (x.trim().isNotEmpty) x.trim(),
   ];
 
-  void _apply() {
+  /// False, with a note, when the headers aren't a JSON object.
+  bool _apply() {
+    Object? headers;
+    if (_headers.text.trim().isNotEmpty) {
+      try {
+        headers = jsonDecode(_headers.text);
+      } catch (_) {}
+      if (headers is! Map) {
+        _say(context, 'Headers must be a JSON object');
+        return false;
+      }
+    }
+    final openAi = widget.kind == openAiConnections;
     _c
       ..url = _url.text.trim().replaceAll(RegExp(r'/+$'), '')
       ..key = _key.text.trim();
@@ -313,11 +362,40 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
         for (final t in _split(_tags.text)) {'name': t},
       ]
       ..['connection_type'] = _local ? 'local' : 'external'
-      ..['auth_type'] = _authType;
+      ..['auth_type'] = _authType
+      ..['passthrough_params'] = _split(_passthrough.text);
+    if (headers == null) {
+      _c.config.remove('headers');
+    } else {
+      _c.config['headers'] = headers;
+    }
+    if (openAi) {
+      _c.config['forward_cookies'] = _cookies;
+      if (_provider.isEmpty) {
+        _c.config.remove('provider');
+      } else {
+        _c.config['provider'] = _provider;
+      }
+      if (_azure) {
+        _c.config
+          ..['azure'] = true
+          ..['api_version'] = _apiVersion.text.trim();
+      } else {
+        _c.config
+          ..remove('azure')
+          ..remove('api_version');
+      }
+      if (_responses) {
+        _c.config['api_type'] = 'responses';
+      } else {
+        _c.config.remove('api_type');
+      }
+    }
+    return true;
   }
 
   Future<void> _verify() async {
-    _apply();
+    if (!_apply()) return;
     setState(() => _checking = true);
     try {
       await ref
@@ -357,8 +435,7 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
                   _say(context, 'Enter the address');
                   return;
                 }
-                _apply();
-                Navigator.pop(context, _c);
+                if (_apply()) Navigator.pop(context, _c);
               },
               child: const Text('Save'),
             ),
@@ -372,7 +449,34 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
             controller: _url,
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(labelText: 'URL'),
+            onChanged: (_) => setState(() {}),
           ),
+          if (openAi)
+            DropdownButtonFormField<String>(
+              initialValue: _provider,
+              decoration: const InputDecoration(labelText: 'Provider'),
+              items: const [
+                DropdownMenuItem(value: '', child: Text('Default')),
+                DropdownMenuItem(value: 'azure', child: Text('Azure OpenAI')),
+                DropdownMenuItem(value: 'llama.cpp', child: Text('llama.cpp')),
+                DropdownMenuItem(value: 'lmstudio', child: Text('LM Studio')),
+                DropdownMenuItem(value: 'litellm', child: Text('LiteLLM')),
+              ],
+              onChanged: (v) => setState(() => _provider = v ?? ''),
+            ),
+          if (openAi && _azure)
+            TextField(
+              controller: _apiVersion,
+              decoration: const InputDecoration(labelText: 'API Version'),
+            ),
+          if (openAi)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('API type'),
+              subtitle: Text(_responses ? 'Responses' : 'Chat Completions'),
+              value: _responses,
+              onChanged: (on) => setState(() => _responses = on),
+            ),
           if (openAi)
             DropdownButtonFormField<String>(
               initialValue: _authType,
@@ -424,6 +528,32 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
               labelText: 'Tags (comma separated)',
             ),
           ),
+          TextField(
+            controller: _headers,
+            minLines: 1,
+            maxLines: 6,
+            decoration: const InputDecoration(
+              labelText: 'Headers',
+              helperText: 'JSON, sent with every request',
+            ),
+          ),
+          TextField(
+            controller: _passthrough,
+            decoration: const InputDecoration(
+              labelText: 'Passthrough params (comma separated)',
+              helperText: 'Request fields sent to the server as they are',
+            ),
+          ),
+          if (openAi)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Forward cookies'),
+              subtitle: const Text(
+                'Forward cookies from your Open WebUI request to this server.',
+              ),
+              value: _cookies,
+              onChanged: (on) => setState(() => _cookies = on),
+            ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Local'),
