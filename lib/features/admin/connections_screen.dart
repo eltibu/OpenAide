@@ -178,7 +178,9 @@ class _ConnectionsScreenState extends ConsumerState<ConnectionsScreen> {
   @override
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
-    final heading = Theme.of(context).textTheme.titleSmall;
+    // Section names in the accent colour, as on every settings page.
+    final heading = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(color: Theme.of(context).colorScheme.primary);
     return Scaffold(
       appBar: AppBar(title: const Text('Model connections')),
       body: !_loaded

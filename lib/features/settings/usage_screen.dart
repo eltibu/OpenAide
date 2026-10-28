@@ -53,7 +53,9 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
     final usage = ref.watch(usageProvider);
     final models = ref.watch(modelsProvider).value ?? const [];
     final muted = context.nexus.muted;
-    final heading = Theme.of(context).textTheme.titleSmall;
+    // Section names in the accent colour, as on every settings page.
+    final heading = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(color: Theme.of(context).colorScheme.primary);
     String modelName(String id) =>
         models.where((m) => m.id == id).firstOrNull?.name ?? id;
 

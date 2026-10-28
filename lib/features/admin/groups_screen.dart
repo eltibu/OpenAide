@@ -853,7 +853,9 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final heading = Theme.of(context).textTheme.titleSmall;
+    // Section names in the accent colour, as on every settings page.
+    final heading = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(color: Theme.of(context).colorScheme.primary);
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
