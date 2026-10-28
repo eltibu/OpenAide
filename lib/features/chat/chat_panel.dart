@@ -232,6 +232,11 @@ class _Files extends ConsumerWidget {
                 : null,
             openIsDir: request.openIsDir,
             embedded: true,
+            onAskFile: (message, bytes, name) async {
+              final chat = ref.read(chatControllerProvider.notifier);
+              await chat.attach(bytes, name);
+              if (!await chat.send(message)) throw 'The chat is busy';
+            },
           ),
         ),
       ],

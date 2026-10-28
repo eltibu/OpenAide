@@ -37,8 +37,12 @@ class TerminalScreen extends ConsumerStatefulWidget {
     this.openPath,
     this.openIsDir = false,
     this.embedded = false,
+    this.onAskFile,
   });
   final TerminalServer server;
+
+  /// Inside a chat: files can be sent to it with a question.
+  final AskAboutFile? onAskFile;
 
   /// Inside the chat's side drawer: only the Terminal / Files switch on
   /// top, no title bar of its own.
@@ -110,6 +114,7 @@ class _TerminalScreenState extends ConsumerState<TerminalScreen>
             onOpenInTerminal: _cdInShell,
             openPath: widget.openPath,
             openIsDir: widget.openIsDir,
+            onAskFile: widget.onAskFile,
           ),
         ],
       ),
@@ -370,9 +375,11 @@ class FileBrowser extends StatefulWidget {
     this.onOpenInTerminal,
     this.openPath,
     this.openIsDir = false,
+    this.onAskFile,
   });
   final TerminalApi api;
   final void Function(String dir)? onOpenInTerminal;
+  final AskAboutFile? onAskFile;
 
   /// Where to start instead of the server's own folder: a folder, or a file
   /// that opens on top of its folder (with its row marked).
@@ -398,6 +405,11 @@ class _FileBrowserState extends State<FileBrowser>
   static FileSort _sortBy = FileSort.name;
   static bool _descending = false;
   static bool _showHidden = false;
+  static bool _grid = false;
+
+  /// Folders visited, to go back and forward like the web's Files.
+  final _back = <String>[];
+  final _forward = <String>[];
 
   /// Picked rows (paths); while any are, taps pick instead of open.
   final _picked = <String>{};
@@ -435,6 +447,28 @@ class _FileBrowserState extends State<FileBrowser>
         });
       }
     }
+  }
+
+  /// Opens [dir] as a new step: back returns here, forward is cleared.
+  Future<void> _go(String dir) {
+    final at = _dir;
+    if (at != null && at != dir) {
+      _back.add(at);
+      _forward.clear();
+    }
+    return _open(dir);
+  }
+
+  Future<void> _goBack() {
+    final at = _dir;
+    if (at != null) _forward.add(at);
+    return _open(_back.removeLast());
+  }
+
+  Future<void> _goForward() {
+    final at = _dir;
+    if (at != null) _back.add(at);
+    return _open(_forward.removeLast());
   }
 
   Future<void> _open(String dir) async {
@@ -510,6 +544,64 @@ class _FileBrowserState extends State<FileBrowser>
         'Uploaded ${f.name}',
       );
     }
+  }
+
+  /// A folder from the phone, with everything in it, into this folder.
+  Future<void> _uploadFolder() async {
+    final dir = _dir;
+    if (dir == null) return;
+    final from = await FilePicker.getDirectoryPath();
+    if (from == null) return;
+    final root = Directory(from);
+    final name = root.uri.pathSegments.where((p) => p.isNotEmpty).last;
+    List<File> files;
+    try {
+      files = [
+        for (final f in root.listSync(recursive: true, followLinks: false))
+          if (f is File &&
+              !f.path
+                  .substring(from.length)
+                  .split('/')
+                  .any((p) => p.startsWith('.')))
+            f,
+      ];
+    } catch (e) {
+      _toast("Couldn't read that folder: $e");
+      return;
+    }
+    if (files.isEmpty) {
+      _toast(
+        "Nothing in $name could be read. Android may keep this "
+        "folder private; try picking the files instead.",
+      );
+      return;
+    }
+    setState(() => _busy = true);
+    var sent = 0;
+    final made = <String>{};
+    for (final f in files) {
+      final rel = f.path.substring(from.length).replaceFirst(RegExp('^/'), '');
+      final parts = rel.split('/');
+      var target = joinPath(dir, name);
+      for (final p in [null, ...parts.take(parts.length - 1)]) {
+        if (p != null) target = joinPath(target, p);
+        if (made.add(target)) {
+          try {
+            await widget.api.mkdir(target);
+          } catch (_) {
+            // Already there.
+          }
+        }
+      }
+      try {
+        await widget.api.upload(target, await f.readAsBytes(), parts.last);
+        sent++;
+      } catch (e) {
+        if (mounted) _toast('${parts.last}: $e');
+      }
+    }
+    if (mounted) _toast('Uploaded $sent of ${files.length} files from $name');
+    await _refresh();
   }
 
   Future<void> _newFolder() async {
@@ -851,6 +943,8 @@ class _FileBrowserState extends State<FileBrowser>
           if (first != null) _picked.add(first.path);
         case 'ports':
           _ports();
+        case 'grid':
+          _grid = !_grid;
         default:
           _sortBy = FileSort.values.byName(v);
       }
@@ -873,6 +967,11 @@ class _FileBrowserState extends State<FileBrowser>
       ),
       const PopupMenuDivider(),
       CheckedPopupMenuItem(
+        value: 'grid',
+        checked: _grid,
+        child: const Text('Grid view'),
+      ),
+      CheckedPopupMenuItem(
         value: 'hidden',
         checked: _showHidden,
         child: const Text('Show hidden files'),
@@ -882,11 +981,63 @@ class _FileBrowserState extends State<FileBrowser>
     ],
   );
 
+  Widget _gridTile(TerminalEntry e) {
+    final muted = context.nexus.muted;
+    final picked = _picked.contains(e.path);
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _tap(e),
+      onLongPress: () => _picked.isNotEmpty ? _toggle(e) : _entryMenu(e),
+      child: Ink(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          color: picked || e.path == _marked
+              ? NexusColors.accent.withValues(alpha: 0.12)
+              : null,
+        ),
+        padding: const EdgeInsets.all(6),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              _picked.isNotEmpty
+                  ? (picked ? Icons.check_circle : Icons.radio_button_unchecked)
+                  : e.isDir
+                  ? Icons.folder
+                  : _iconFor(e.name),
+              size: 40,
+              color: e.isDir ? NexusColors.accent : muted,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              e.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _tap(TerminalEntry e) => _picked.isNotEmpty
+      ? _toggle(e)
+      : e.isDir
+      ? _go(e.path)
+      : _openFile(e.path, e.name);
+
   Future<void> _openFile(String path, String name) async {
     await Navigator.push(
       context,
       MaterialPageRoute<void>(
-        builder: (_) => FileViewer(api: widget.api, path: path, name: name),
+        builder: (_) => FileViewer(
+          api: widget.api,
+          path: path,
+          name: name,
+          onAsk: widget.onAskFile,
+        ),
       ),
     );
     if (mounted) await _refresh();
@@ -936,6 +1087,11 @@ class _FileBrowserState extends State<FileBrowser>
                           onTap: () => Navigator.pop(context, 'upload'),
                         ),
                         ListTile(
+                          leading: const Icon(Icons.drive_folder_upload),
+                          title: const Text('Upload Folder'),
+                          onTap: () => Navigator.pop(context, 'dir'),
+                        ),
+                        ListTile(
                           leading: const Icon(Icons.create_new_folder_outlined),
                           title: const Text('New folder'),
                           onTap: () => Navigator.pop(context, 'folder'),
@@ -952,6 +1108,8 @@ class _FileBrowserState extends State<FileBrowser>
                 switch (choice) {
                   case 'upload':
                     await _upload();
+                  case 'dir':
+                    await _uploadFolder();
                   case 'folder':
                     await _newFolder();
                   case 'file':
@@ -970,6 +1128,18 @@ class _FileBrowserState extends State<FileBrowser>
               height: 44,
               child: Row(
                 children: [
+                  IconButton(
+                    tooltip: 'Back',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _back.isEmpty ? null : _goBack,
+                    icon: const Icon(Icons.chevron_left),
+                  ),
+                  IconButton(
+                    tooltip: 'Forward',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _forward.isEmpty ? null : _goForward,
+                    icon: const Icon(Icons.chevron_right),
+                  ),
                   Expanded(
                     child: ListView(
                       scrollDirection: Axis.horizontal,
@@ -980,9 +1150,7 @@ class _FileBrowserState extends State<FileBrowser>
                           Row(
                             children: [
                               TextButton(
-                                onPressed: path == dir
-                                    ? null
-                                    : () => _open(path),
+                                onPressed: path == dir ? null : () => _go(path),
                                 child: Text(label),
                               ),
                               if (path != dir)
@@ -1029,7 +1197,7 @@ class _FileBrowserState extends State<FileBrowser>
                           ListTile(
                             leading: const Icon(Icons.arrow_upward),
                             title: const Text('..'),
-                            onTap: () => _open(parentPath(dir!)),
+                            onTap: () => _go(parentPath(dir!)),
                           ),
                         if (_shown.isEmpty)
                           Padding(
@@ -1041,42 +1209,51 @@ class _FileBrowserState extends State<FileBrowser>
                               ),
                             ),
                           ),
-                        for (final e in _shown)
-                          ListTile(
-                            selected:
-                                e.path == _marked || _picked.contains(e.path),
-                            leading: _picked.isNotEmpty
-                                ? Icon(
-                                    _picked.contains(e.path)
-                                        ? Icons.check_circle
-                                        : Icons.radio_button_unchecked,
-                                  )
-                                : Icon(
-                                    e.isDir ? Icons.folder : _iconFor(e.name),
-                                    color: e.isDir ? NexusColors.accent : muted,
-                                  ),
-                            title: Text(e.name),
-                            subtitle: Text(
-                              [
-                                if (!e.isDir && e.size != null) _size(e.size!),
-                                if (e.modified != null) _when(e.modified!),
-                              ].join(' · '),
-                              style: TextStyle(color: muted, fontSize: 12),
+                        if (_grid)
+                          GridView.extent(
+                            maxCrossAxisExtent: 112,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(8),
+                            children: [for (final e in _shown) _gridTile(e)],
+                          )
+                        else
+                          for (final e in _shown)
+                            ListTile(
+                              selected:
+                                  e.path == _marked || _picked.contains(e.path),
+                              leading: _picked.isNotEmpty
+                                  ? Icon(
+                                      _picked.contains(e.path)
+                                          ? Icons.check_circle
+                                          : Icons.radio_button_unchecked,
+                                    )
+                                  : Icon(
+                                      e.isDir ? Icons.folder : _iconFor(e.name),
+                                      color: e.isDir
+                                          ? NexusColors.accent
+                                          : muted,
+                                    ),
+                              title: Text(e.name),
+                              subtitle: Text(
+                                [
+                                  if (!e.isDir && e.size != null)
+                                    _size(e.size!),
+                                  if (e.modified != null) _when(e.modified!),
+                                ].join(' · '),
+                                style: TextStyle(color: muted, fontSize: 12),
+                              ),
+                              onTap: () => _tap(e),
+                              onLongPress: () => _picked.isNotEmpty
+                                  ? _toggle(e)
+                                  : _entryMenu(e),
+                              trailing: _picked.isNotEmpty
+                                  ? null
+                                  : IconButton(
+                                      icon: const Icon(Icons.more_vert),
+                                      onPressed: () => _entryMenu(e),
+                                    ),
                             ),
-                            onTap: () => _picked.isNotEmpty
-                                ? _toggle(e)
-                                : e.isDir
-                                ? _open(e.path)
-                                : _openFile(e.path, e.name),
-                            onLongPress: () =>
-                                _picked.isNotEmpty ? _toggle(e) : _entryMenu(e),
-                            trailing: _picked.isNotEmpty
-                                ? null
-                                : IconButton(
-                                    icon: const Icon(Icons.more_vert),
-                                    onPressed: () => _entryMenu(e),
-                                  ),
-                          ),
                       ],
                     ),
                   ),
@@ -1129,16 +1306,49 @@ String _when(DateTime t) {
 }
 
 /// Shows a file: pictures as pictures, text as editable text.
+/// Sends a file and a message about it to the chat this terminal is part of.
+typedef AskAboutFile = Future<void> Function(
+  String message,
+  List<int> bytes,
+  String name,
+);
+
+/// The message the web's "Ask or edit" box sends: the picked lines quoted,
+/// with where they are, then what was asked.
+String fileAskMessage(
+  String path,
+  String text,
+  TextSelection selection,
+  String instruction,
+) {
+  if (!selection.isValid || selection.isCollapsed) return instruction;
+  final start = selection.start.clamp(0, text.length);
+  final end = selection.end.clamp(0, text.length);
+  final picked = text.substring(start, end);
+  final first = '\n'.allMatches(text.substring(0, start)).length + 1;
+  final last = first + '\n'.allMatches(picked.trimRight()).length;
+  final where = first == last ? '$path:$first' : '$path:$first-$last';
+  final quote = [
+    where,
+    picked,
+  ].join('\n').split('\n').map((l) => '> $l').join('\n');
+  return '$quote\n\n$instruction';
+}
+
 class FileViewer extends StatefulWidget {
   const FileViewer({
     super.key,
     required this.api,
     required this.path,
     required this.name,
+    this.onAsk,
   });
   final TerminalApi api;
   final String path;
   final String name;
+
+  /// Set inside a chat: an "Ask or edit" box sends the file there.
+  final AskAboutFile? onAsk;
 
   @override
   State<FileViewer> createState() => _FileViewerState();
@@ -1149,6 +1359,36 @@ class _FileViewerState extends State<FileViewer> {
   String? _text;
   Object? _error;
   final _edit = TextEditingController();
+  final _ask = TextEditingController();
+  bool _asking = false;
+
+  Future<void> _send() async {
+    final instruction = _ask.text.trim();
+    final bytes = _bytes;
+    if (instruction.isEmpty || bytes == null || _asking) return;
+    setState(() => _asking = true);
+    try {
+      if (_dirty) await _save();
+      final latest = _text == null ? bytes : utf8.encode(_edit.text);
+      await widget.onAsk!(
+        fileAskMessage(widget.path, _edit.text, _edit.selection, instruction),
+        latest,
+        widget.name,
+      );
+      _ask.clear();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Sent to the chat')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Not sent: $e')));
+      }
+    }
+    if (mounted) setState(() => _asking = false);
+  }
+
   bool _dirty = false;
   bool _saving = false;
 
@@ -1381,6 +1621,48 @@ class _FileViewerState extends State<FileViewer> {
                 onChanged: (_) {
                   if (!_dirty) setState(() => _dirty = true);
                 },
+              ),
+        bottomNavigationBar: widget.onAsk == null || _bytes == null
+            ? null
+            : SafeArea(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    12,
+                    6,
+                    6,
+                    6 + MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _ask,
+                          minLines: 1,
+                          maxLines: 4,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _send(),
+                          decoration: const InputDecoration(
+                            hintText: 'Ask or edit…',
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Send',
+                        onPressed: _asking ? null : _send,
+                        icon: _asking
+                            ? const SizedBox.square(
+                                dimension: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.arrow_upward),
+                      ),
+                    ],
+                  ),
+                ),
               ),
       ),
     );
