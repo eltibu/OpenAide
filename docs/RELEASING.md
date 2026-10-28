@@ -13,6 +13,7 @@ The update token (`NEXUS_UPDATE_TOKEN`) is only built in while the repo is priva
 
 In this order, so no phone ever needs a reinstall:
 
+0. **Clean the history.** No secrets are in it, but old commits show a home network address (192.168.1.209, in tests), the casadelamota.xyz Studio link, and the owner's personal email on 3 commits. Either publish a fresh repo with one squashed commit, or rewrite this repo's history (`git filter-repo` replacing those strings and mailmapping the email to the GitHub noreply address). Rewriting breaks every open branch and pull request, so do it once all work is merged, and check afterwards that the Actions cache still holds the signing key (it is keyed by branch, not by commit). The tests no longer use the real address.
 1. Merge the work into the default branch. Let a dev build from it reach your phone **and every tester's copy that has the built-in token**: this build remembers the Dev channel and can update without a token. A copy that skips it would keep the old updater, which stops seeing updates once the token is revoked (step 5) and then needs the new APK installed by hand (over the top, no uninstall).
 2. Run **Mark old builds as dev builds** (Actions tab). Every earlier release becomes a pre-release, so Stable doesn't offer an old dev build.
 3. Settings → General → Danger Zone → **Change visibility** → Public.
