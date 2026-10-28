@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+
+import '../../core/widgets/empty_state.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/openwebui_client.dart';
@@ -92,9 +95,9 @@ class ToolsScreen extends ConsumerWidget {
           data: (items) => ListView(
             children: [
               if (items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text('No tools yet', style: TextStyle(color: muted)),
+                const EmptyState(
+                  icon: Icons.build_outlined,
+                  title: 'No tools yet',
                 ),
               for (final t in ownerFiltered(ref, items, (t) => t['user_id']))
                 ListTile(
@@ -575,9 +578,9 @@ class SkillsScreen extends ConsumerWidget {
           data: (items) => ListView(
             children: [
               if (items.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text('No skills yet', style: TextStyle(color: muted)),
+                const EmptyState(
+                  icon: Icons.psychology_outlined,
+                  title: 'No skills yet',
                 ),
               for (final s in ownerFiltered(ref, items, (s) => s['user_id']))
                 ListTile(

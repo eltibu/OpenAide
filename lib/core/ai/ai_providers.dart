@@ -12,13 +12,17 @@ import 'package:http/http.dart' as http;
 
 import '../api/sse.dart';
 import 'copilot.dart';
+import 'local_llm.dart';
 import '../models/model_info.dart';
 
 enum AiProvider {
   openRouter('openrouter', 'OpenRouter'),
   anthropic('anthropic', 'Claude'),
   openAi('openai', 'OpenAI'),
-  copilot('copilot', 'GitHub Copilot');
+  copilot('copilot', 'GitHub Copilot'),
+
+  /// Models downloaded to the phone (local_llm.dart); no key, no internet.
+  local('local', 'On this phone');
 
   const AiProvider(this.id, this.label);
 
@@ -70,9 +74,50 @@ class AiMessage {
 
 /// A piece of a streaming reply.
 class AiChunk {
-  const AiChunk({this.text = '', this.thinking = ''});
+  const AiChunk({this.text = '', this.thinking = '', this.tools = const []});
   final String text;
   final String thinking;
+
+  /// Pieces of tool calls the model is making, by their place in the reply.
+  final List<AiToolDelta> tools;
+}
+
+/// Part of a tool call as it streams: the first piece has its id and name,
+/// the rest more of its arguments (JSON text).
+class AiToolDelta {
+  const AiToolDelta(this.index, {this.id, this.name, this.arguments = ''});
+  final int index;
+  final String? id;
+  final String? name;
+  final String arguments;
+}
+
+/// A tool the model may call: what it does and its arguments as JSON
+/// Schema.
+class AiToolSpec {
+  const AiToolSpec(this.name, this.description, this.parameters);
+  final String name;
+  final String description;
+  final Map<String, dynamic> parameters;
+}
+
+/// One tool call the model made.
+class AiToolCall {
+  const AiToolCall(this.id, this.name, this.arguments);
+  final String id;
+  final String name;
+
+  /// JSON text, as the model wrote it.
+  final String arguments;
+}
+
+/// A step of the model using tools: what it said, the calls it made and
+/// what each returned (same order). Sent back after the chat's messages.
+class AiToolTurn {
+  const AiToolTurn(this.text, this.calls, this.results);
+  final String text;
+  final List<AiToolCall> calls;
+  final List<String> results;
 }
 
 const _openRouterBase = 'https://openrouter.ai/api/v1';
@@ -102,6 +147,7 @@ Map<String, String> _headers(AiProvider p, String key) => switch (p) {
   AiProvider.openAi => {'Authorization': 'Bearer $key'},
   // Copilot's token comes from copilotSession; see copilot.dart.
   AiProvider.copilot => copilotHeaders(key),
+  AiProvider.local => const {},
 };
 
 /// The provider's own words for what went wrong, else the status.
@@ -235,6 +281,9 @@ Future<List<ModelInfo>> listProviderModels(
                     true,
               ),
         ];
+      case AiProvider.local:
+        // Downloaded models are listed by the models screen's store.
+        return const [];
       case AiProvider.openAi:
         final json = await _getJson(
           client,
@@ -291,8 +340,19 @@ Stream<AiChunk> streamProviderReply({
   required List<AiMessage> messages,
   String? system,
   Map<String, dynamic> params = const {},
+  List<AiToolSpec> tools = const [],
+  List<AiToolTurn> turns = const [],
   http.Client? httpClient,
 }) async* {
+  if (provider == AiProvider.local) {
+    yield* streamLocalModel(
+      file: model,
+      messages: messages,
+      system: system,
+      params: params,
+    );
+    return;
+  }
   final client = httpClient ?? http.Client();
   try {
     final http.Request req;
@@ -302,12 +362,26 @@ Stream<AiChunk> streamProviderReply({
       headers = copilotHeaders(session.token);
       req = http.Request('POST', Uri.parse('${session.base}/chat/completions'))
         ..body = jsonEncode(
-          openAiBody(model, messages, system: system, params: params),
+          openAiBody(
+            model,
+            messages,
+            system: system,
+            params: params,
+            tools: tools,
+            turns: turns,
+          ),
         );
     } else if (provider == AiProvider.anthropic) {
       req = http.Request('POST', Uri.parse('$_anthropicBase/messages'))
         ..body = jsonEncode(
-          anthropicBody(model, messages, system: system, params: params),
+          anthropicBody(
+            model,
+            messages,
+            system: system,
+            params: params,
+            tools: tools,
+            turns: turns,
+          ),
         );
     } else {
       final base = provider == AiProvider.openRouter
@@ -315,7 +389,14 @@ Stream<AiChunk> streamProviderReply({
           : _openAiBase;
       req = http.Request('POST', Uri.parse('$base/chat/completions'))
         ..body = jsonEncode(
-          openAiBody(model, messages, system: system, params: params),
+          openAiBody(
+            model,
+            messages,
+            system: system,
+            params: params,
+            tools: tools,
+            turns: turns,
+          ),
         );
     }
     req.headers.addAll({
@@ -356,10 +437,24 @@ Map<String, dynamic> openAiBody(
   List<AiMessage> messages, {
   String? system,
   Map<String, dynamic> params = const {},
+  List<AiToolSpec> tools = const [],
+  List<AiToolTurn> turns = const [],
 }) => {
   ...params,
   'model': model,
   'stream': true,
+  if (tools.isNotEmpty)
+    'tools': [
+      for (final t in tools)
+        {
+          'type': 'function',
+          'function': {
+            'name': t.name,
+            'description': t.description,
+            'parameters': t.parameters,
+          },
+        },
+    ],
   'messages': [
     if (system != null && system.trim().isNotEmpty)
       {'role': 'system', 'content': system},
@@ -378,8 +473,44 @@ Map<String, dynamic> openAiBody(
                     },
                 ],
         },
+    for (final turn in turns) ...[
+      {
+        'role': 'assistant',
+        'content': turn.text.isEmpty ? null : turn.text,
+        if (turn.calls.isNotEmpty)
+          'tool_calls': [
+            for (final c in turn.calls)
+              {
+                'id': c.id,
+                'type': 'function',
+                'function': {
+                  'name': c.name,
+                  'arguments': c.arguments.isEmpty ? '{}' : c.arguments,
+                },
+              },
+          ],
+      },
+      for (final (i, c) in turn.calls.indexed)
+        {
+          'role': 'tool',
+          'tool_call_id': c.id,
+          'content': i < turn.results.length ? turn.results[i] : '',
+        },
+    ],
   ],
 };
+
+/// Arguments as an object, whatever the model wrote.
+Map<String, dynamic> toolArguments(String json) {
+  if (json.trim().isEmpty) return {};
+  try {
+    final v = jsonDecode(json);
+    if (v is Map) return v.cast<String, dynamic>();
+  } on FormatException {
+    // Left empty below.
+  }
+  return {};
+}
 
 /// The request body for Claude's Messages API.
 Map<String, dynamic> anthropicBody(
@@ -387,6 +518,8 @@ Map<String, dynamic> anthropicBody(
   List<AiMessage> messages, {
   String? system,
   Map<String, dynamic> params = const {},
+  List<AiToolSpec> tools = const [],
+  List<AiToolTurn> turns = const [],
 }) => {
   if (params['temperature'] != null) 'temperature': params['temperature'],
   if (params['top_p'] != null) 'top_p': params['top_p'],
@@ -394,6 +527,15 @@ Map<String, dynamic> anthropicBody(
   'max_tokens': params['max_tokens'] ?? 8192,
   'stream': true,
   if (system != null && system.trim().isNotEmpty) 'system': system,
+  if (tools.isNotEmpty)
+    'tools': [
+      for (final t in tools)
+        {
+          'name': t.name,
+          'description': t.description,
+          'input_schema': t.parameters,
+        },
+    ],
   'messages': [
     for (final m in messages)
       if (m.role != 'system' && (m.text.isNotEmpty || m.images.isNotEmpty))
@@ -404,6 +546,35 @@ Map<String, dynamic> anthropicBody(
             if (m.text.isNotEmpty) {'type': 'text', 'text': m.text},
           ],
         },
+    for (final turn in turns) ...[
+      {
+        'role': 'assistant',
+        'content': [
+          if (turn.text.trim().isNotEmpty) {'type': 'text', 'text': turn.text},
+          for (final c in turn.calls)
+            {
+              'type': 'tool_use',
+              'id': c.id,
+              'name': c.name,
+              'input': toolArguments(c.arguments),
+            },
+        ],
+      },
+      if (turn.calls.isNotEmpty)
+        {
+          'role': 'user',
+          'content': [
+            for (final (i, c) in turn.calls.indexed)
+              {
+                'type': 'tool_result',
+                'tool_use_id': c.id,
+                'content': i < turn.results.length && turn.results[i].isNotEmpty
+                    ? turn.results[i]
+                    : '(no output)',
+              },
+          ],
+        },
+    ],
   ],
 };
 
@@ -431,10 +602,22 @@ AiChunk? openAiChunk(Map<String, dynamic> event) {
   if (delta is! Map) return null;
   final text = delta['content'];
   final thinking = delta['reasoning'] ?? delta['reasoning_content'];
-  if (text is! String && thinking is! String) return null;
+  final calls = delta['tool_calls'];
+  final tools = [
+    for (final (i, c) in (calls is List ? calls : const []).indexed)
+      if (c is Map)
+        AiToolDelta(
+          c['index'] is int ? c['index'] as int : i,
+          id: c['id'] as String?,
+          name: (c['function'] as Map?)?['name'] as String?,
+          arguments: '${(c['function'] as Map?)?['arguments'] ?? ''}',
+        ),
+  ];
+  if (text is! String && thinking is! String && tools.isEmpty) return null;
   return AiChunk(
     text: text is String ? text : '',
     thinking: thinking is String ? thinking : '',
+    tools: tools,
   );
 }
 
@@ -443,12 +626,32 @@ AiChunk? anthropicChunk(Map<String, dynamic> event) {
     case 'error':
       final e = event['error'];
       throw AiException(e is Map ? '${e['message'] ?? e}' : '$e');
+    case 'content_block_start':
+      final block = event['content_block'];
+      if (block is! Map || block['type'] != 'tool_use') return null;
+      return AiChunk(
+        tools: [
+          AiToolDelta(
+            event['index'] as int? ?? 0,
+            id: '${block['id']}',
+            name: '${block['name']}',
+          ),
+        ],
+      );
     case 'content_block_delta':
       final delta = event['delta'];
       if (delta is! Map) return null;
       return switch (delta['type']) {
         'text_delta' => AiChunk(text: '${delta['text'] ?? ''}'),
         'thinking_delta' => AiChunk(thinking: '${delta['thinking'] ?? ''}'),
+        'input_json_delta' => AiChunk(
+          tools: [
+            AiToolDelta(
+              event['index'] as int? ?? 0,
+              arguments: '${delta['partial_json'] ?? ''}',
+            ),
+          ],
+        ),
         _ => null,
       };
   }

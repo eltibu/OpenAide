@@ -73,7 +73,10 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
   @override
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
-    final heading = Theme.of(context).textTheme.titleSmall;
+    // Section names in the accent colour, as on every settings page.
+    final heading = Theme.of(
+      context,
+    ).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary);
     final ui = ref.watch(uiSettingsProvider).value;
     final opens = assistantOpens(ui);
     final lock = ref.watch(appLockProvider).value;

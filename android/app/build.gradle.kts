@@ -42,6 +42,30 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Models on the phone (llama.cpp) are built for 64-bit ARM, which
+        // nearly every phone since 2017 has; elsewhere the screen says so.
+        externalNativeBuild {
+            cmake {
+                abiFilters += listOf("arm64-v8a")
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path("src/main/cpp/CMakeLists.txt")
+            version = "3.31.6"
+        }
+    }
+
+    // llama.cpp picks the CPU code for the phone's chip from separate
+    // libraries at run time, so they have to be unpacked on install.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     signingConfigs {

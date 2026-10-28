@@ -13,6 +13,8 @@ import '../../core/ai/ai_providers.dart';
 import '../../core/ai/copilot.dart';
 import '../../core/theme.dart';
 import 'ai_keys.dart';
+import 'local_models.dart';
+import 'local_models_screen.dart';
 
 class AiProvidersScreen extends StatelessWidget {
   const AiProvidersScreen({super.key});
@@ -25,7 +27,7 @@ class AiProvidersScreen extends StatelessWidget {
 }
 
 /// The providers with their sign-in and key fields; also the first screen
-/// of using Nexus without a server.
+/// of using the app without a server.
 class AiProviderList extends ConsumerWidget {
   const AiProviderList({super.key, this.intro});
 
@@ -46,15 +48,47 @@ class AiProviderList extends ConsumerWidget {
                 style: TextStyle(color: context.nexus.muted),
               ),
           const SizedBox(height: 16),
-          for (final p in AiProvider.values) ...[
-            _ProviderCard(provider: p, savedKey: value[p]),
-            const SizedBox(height: 12),
-          ],
+          for (final p in AiProvider.values)
+            if (p != AiProvider.local) ...[
+              _ProviderCard(provider: p, savedKey: value[p]),
+              const SizedBox(height: 12),
+            ],
+          const _OnThisPhoneCard(),
         ],
       ),
       AsyncError(:final error) => Center(child: Text('$error')),
       _ => const Center(child: CircularProgressIndicator()),
     };
+  }
+}
+
+/// Models on the phone itself: no key, see LocalModelsScreen.
+class _OnThisPhoneCard extends ConsumerWidget {
+  const _OnThisPhoneCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final ready = [
+      for (final m in ref.watch(localModelsProvider).value ?? const [])
+        if (m.ready) m,
+    ];
+    return Card(
+      child: ListTile(
+        contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
+        leading: const Icon(Icons.phone_android),
+        title: const Text('On this phone'),
+        subtitle: Text(
+          ready.isEmpty
+              ? 'Download a model and chat offline: free, private, no '
+                    'account. Smaller and slower than online models.'
+              : '${ready.length} model${ready.length == 1 ? '' : 's'} '
+                    'downloaded. Works offline.',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: () => Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => const LocalModelsScreen())),
+      ),
+    );
   }
 }
 
@@ -108,6 +142,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                 'other apps, so it may stop working.'
           : "Use your own Copilot plan. Sign-in isn't set up in this "
                 'version yet.',
+    AiProvider.local => '',
   };
 
   String get _hint => switch (_p) {
@@ -115,6 +150,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
     AiProvider.anthropic => 'sk-ant-…',
     AiProvider.openAi => 'sk-…',
     AiProvider.copilot => 'gho_…',
+    AiProvider.local => '',
   };
 
   /// Lists the models [key] unlocks; saves it if that works.
@@ -233,7 +269,9 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
             Text(_blurb, style: TextStyle(color: context.nexus.muted)),
             const SizedBox(height: 12),
             if (_signIn != null) ...[
-              const Text('Approve OpenAide in the browser, then come back here.'),
+              const Text(
+                'Approve OpenAide in the browser, then come back here.',
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [

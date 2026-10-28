@@ -13,6 +13,7 @@ import 'listen.dart';
 import 'studio_api.dart';
 import 'studio_doc.dart';
 import 'studio_screen.dart' show StudioEditor, studioModel, studioDocsProvider;
+import '../../core/widgets/markdown_style.dart';
 
 String _clock(Duration d) {
   String two(int n) => n.toString().padLeft(2, '0');
@@ -533,11 +534,7 @@ class _RecordNotesScreenState extends ConsumerState<RecordNotesScreen> {
                               data: cleanAiText(_draft).isEmpty
                                   ? '_The AI is writing it up…_'
                                   : cleanAiText(_draft),
-                              config:
-                                  Theme.of(context).brightness ==
-                                      Brightness.dark
-                                  ? MarkdownConfig.darkConfig
-                                  : MarkdownConfig.defaultConfig,
+                              config: nexusMarkdown(context),
                             ),
                           )
                         : _pieces.isEmpty

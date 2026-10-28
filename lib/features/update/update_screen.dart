@@ -81,9 +81,9 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
                       'different token here to override it.'
                 : _hasToken
                 ? 'A token is saved. Paste a new one to replace it.'
-                : 'Needed because the repo is private. Create a fine-grained '
-                      'token on GitHub with read-only "Contents" access to '
-                      '$updateRepo only, and paste it here.',
+                : 'Not needed: updates come from the public releases of '
+                      '$updateRepo. Only for a private copy of the app, '
+                      'paste a token with read-only "Contents" access.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),

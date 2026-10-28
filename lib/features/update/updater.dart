@@ -117,42 +117,41 @@ class Updater extends Notifier<UpdateState> {
     }
   }
 
-  Map<String, String> _headers(String token) => {
-    'Authorization': 'Bearer $token',
+  Map<String, String> _headers(String? token) => {
+    'Authorization': ?(token == null ? null : 'Bearer $token'),
     'X-GitHub-Api-Version': '2022-11-28',
   };
 
-  /// Looks for a newer build. Quiet when no token is set and [quiet] is true,
-  /// as on app start.
+  /// Looks for a newer build. A public repo needs no token; with one that
+  /// GitHub refuses (revoked or expired) it asks again without it.
   Future<void> check({bool quiet = false}) async {
-    final token = await this.token();
-    if (token == null) {
-      if (!quiet) {
-        state = const UpdateFailed(
-          'Add a GitHub token in App updates to check for new builds.',
-        );
-      }
-      return;
-    }
     state = const UpdateChecking();
     try {
       final info = await PackageInfo.fromPlatform();
       final current = int.tryParse(info.buildNumber) ?? 0;
-      final res = await http.get(
-        // Several builds can finish out of order, so GitHub's "latest" isn't
-        // always the newest: look at recent releases and take the highest.
-        Uri.parse(
-          'https://api.github.com/repos/$updateRepo/releases?per_page=20',
-        ),
+      // Several builds can finish out of order, so GitHub's "latest" isn't
+      // always the newest: look at recent releases and take the highest.
+      final url = Uri.parse(
+        'https://api.github.com/repos/$updateRepo/releases?per_page=20',
+      );
+      Future<http.Response> get(String? token) => http.get(
+        url,
         headers: {..._headers(token), 'Accept': 'application/vnd.github+json'},
       );
+      final token = await this.token();
+      var res = await get(token);
+      if (token != null && (res.statusCode == 401 || res.statusCode == 403)) {
+        res = await get(null);
+      }
       // A private repo answers 404 to a token that can't read it, so 404 is a
       // token problem, never "up to date".
       if (res.statusCode == 401 ||
           res.statusCode == 403 ||
           res.statusCode == 404) {
-        throw const HttpException(
-          'GitHub refused the token. Check that it can read this repo.',
+        throw HttpException(
+          token == null
+              ? "Couldn't reach this app's releases on GitHub."
+              : 'GitHub refused the token. Check that it can read this repo.',
         );
       }
       if (res.statusCode != 200) {
@@ -172,22 +171,24 @@ class Updater extends Notifier<UpdateState> {
   /// Downloads [update] and opens Android's installer.
   Future<void> install(AvailableUpdate update) async {
     final token = await this.token();
-    if (token == null) {
-      state = const UpdateFailed('Add a GitHub token in App updates first.');
-      return;
-    }
     state = const UpdateDownloading(null);
     final client = http.Client();
     try {
       // The asset API answers with a redirect to a short-lived download link
       // that must be fetched without the token.
-      final req = http.Request('GET', Uri.parse(update.assetApiUrl))
-        ..headers.addAll({
-          ..._headers(token),
-          'Accept': 'application/octet-stream',
-        })
-        ..followRedirects = false;
-      var res = await client.send(req);
+      Future<http.StreamedResponse> asset(String? token) => client.send(
+        http.Request('GET', Uri.parse(update.assetApiUrl))
+          ..headers.addAll({
+            ..._headers(token),
+            'Accept': 'application/octet-stream',
+          })
+          ..followRedirects = false,
+      );
+      var res = await asset(token);
+      if (token != null && (res.statusCode == 401 || res.statusCode == 403)) {
+        await res.stream.drain<void>();
+        res = await asset(null);
+      }
       final location = res.headers['location'];
       if (res.isRedirect && location != null) {
         await res.stream.drain<void>();

@@ -45,6 +45,9 @@ class SessionNotifier extends AsyncNotifier<Session?> {
   /// False only while the saved session is first being restored.
   bool booted = false;
 
+  /// Internet servers the person chose to reach over plain http anyway.
+  final insecureOk = <String>{};
+
   @override
   Future<Session?> build() async {
     try {
@@ -203,7 +206,7 @@ class SessionNotifier extends AsyncNotifier<Session?> {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
       final client = OpenWebUiClient(
-        baseUrl: await OpenWebUiClient.discover(url),
+        baseUrl: await OpenWebUiClient.discover(url, allowInsecure: insecureOk),
       );
       await auth(client);
       return _save(client, await client.me());
