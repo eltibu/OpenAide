@@ -14,12 +14,19 @@ on:
         description: Tester build to share with someone else. No built-in update token, and no release (Joel's phone never sees it).
         type: boolean
         default: false
+      public_release:
+        description: Public release (stable channel) for everyone. No update token. Only from the default branch.
+        type: boolean
+        default: false
 
 jobs:
   android:
     # Joel's PC (WSL Ubuntu) runs the builds: GitHub-hosted minutes for this
     # private repo are blocked by billing. It has the Android SDK and JDK 17.
     runs-on: [self-hosted, nexus-build]
+    # Never run a stranger's code on Joel's PC: pull requests from forks
+    # don't build here.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
       contents: write
     # Job-level, so a step's `if` can test it (a step's own env can't).
@@ -27,6 +34,11 @@ jobs:
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       RELEASE_KEYSTORE_BASE64: ${{ secrets.NEXUS_RELEASE_KEYSTORE_BASE64 }}
     steps:
+      - name: Public releases come from the default branch
+        if: ${{ inputs.public_release && github.ref_name != github.event.repository.default_branch }}
+        run: |
+          echo "::error::Run the public release from ${{ github.event.repository.default_branch }}, not ${{ github.ref_name }}."
+          exit 1
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with:
@@ -124,8 +136,10 @@ jobs:
       # checks API without the raw log.
       # The built-in token must be able to see this repo's releases, or the
       # app can never find an update. Never prints the token.
+      # Only while the repo is private: public releases are readable without
+      # a token, so no build carries one once the repo is public.
       - name: Check the update token
-        if: ${{ !inputs.tester_build }}
+        if: ${{ github.event.repository.private && !inputs.tester_build && !inputs.public_release }}
         env:
           NEXUS_UPDATE_TOKEN: ${{ secrets.NEXUS_UPDATE_TOKEN }}
         run: |
@@ -158,9 +172,10 @@ jobs:
       - name: Build APK
         env:
           # Read-only token for the in-app updater (repo secret), so the app
-          # never asks for one. Left out of tester builds: anyone holding the
-          # APK can read it, and it opens this private repo.
-          NEXUS_UPDATE_TOKEN: ${{ !inputs.tester_build && secrets.NEXUS_UPDATE_TOKEN || '' }}
+          # never asks for one while the repo is private. Left out of tester
+          # and public builds, and of every build once the repo is public:
+          # anyone holding the APK can read it.
+          NEXUS_UPDATE_TOKEN: ${{ github.event.repository.private && !inputs.tester_build && !inputs.public_release && secrets.NEXUS_UPDATE_TOKEN || '' }}
         run: |
           set -o pipefail
           flutter build apk --release \
@@ -240,17 +255,34 @@ jobs:
         with:
           name: ${{ inputs.tester_build && 'nexus-tester-apk' || 'nexus-assistant-apk' }}
           path: build/app/outputs/flutter-apk/app-release.apk
-      # Each build becomes a GitHub Release tagged v0.1.<run number>; the
-      # app's updater installs the newest one.
-      - name: Publish build for in-app updates
-        if: ${{ !inputs.tester_build && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+      # Each dev build becomes a GitHub pre-release tagged v0.1.<run number>;
+      # the app's updater on the dev channel installs the newest one. Asset
+      # name nexus-assistant.apk is what older apps look for.
+      - name: Publish dev build for in-app updates
+        if: ${{ !inputs.tester_build && !inputs.public_release }}
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message || github.event.pull_request.title }}
         run: |
           cp build/app/outputs/flutter-apk/app-release.apk nexus-assistant.apk
           gh release create "v0.1.${{ github.run_number }}" nexus-assistant.apk \
-            --title "Nexus Assistant 0.1.${{ github.run_number }}" \
+            --title "OpenAide 0.1.${{ github.run_number }} (dev)" \
             --notes "$NOTES" \
             --target "${{ github.event.pull_request.head.sha || github.sha }}" \
+            --prerelease
+      # A public release: a normal (not pre-) release marked latest, so
+      # /releases/latest and the stable channel point at it. Notes list what
+      # changed since the last public release.
+      - name: Publish public release
+        if: ${{ inputs.public_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=0.1.${{ github.run_number }}
+          cp build/app/outputs/flutter-apk/app-release.apk "OpenAide-$VERSION.apk"
+          PREV=$(gh release list --exclude-pre-releases --exclude-drafts --limit 1 --json tagName --jq '.[0].tagName // empty')
+          gh release create "v$VERSION" "OpenAide-$VERSION.apk" \
+            --title "OpenAide $VERSION" \
+            --target "${{ github.sha }}" \
+            --generate-notes ${PREV:+--notes-start-tag "$PREV"} \
             --latest

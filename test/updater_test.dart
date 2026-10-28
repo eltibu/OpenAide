@@ -28,4 +28,24 @@ void main() {
     expect(newest?.assetApiUrl, 'u-v0.1.21');
     expect(newestRelease([]), isNull);
   });
+
+  test('stable skips dev builds; public APK names count', () {
+    Map<String, dynamic> rel(String tag, String asset, {bool pre = false}) => {
+      'tag_name': tag,
+      'prerelease': pre,
+      'assets': [
+        {'name': asset, 'url': 'u-$tag'},
+      ],
+    };
+    final releases = [
+      rel('v0.1.30', 'OpenAide-0.1.30.apk'),
+      rel('v0.1.31', 'nexus-assistant.apk', pre: true),
+      rel('v0.1.32', 'notes.txt'),
+    ];
+    expect(newestRelease(releases, includeDev: false)?.build, 30);
+    expect(newestRelease(releases)?.build, 31);
+    expect(isAppAsset('OpenAide-0.1.30.apk'), isTrue);
+    expect(isAppAsset('nexus-assistant.apk'), isTrue);
+    expect(isAppAsset('other.apk'), isFalse);
+  });
 }
