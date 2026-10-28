@@ -1,3 +1,4 @@
+import '../providers/ai_providers_screen.dart';
 import '../phone/phone_settings.dart';
 
 import 'dart:convert';
@@ -8,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../accounts/accounts_screen.dart';
 import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
@@ -181,12 +183,26 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const NotificationSettings()),
           ),
           ListTile(
+            leading: const Icon(Icons.manage_accounts_outlined),
+            title: const Text('Accounts'),
+            subtitle: const Text(
+              'Email and other services the app signs in to',
+            ),
+            onTap: () => open(const AccountsScreen()),
+          ),
+          ListTile(
             leading: const Icon(Icons.phone_android),
             title: const Text('Phone and assistant'),
             subtitle: const Text(
               'Default assistant, shortcuts, Share, app lock',
             ),
             onTap: () => open(const PhoneSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.hub_outlined),
+            title: const Text('AI providers'),
+            subtitle: const Text('OpenRouter, Claude and OpenAI'),
+            onTap: () => open(const AiProvidersScreen()),
           ),
           if ((ref.watch(serverConfigProvider).value?['features']
                   as Map?)?['enable_direct_connections'] ==

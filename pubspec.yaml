@@ -60,6 +60,7 @@ dependencies:
   sqlite3_flutter_libs: ^0.5.32
   camera: ^0.12.2
   geolocator: ^14.0.1
+  enough_mail: ^3.0.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

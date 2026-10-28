@@ -11,13 +11,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/auth/session.dart';
 import 'core/theme.dart';
 import 'core/widgets/nexus_logo.dart';
-import 'features/auth/login_screen.dart';
+import 'features/auth/welcome_screen.dart';
 import 'features/auth/sign_in_steps.dart';
 import 'features/chat/chat_controller.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/chat/in_app_toasts.dart';
 import 'features/chat/server_asks.dart';
 import 'features/phone/app_lock.dart';
+import 'features/standalone/local_chats.dart';
+import 'features/standalone/standalone_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -79,7 +81,11 @@ class NexusApp extends ConsumerWidget {
               ),
             ),
           ),
-        _ => const LoginScreen(),
+        _ when ref.watch(standaloneModeProvider).isLoading => const Scaffold(),
+        // Signed out: chats with AI providers only, when chosen.
+        _ when ref.watch(standaloneModeProvider).value == true =>
+          const StandaloneScreen(),
+        _ => const WelcomeScreen(),
       },
     );
   }

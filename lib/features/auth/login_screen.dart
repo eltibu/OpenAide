@@ -8,7 +8,10 @@ import 'sign_in_steps.dart';
 import 'sso_login_screen.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.onBack});
+
+  /// Back to the welcome screen, when it led here.
+  final VoidCallback? onBack;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -78,7 +81,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ? PendingScreen(onCheck: _submit, busy: session.isLoading)
           : TwoStepScreen(step: step, busy: session.isLoading);
     }
-    return Scaffold(
+    final scaffold = Scaffold(
+      appBar: widget.onBack == null
+          ? null
+          : AppBar(leading: BackButton(onPressed: widget.onBack)),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -225,6 +231,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           ),
         ),
       ),
+    );
+    if (widget.onBack == null) return scaffold;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) widget.onBack!();
+      },
+      child: scaffold,
     );
   }
 }

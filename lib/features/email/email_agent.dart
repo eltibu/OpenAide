@@ -346,8 +346,36 @@ String composeRequest({
     'exactly this text, unchanged:\n<<<\n$text\n>>>\nAnswer with a JSON '
     'object: {"sent": true or false, "error": "" or what went wrong}.';
 
+/// Where the Email screen's mail comes from: Nexus on the server
+/// ([EmailAgent]) or an account the app signs in to itself (DirectMail).
+abstract interface class MailSource {
+  /// Who the mail is shown and sent as ("Nexus" or an address).
+  String get label;
+
+  /// Nexus writes a note on each email and a summary when one is opened.
+  bool get hasNotes;
+
+  /// The phone's copy of the lists, shown before anything is fetched.
+  Future<Map<String, dynamic>> phoneCopy();
+
+  Future<List<Email>> kept(String folder);
+  Future<DateTime?> checkedAt(String folder);
+  Future<Map> readMarks();
+  Future<OpenedEmail?> keptOpen(Email e);
+  Future<void> setRead(Email e, {bool read = true});
+  Future<List<Email>> check(String folder);
+  Future<OpenedEmail> openAndKeep(Email e);
+  Future<List<Email>> list({String folder = 'inbox', String query = ''});
+  Future<void> reply(Email e, String text, {bool all = false});
+  Future<void> compose({
+    required String to,
+    required String subject,
+    required String text,
+  });
+}
+
 /// Runs requests as turns in the email chat and waits for the answers.
-class EmailAgent {
+class EmailAgent implements MailSource {
   EmailAgent(
     this.client, {
     required this.model,
@@ -363,6 +391,15 @@ class EmailAgent {
   final Map<String, dynamic> options;
 
   final EmailCache cache;
+
+  @override
+  String get label => 'OpenAide';
+
+  @override
+  bool get hasNotes => true;
+
+  @override
+  Future<Map<String, dynamic>> phoneCopy() => cache.read();
 
   String? _chatId;
 
@@ -421,17 +458,21 @@ class EmailAgent {
   }
 
   /// The emails kept for [folder], newest first.
+  @override
   Future<List<Email>> kept(String folder) async =>
       keptIn(await _store(), folder);
 
   /// When Nexus last checked [folder].
+  @override
   Future<DateTime?> checkedAt(String folder) async =>
       checkedIn(await _store(), folder);
 
   /// What was marked read or unread in the app, by email id.
+  @override
   Future<Map> readMarks() async => (await _store())['read'] as Map? ?? {};
 
   /// An email opened before, as Nexus showed it then.
+  @override
   Future<OpenedEmail?> keptOpen(Email e) async {
     final opened = (await _store())['opened'];
     final j = opened is Map ? opened[e.id] : null;
@@ -471,11 +512,13 @@ class EmailAgent {
   }
 
   /// Marks [e] read (or unread again) in the app, kept on the server.
+  @override
   Future<void> setRead(Email e, {bool read = true}) => _save((s) {
     s['read'] = {...?s['read'] as Map?, e.id: read};
   });
 
   /// Checks [folder] with Nexus and keeps the result with what was there.
+  @override
   Future<List<Email>> check(String folder) async {
     final fresh = await list(folder: folder);
     await _save((s) {
@@ -493,6 +536,7 @@ class EmailAgent {
   }
 
   /// Opens [e] with Nexus and keeps what it showed.
+  @override
   Future<OpenedEmail> openAndKeep(Email e) async {
     final opened = await open(e);
     await _save((s) {
@@ -594,6 +638,7 @@ class EmailAgent {
     return json;
   }
 
+  @override
   Future<List<Email>> list({String folder = 'inbox', String query = ''}) async {
     final json = await _askJson(listRequest(folder: folder, query: query));
     final items = json is List
@@ -632,9 +677,11 @@ class EmailAgent {
   }
 
   /// Sends; throws with Nexus's reason when it didn't.
+  @override
   Future<void> reply(Email e, String text, {bool all = false}) async =>
       _sent(await _askJson(sendRequest(e, text, all: all)));
 
+  @override
   Future<void> compose({
     required String to,
     required String subject,

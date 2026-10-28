@@ -12,6 +12,8 @@ import '../../core/auth/session.dart';
 import '../../core/models/model_info.dart';
 
 ImageProvider? modelImage(OpenWebUiClient client, ModelInfo model) {
+  // Models from Settings > AI providers have no picture on the server.
+  if (model.raw['nexus_provider'] != null) return null;
   final url = model.profileImageUrl ?? '';
   if (url.startsWith('data:image/')) {
     try {
