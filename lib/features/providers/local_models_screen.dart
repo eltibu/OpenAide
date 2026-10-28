@@ -363,7 +363,11 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
 
   Widget _heading(BuildContext context, String text) => Padding(
     padding: const EdgeInsets.only(top: 24, bottom: 8),
-    child: Text(text, style: Theme.of(context).textTheme.titleMedium),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(color: Theme.of(context).colorScheme.primary),
+    ),
   );
 }
 

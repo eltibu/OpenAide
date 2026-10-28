@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
+import '../../core/net/local_network.dart';
 import '../../core/widgets/nexus_logo.dart';
 import 'sign_in_steps.dart';
 import 'sso_login_screen.dart';
@@ -59,9 +60,49 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /// Plain http to an internet server: only once the person agrees.
+  Future<bool> _okToSendUnencrypted(String host) async {
+    final notifier = ref.read(sessionProvider.notifier);
+    if (notifier.insecureOk.contains(host)) return true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Connect without encryption?'),
+        content: Text(
+          '$host is reached over plain http. Your password, sign-in and '
+          'chats would cross the internet unencrypted, and anyone on the '
+          'way could read them. Use https:// if the server has it.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Connect anyway'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return false;
+    notifier.insecureOk.add(host);
+    return true;
+  }
+
+  Future<void> _allowAndRetry(InsecureServer e) async {
+    if (await _okToSendUnencrypted(e.host)) _submit();
+  }
+
   Future<void> _signInWithBrowser() async {
     if (_url.text.trim().isEmpty) return;
     final base = OpenWebUiClient.normalizeUrl(_url.text);
+    final uri = Uri.parse(base);
+    if (isInsecureRemote(uri) &&
+        !await _okToSendUnencrypted(uri.host.toLowerCase())) {
+      return;
+    }
+    if (!mounted) return;
     final result = await Navigator.push<SsoResult>(
       context,
       MaterialPageRoute(builder: (_) => SsoLoginScreen(baseUrl: base)),
@@ -231,6 +272,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     '${session.error}',
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
+                  if (session.error case final InsecureServer e)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: session.isLoading
+                            ? null
+                            : () => _allowAndRetry(e),
+                        child: const Text('Connect anyway, unencrypted'),
+                      ),
+                    ),
                 ],
               ],
             ),
