@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/chat_controller.dart' show serverConfigProvider;
 import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
@@ -20,6 +21,7 @@ import 'connections_screen.dart';
 import 'groups_screen.dart';
 import 'integrations_screen.dart';
 import 'pipelines_screen.dart';
+import 'user_extras.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -379,6 +381,37 @@ class _UserEditorState extends ConsumerState<UserEditor> {
       appBar: AppBar(
         title: Text(_isNew ? 'Add user' : 'Edit user'),
         actions: [
+          if (!_isNew && widget.user!.role != 'admin') ...[
+            if ((ref.watch(serverConfigProvider).value?['features']
+                    as Map?)?['enable_admin_chat_access'] !=
+                false)
+              IconButton(
+                tooltip: 'Chats',
+                icon: const Icon(Icons.forum_outlined),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => UserChatsScreen(
+                      userId: widget.user!.id,
+                      name: widget.user!.name,
+                    ),
+                  ),
+                ),
+              ),
+            IconButton(
+              tooltip: 'Preview Access',
+              icon: const Icon(Icons.visibility_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => UserPreviewScreen(
+                    userId: widget.user!.id,
+                    name: widget.user!.name,
+                  ),
+                ),
+              ),
+            ),
+          ],
           if (!_isNew && !self)
             IconButton(
               tooltip: 'Delete',
