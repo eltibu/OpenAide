@@ -85,6 +85,15 @@ jobs:
       - name: Sign with the shared debug key
         if: ${{ hashFiles('android/key.properties') == '' }}
         run: |
+          # actions/cache stores the file relative to the workspace, so on a
+          # runner whose workspace isn't under $HOME (Joel's PC) it lands
+          # three levels above the workspace instead.
+          if [ ! -f ~/.android/debug.keystore ]; then
+            ALT=$(realpath -m "$GITHUB_WORKSPACE/../../../.android/debug.keystore")
+            if [ -f "$ALT" ]; then
+              mkdir -p ~/.android && cp "$ALT" ~/.android/debug.keystore
+            fi
+          fi
           cat > android/key.properties <<EOF
           storeFile=$HOME/.android/debug.keystore
           storePassword=android
