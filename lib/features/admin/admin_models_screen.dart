@@ -190,6 +190,31 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
     }
   }
 
+  Future<void> _resetAll() async {
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset All Models'),
+        content: const Text(
+          'This will delete all models including custom models and cannot '
+          'be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete all'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true) return;
+    await _run(_api.deleteAll, 'All models deleted successfully');
+  }
+
   Future<void> _all({bool? active, bool? hidden}) async {
     final list = _models ?? const [];
     await _run(() async {
@@ -427,6 +452,7 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                     'import' => _import(),
                     'export' => _export(),
                     'order' => _resetOrder(),
+                    'reset' => _resetAll(),
                     'defaults' => Navigator.push(
                       context,
                       MaterialPageRoute<void>(
@@ -451,6 +477,11 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                     PopupMenuItem(
                       value: 'order',
                       child: Text('Reset order (by name)'),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: 'reset',
+                      child: Text('Reset All Models'),
                     ),
                   ],
                 ),

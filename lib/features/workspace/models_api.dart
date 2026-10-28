@@ -126,6 +126,34 @@ class ModelsApi {
 
   Future<void> delete(String id) =>
       client.send('POST', '$_base/model/delete', body: {'id': id});
+
+  /// Admin: deletes every saved model, custom and connection changes alike.
+  Future<void> deleteAll() => client.send('DELETE', '$_base/delete/all');
+
+  /// Switches [models] on or off, or hides or shows them, as the web's
+  /// Actions menu does (only those not already so).
+  Future<int> setAll(
+    Iterable<WorkspaceModel> models, {
+    bool? active,
+    bool? hidden,
+  }) async {
+    var changed = 0;
+    for (final m in models.where((m) => m.writable)) {
+      // Hidden first: saving the model sends its old on/off back too.
+      if (hidden != null && (m.meta['hidden'] == true) != hidden) {
+        await save({
+          ...m.json,
+          'meta': {...m.meta, 'hidden': hidden},
+        }, create: false);
+        changed++;
+      }
+      if (active != null && m.active != active) {
+        await toggle(m.id);
+        changed++;
+      }
+    }
+    return changed;
+  }
 }
 
 /// A model id from its name, as the web makes one.

@@ -50,7 +50,39 @@ class ModelsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Models'),
-        actions: const [OwnerFilterButton()],
+        actions: [
+          const OwnerFilterButton(),
+          PopupMenuButton<String>(
+            tooltip: 'Actions',
+            onSelected: (v) async {
+              final items = list.value;
+              if (items == null) return;
+              final mine = ownerFiltered(ref, items, (m) => m.userId);
+              try {
+                await ref
+                    .read(modelsApiProvider)
+                    .setAll(
+                      mine,
+                      active: v == 'on' ? true : (v == 'off' ? false : null),
+                      hidden: v == 'hide' ? true : (v == 'show' ? false : null),
+                    );
+                if (context.mounted && v == 'hide') {
+                  _say(context, 'All models are now hidden');
+                }
+              } catch (e) {
+                if (context.mounted) _say(context, '$e');
+              }
+              ref.invalidate(workspaceModelsProvider);
+              ref.invalidate(modelsProvider);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'on', child: Text('Enable All')),
+              PopupMenuItem(value: 'off', child: Text('Disable All')),
+              PopupMenuItem(value: 'show', child: Text('Show All')),
+              PopupMenuItem(value: 'hide', child: Text('Hide All')),
+            ],
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'New model',

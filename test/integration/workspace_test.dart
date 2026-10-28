@@ -95,6 +95,16 @@ void main() {
       await api.toggle(m.id);
       expect((await api.get(m.id)).active, isFalse);
       expect((await api.list()).any((x) => x.id == m.id), isTrue);
+
+      // The Actions menu: only what isn't already so is changed.
+      final mine = [m = await api.get(m.id)];
+      expect(await api.setAll(mine, hidden: true, active: true), 2);
+      m = await api.get(m.id);
+      expect(m.meta['hidden'], isTrue);
+      expect(m.active, isTrue);
+      expect(await api.setAll([m], hidden: true, active: true), 0);
+      await api.setAll([m], hidden: false);
+      expect((await api.get(m.id)).meta['hidden'], isFalse);
     } finally {
       await api.delete('nexus-test-model');
     }
