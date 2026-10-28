@@ -304,7 +304,8 @@ jobs:
           # Publish only if this build contains the current latest release, so
           # a branch that is behind never replaces newer work on the phone.
           HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
-          LATEST=$(gh api "repos/${{ github.repository }}/releases/latest" --jq .tag_name 2>/dev/null || true)
+          # Highest v0.1.N across releases (/releases/latest skips pre-releases).
+          LATEST=$(gh release list --repo "${{ github.repository }}" --limit 30 --exclude-drafts --json tagName --jq '.[].tagName' 2>/dev/null | grep -E '^v0\.1\.[0-9]+$' | sort -t. -k3 -n | tail -1 || true)
           if [ -n "$LATEST" ]; then
             LATEST_SHA=$(gh api "repos/${{ github.repository }}/commits/$LATEST" --jq .sha)
             STATUS=$(gh api "repos/${{ github.repository }}/compare/$LATEST_SHA...$HEAD_SHA" --jq .status)
