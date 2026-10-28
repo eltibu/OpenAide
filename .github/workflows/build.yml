@@ -313,6 +313,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message || github.event.pull_request.title }}
         run: |
+          # Publish only if this build contains the current latest release, so
+          # a branch that is behind never replaces newer work on the phone.
+          HEAD_SHA="${{ github.event.pull_request.head.sha || github.sha }}"
+          # The newest build of any kind: dev builds are pre-releases, which
+          # GitHub's "latest" skips.
+          LATEST=$(gh release list --limit 30 --exclude-drafts --json tagName --jq '.[].tagName' \
+            | grep -E '^v0\.1\.[0-9]+$' | sort -t. -k3 -n | tail -1 || true)
+          if [ -n "$LATEST" ]; then
+            LATEST_SHA=$(gh api "repos/${{ github.repository }}/commits/$LATEST" --jq .sha)
+            STATUS=$(gh api "repos/${{ github.repository }}/compare/$LATEST_SHA...$HEAD_SHA" --jq .status)
+            if [ "$STATUS" != "ahead" ] && [ "$STATUS" != "identical" ]; then
+              echo "::warning::Not publishing: this build is $STATUS against the latest release $LATEST ($LATEST_SHA). Merge that into this branch first."
+              exit 0
+            fi
+          fi
           cp build/app/outputs/flutter-apk/app-release.apk nexus-assistant.apk
           gh release create "v0.1.${{ github.run_number }}" nexus-assistant.apk \
             --title "OpenAide 0.1.${{ github.run_number }} (dev)" \

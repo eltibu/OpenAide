@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import '../models/chat.dart';
+import '../net/local_network.dart';
 import '../offline/offline_cache.dart';
 import '../models/model_info.dart';
 import 'sse.dart';
@@ -19,6 +20,20 @@ class ApiException implements Exception {
 
   @override
   String toString() => friendlyApiError(statusCode, message);
+}
+
+/// The server answers only over plain http and is on the internet, so a
+/// sign-in would cross the internet unencrypted. Signing in goes ahead only
+/// once the person says so for [host].
+class InsecureServer implements Exception {
+  const InsecureServer(this.host);
+  final String host;
+
+  @override
+  String toString() =>
+      '$host only answers over plain http, so your password and chats would '
+      'cross the internet unencrypted. Use its https:// address if it has '
+      'one.';
 }
 
 /// What an error from the server says to a person: the server's own
@@ -204,10 +219,13 @@ class OpenWebUiClient {
 
   /// Finds the Open WebUI base URL for what the user typed: tries it as
   /// given, then without any path (people often paste a chat or /auth link),
-  /// and https before http when no scheme was typed.
+  /// and https before http when no scheme was typed. Plain http is used
+  /// for the home network, and for internet hosts only when they are in
+  /// [allowInsecure].
   static Future<String> discover(
     String input, {
     http.Client? httpClient,
+    Set<String> allowInsecure = const {},
   }) async {
     final typed = input.trim();
     final hasScheme =
@@ -223,6 +241,7 @@ class OpenWebUiClient {
         ..add(uri.origin);
     }
     Object? lastError;
+    String? refused;
     final tried = <String>{};
     while (candidates.isNotEmpty && tried.length < 8) {
       final base = candidates.removeAt(0);
@@ -233,6 +252,14 @@ class OpenWebUiClient {
           httpClient: httpClient,
         ).config();
         if (config.containsKey('version') || config.containsKey('name')) {
+          // Only the public config was read so far: nothing secret has
+          // gone over plain http yet.
+          final host = Uri.parse(base).host.toLowerCase();
+          if (isInsecureRemote(Uri.parse(base)) &&
+              !allowInsecure.contains(host)) {
+            refused ??= host;
+            continue;
+          }
           return base;
         }
       } on ApiException catch (e) {
@@ -258,6 +285,7 @@ class OpenWebUiClient {
         lastError = e;
       }
     }
+    if (refused != null) throw InsecureServer(refused);
     if (lastError is ApiException) throw lastError;
     throw ApiException(
       0,
