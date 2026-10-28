@@ -71,14 +71,15 @@ final _skip = RegExp(
   r'^(back|close|cancel|dismiss|navigate up|done)$|'
   r'delete|remove|sign ?out|log ?out|clear|reset|revoke|uninstall|wipe|'
   r'\bleave\b|\bban\b|deactivate|disconnect|forget|erase|archive all|'
-  r'\bsend\b|voice|\bcall\b|record|dictat|microphone|\bmic\b|camera|photo|'
+  r'\bsend\b|voice|\bcall\b|^record$|start recording|dictat|microphone|\bmic\b|camera|photo|'
   r'scan|\bshare\b|browser|website|github|learn more|privacy policy|'
-  r'attach|upload|import|choose file|pick|download|export|install|'
-  r'update now|restart|shut ?down|\bkill\b|\bstop\b|lock|biometric|'
-  r'set as default|default assistant|exit|quit|copy|paste|cut|'
-  r'emoji|regenerate|terminal|connect server|sign in|log ?in|'
+  r'attach|upload|import|choose file|\bpick\b|download|export|install|'
+  r'update now|restart|shut ?down|\bkill\b|\bstop\b|\block\b|biometric|'
+  r'set as default|default assistant|\bexit\b|quit|copy|paste|\bcut\b|'
+  r'emoji|regenerate|connect server|sign in|log ?in|'
   r'switch account|add account|change password|replace|overwrite|'
-  r'run|execute|pull|rebuild|reindex|sync|play|speak|read aloud|listen',
+  r'\brun\b|execute|\bpull\b|rebuild|reindex|\bsync\b|\bplay\b|speak|read aloud|'
+  r'listen',
   caseSensitive: false,
 );
 
