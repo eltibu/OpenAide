@@ -12,6 +12,7 @@ import 'banners_screen.dart';
 import 'config_editor.dart';
 import 'connections_screen.dart';
 import 'groups_screen.dart';
+import 'integrations_screen.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -105,6 +106,12 @@ class AdminScreen extends StatelessWidget {
             title: const Text('Model connections'),
             subtitle: const Text('OpenAI-compatible and Ollama servers'),
             onTap: () => open(const ConnectionsScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.extension_outlined),
+            title: const Text('Integrations'),
+            subtitle: const Text('Tool servers (OpenAPI, MCP) and terminals'),
+            onTap: () => open(const IntegrationsScreen()),
           ),
           for (final section in adminConfigSections)
             ListTile(
