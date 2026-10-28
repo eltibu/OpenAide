@@ -12,13 +12,17 @@ import 'package:http/http.dart' as http;
 
 import '../api/sse.dart';
 import 'copilot.dart';
+import 'local_llm.dart';
 import '../models/model_info.dart';
 
 enum AiProvider {
   openRouter('openrouter', 'OpenRouter'),
   anthropic('anthropic', 'Claude'),
   openAi('openai', 'OpenAI'),
-  copilot('copilot', 'GitHub Copilot');
+  copilot('copilot', 'GitHub Copilot'),
+
+  /// Models downloaded to the phone (local_llm.dart); no key, no internet.
+  local('local', 'On this phone');
 
   const AiProvider(this.id, this.label);
 
@@ -102,6 +106,7 @@ Map<String, String> _headers(AiProvider p, String key) => switch (p) {
   AiProvider.openAi => {'Authorization': 'Bearer $key'},
   // Copilot's token comes from copilotSession; see copilot.dart.
   AiProvider.copilot => copilotHeaders(key),
+  AiProvider.local => const {},
 };
 
 /// The provider's own words for what went wrong, else the status.
@@ -235,6 +240,9 @@ Future<List<ModelInfo>> listProviderModels(
                     true,
               ),
         ];
+      case AiProvider.local:
+        // Downloaded models are listed by the models screen's store.
+        return const [];
       case AiProvider.openAi:
         final json = await _getJson(
           client,
@@ -293,6 +301,15 @@ Stream<AiChunk> streamProviderReply({
   Map<String, dynamic> params = const {},
   http.Client? httpClient,
 }) async* {
+  if (provider == AiProvider.local) {
+    yield* streamLocalModel(
+      file: model,
+      messages: messages,
+      system: system,
+      params: params,
+    );
+    return;
+  }
   final client = httpClient ?? http.Client();
   try {
     final http.Request req;

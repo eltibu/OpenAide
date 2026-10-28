@@ -21,7 +21,8 @@ Stream<AiChunk> streamDirectReply({
 }) async* {
   final parsed = parseProviderModel(modelId);
   if (parsed == null) throw AiException('$modelId is not a provider model.');
-  final key = keys[parsed.provider];
+  // Models on the phone need no key.
+  final key = parsed.provider == AiProvider.local ? '' : keys[parsed.provider];
   if (key == null) {
     throw AiException(
       'Add your ${parsed.provider.label} key in Settings > AI providers '

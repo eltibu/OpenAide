@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/ai_providers.dart';
 import '../../core/models/model_info.dart';
+import 'local_models.dart';
 
 const _storage = FlutterSecureStorage();
 String _keyName(AiProvider p) => 'ai_key_${p.id}';
@@ -53,15 +54,19 @@ final aiKeysProvider = AsyncNotifierProvider<AiKeys, Map<AiProvider, String>>(
   AiKeys.new,
 );
 
-/// Models from every provider with a key. A provider that fails is left
-/// out rather than hiding the others.
+/// Models from every provider with a key, then the models downloaded to
+/// the phone. A provider that fails is left out rather than hiding the
+/// others.
 final providerModelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  final local = ref
+      .watch(localPickerModelsProvider.future)
+      .catchError((_) => const <ModelInfo>[]);
   final keys = await ref.watch(aiKeysProvider.future);
   final found = await Future.wait([
     for (final e in keys.entries)
       listProviderModels(e.key, e.value).catchError((_) => const <ModelInfo>[]),
   ]);
-  return [for (final list in found) ...list];
+  return [for (final list in found) ...list, ...await local];
 });
 
 /// A running "Sign in with OpenRouter": the browser is open, and the app

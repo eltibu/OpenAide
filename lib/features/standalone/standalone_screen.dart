@@ -18,6 +18,8 @@ import '../../core/models/model_info.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/nexus_logo.dart';
 import '../providers/ai_keys.dart';
+import '../providers/local_models.dart';
+import '../providers/local_models_screen.dart';
 import '../providers/ai_providers_screen.dart';
 import '../providers/provider_chat.dart';
 import 'local_chats.dart';
@@ -293,13 +295,17 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
   @override
   Widget build(BuildContext context) {
     final keys = ref.watch(aiKeysProvider).value ?? const {};
+    // A provider key or a model on the phone is enough to chat.
+    final canChat =
+        keys.isNotEmpty ||
+        (ref.watch(localPickerModelsProvider).value?.isNotEmpty ?? false);
     final modelsAsync = ref.watch(providerModelsProvider);
     final models = modelsAsync.value ?? const <ModelInfo>[];
     final model = _effectiveModel(models);
     final modelName = models.where((m) => m.id == model).firstOrNull?.name;
     return Scaffold(
       appBar: AppBar(
-        title: keys.isEmpty
+        title: !canChat
             ? const Text('OpenAide')
             : TextButton(
                 onPressed: models.isEmpty ? null : () => _pickModel(models),
@@ -320,7 +326,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                 ),
               ),
         actions: [
-          if (keys.isNotEmpty)
+          if (canChat)
             IconButton(
               tooltip: 'New chat',
               icon: const Icon(Icons.edit_square),
@@ -329,7 +335,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
         ],
       ),
       drawer: _drawer(context),
-      body: keys.isEmpty
+      body: !canChat
           ? AiProviderList(intro: _welcome(context))
           : Column(
               children: [
@@ -382,7 +388,8 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
       Text(
         'Pick at least one to start chatting. OpenRouter is the quickest: '
         'one sign-in gives you models from every big AI company. Keys stay '
-        'on this phone.',
+        'on this phone. Or download a model to run on the phone itself, '
+        'offline (at the bottom).',
         textAlign: TextAlign.center,
         style: TextStyle(color: context.nexus.muted),
       ),
@@ -445,6 +452,17 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AiProvidersScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.phone_android),
+              title: const Text('Models on this phone'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LocalModelsScreen()),
                 );
               },
             ),
