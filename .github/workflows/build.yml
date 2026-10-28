@@ -13,7 +13,9 @@ on:
 
 jobs:
   android:
-    runs-on: ubuntu-latest
+    # Joel's PC (WSL Ubuntu) runs the builds: GitHub-hosted minutes for this
+    # private repo are blocked by billing. It has the Android SDK and JDK 17.
+    runs-on: [self-hosted, nexus-build]
     permissions:
       contents: write
     # Job-level, so a step's `if` can test it (a step's own env can't).
