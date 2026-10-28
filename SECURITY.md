@@ -29,6 +29,8 @@ it before you talk about it publicly.
 ## Plain HTTP
 
 Open WebUI servers at home are often reached as `http://192.168.x.x`, so
-the app allows plain HTTP. Anything sent that way, including your sign-in,
-can be read by others on the same network. Use `https://` for any server
-reached over the internet.
+the app accepts plain HTTP on the home network (private addresses,
+`localhost`, names like `nas` or `server.local`). For a server on the
+internet it signs in over HTTPS only, unless you tap *Connect anyway* after
+a warning: over plain HTTP your password and chats can be read by anyone on
+the way.

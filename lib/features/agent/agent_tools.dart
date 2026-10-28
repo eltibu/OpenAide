@@ -223,9 +223,20 @@ List<AgentTool> _builtIns(
       },
     );
     if ((said == null || said.isEmpty) && offered != null) {
-      return 'Several contacts match: '
-          '${offered!.map((p) => '${p['name']} (${p['number']})').join(', ')}'
-          '. Ask which one, then try again with the number.';
+      // Names only, never whole numbers: what goes back to the model is
+      // sent to the AI provider and kept with the reply.
+      String hint(Map p) {
+        final digits = '${p['number']}'.replaceAll(RegExp(r'\D'), '');
+        final end = digits.length > 2
+            ? digits.substring(digits.length - 2)
+            : '';
+        return end.isEmpty
+            ? '${p['name']}'
+            : '${p['name']} (number ending $end)';
+      }
+
+      return 'Several contacts match: ${offered!.map(hint).join(', ')}. Ask '
+          'which one, then try again with that name exactly as written here.';
     }
     return said == null || said.isEmpty ? 'Nothing happened.' : said;
   }
