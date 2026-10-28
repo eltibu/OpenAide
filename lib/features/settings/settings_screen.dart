@@ -17,6 +17,7 @@ import 'data_controls.dart';
 import 'interface_settings.dart';
 import 'notification_settings.dart';
 import 'settings_api.dart';
+import 'terminal_connections.dart';
 import 'two_step_settings.dart';
 import 'usage_screen.dart';
 
@@ -183,6 +184,12 @@ class SettingsScreen extends ConsumerWidget {
               'Default assistant, shortcuts, Share, app lock',
             ),
             onTap: () => open(const PhoneSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.terminal),
+            title: const Text('Terminal connections'),
+            subtitle: const Text('Your own Open Terminal servers'),
+            onTap: () => open(const TerminalConnectionsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.storage_outlined),

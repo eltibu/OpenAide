@@ -1202,7 +1202,7 @@ class _Account extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(meProvider).value ?? session?.user;
     final name = '${me?['name'] ?? session?.userName ?? ''}';
-    final servers = ref.watch(terminalServersProvider).value ?? const [];
+    final servers = ref.watch(allTerminalsProvider).value ?? const [];
     final features =
         (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
         const {};

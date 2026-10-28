@@ -3,11 +3,17 @@ import 'dart:io';
 
 import '../../core/api/openwebui_client.dart';
 
-/// A terminal server the admin connected to Open WebUI (an Open Terminal:
-/// a shell and a file system). The app reaches it through Open WebUI's own
-/// proxy, signed in as the user, exactly as the web UI does.
+/// A terminal server (an Open Terminal: a shell and a file system). One the
+/// admin connected is reached through Open WebUI's own proxy, signed in as
+/// the user; one of your own (Settings > Terminal connections) is reached
+/// at its own address with its key, exactly as the web UI does.
 class TerminalServer {
-  const TerminalServer({required this.id, required this.name});
+  const TerminalServer({
+    required this.id,
+    required this.name,
+    this.url,
+    this.key,
+  });
 
   factory TerminalServer.fromJson(Map<String, dynamic> j) => TerminalServer(
     id: '${j['id']}',
@@ -16,7 +22,36 @@ class TerminalServer {
 
   final String id;
   final String name;
+
+  /// Your own terminal's address and key; null for the admin's.
+  final String? url;
+  final String? key;
+
+  bool get direct => url != null;
 }
+
+/// Kept with your settings on the server, as the web keeps them.
+const userTerminalsKey = 'terminalServers';
+
+/// Your own terminal connections, as saved: {url, key, name, enabled, ...}.
+List<Map<String, dynamic>> userTerminalConfigs(Map? ui) => [
+  for (final s in (ui?[userTerminalsKey] as List? ?? const []).whereType<Map>())
+    if ('${s['url'] ?? ''}'.isNotEmpty) s.cast<String, dynamic>(),
+];
+
+/// The ones switched on, ready to open.
+List<TerminalServer> userTerminals(Map? ui) => [
+  for (final s in userTerminalConfigs(ui))
+    if (s['enabled'] != false)
+      TerminalServer(
+        id: '${s['url']}',
+        name: '${s['name'] ?? ''}'.trim().isEmpty
+            ? '${s['url']}'
+            : '${s['name']}',
+        url: '${s['url']}',
+        key: '${s['key'] ?? ''}'.trim(),
+      ),
+];
 
 /// One file or folder in a listing.
 class TerminalEntry {
@@ -66,12 +101,20 @@ Future<List<TerminalServer>> terminalServers(OpenWebUiClient client) async {
 
 /// The files and shells of one terminal server.
 class TerminalApi {
-  TerminalApi(this.client, this.server);
+  TerminalApi(OpenWebUiClient client, this.server)
+    : client = server.url == null
+          ? client
+          : OpenWebUiClient(
+              baseUrl: server.url!,
+              token: (server.key ?? '').isEmpty ? null : server.key,
+            );
 
   final OpenWebUiClient client;
   final TerminalServer server;
 
-  String get _base => '/api/v1/terminals/${Uri.encodeComponent(server.id)}';
+  String get _base => server.direct
+      ? ''
+      : '/api/v1/terminals/${Uri.encodeComponent(server.id)}';
 
   /// The user's home and the folder the file browser starts in.
   Future<({String home, String cwd})> cwd() async {
@@ -263,7 +306,13 @@ class TerminalApi {
           'Cookie': client.cookie!,
       },
     );
-    ws.add(jsonEncode({'type': 'auth', 'token': client.token, 'chat_id': ''}));
+    ws.add(
+      jsonEncode({
+        'type': 'auth',
+        'token': server.direct ? server.key ?? '' : client.token,
+        'chat_id': '',
+      }),
+    );
     return ws;
   }
 }

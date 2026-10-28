@@ -10,6 +10,7 @@ import 'package:xterm/xterm.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/chat_controller.dart' show userSettingsProvider;
 import '../chat/file_details.dart' show PdfViewScreen;
 import '../server/server_page.dart';
 import 'file_tools.dart';
@@ -25,6 +26,19 @@ final terminalServersProvider = FutureProvider<List<TerminalServer>>((
   } catch (_) {
     return const [];
   }
+});
+
+/// The admin's terminals and your own (Settings > Terminal connections),
+/// for the shell and Files. Chats use the admin's only, as on the web.
+final allTerminalsProvider = FutureProvider<List<TerminalServer>>((ref) async {
+  final system = await ref.watch(terminalServersProvider.future);
+  Map? ui;
+  try {
+    ui = (await ref.watch(userSettingsProvider.future))['ui'] as Map?;
+  } catch (_) {
+    // Settings unreachable: the admin's terminals still work.
+  }
+  return [...system, ...userTerminals(ui)];
 });
 
 /// A terminal server's shell and files, like the web UI's terminal panel:
@@ -915,7 +929,15 @@ class _FileBrowserState extends State<FileBrowser>
                         MaterialPageRoute<void>(
                           builder: (_) => ServerPage(
                             title: 'Port ${p.port}',
-                            path: widget.api.proxyPath(p.port),
+                            // Your own terminal: at its own address.
+                            path: widget.api.server.direct
+                                ? ''
+                                : widget.api.proxyPath(p.port),
+                            url: widget.api.server.direct
+                                ? widget.api.client
+                                      .uri(widget.api.proxyPath(p.port))
+                                      .toString()
+                                : null,
                           ),
                         ),
                       );

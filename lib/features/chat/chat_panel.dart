@@ -11,7 +11,7 @@ import '../../core/theme.dart';
 import '../settings/settings_screen.dart' show Avatar, meProvider;
 import '../terminal/terminal_api.dart' show TerminalServer;
 import '../terminal/terminal_screen.dart'
-    show TerminalScreen, terminalServersProvider;
+    show TerminalScreen, allTerminalsProvider;
 import 'chat_controller.dart';
 import 'chat_controls.dart';
 import 'side_panel.dart';
@@ -172,7 +172,7 @@ class _Files extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final servers = ref.watch(terminalServersProvider);
+    final servers = ref.watch(allTerminalsProvider);
     final request = ref.watch(panelRequestProvider);
     final chosen = ref.watch(
       chatControllerProvider.select((s) => s.terminalId),
