@@ -142,6 +142,15 @@ jobs:
           if [ "$CODE" != "200" ]; then
             echo "::error::The update token can't read releases (HTTP $CODE). The app would never see updates."; exit 1
           fi
+      # The runner on Joel's PC keeps state between builds. A Kotlin daemon
+      # left from an earlier build can leave files pointing Gradle at a port
+      # nobody listens on, and every build then waits on it. Compile Kotlin
+      # inside Gradle and stop any leftover daemons first.
+      - name: Compile Kotlin in-process
+        run: |
+          echo "kotlin.compiler.execution.strategy=in-process" >> android/gradle.properties
+          pkill -u "$(id -u)" -f KotlinCompileDaemon || true
+          rm -rf "$HOME/.local/share/kotlin/daemon" "$HOME/.kotlin/daemon" 2>/dev/null || true
       - name: Build APK
         env:
           # Read-only token for the in-app updater (repo secret), so the app
