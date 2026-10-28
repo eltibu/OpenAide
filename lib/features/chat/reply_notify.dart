@@ -27,6 +27,25 @@ Future<bool> askForNotifications() async {
   }
 }
 
+/// Opens Android's notification settings for Nexus.
+Future<void> openNotificationSettings() async {
+  try {
+    await _channel.invokeMethod('openSettings');
+  } on MissingPluginException {
+    // Not on a phone.
+  }
+}
+
+/// Asks for permission, or, when Android won't ask again, opens its
+/// settings for Nexus. True when notifications are allowed now.
+Future<bool> allowNotifications() async {
+  if (await askForNotifications() && await notificationsAllowed()) {
+    return true;
+  }
+  await openNotificationSettings();
+  return false;
+}
+
 /// True when nobody is looking at the app.
 bool get appInBackground {
   final s = WidgetsBinding.instance.lifecycleState;
@@ -62,7 +81,9 @@ Future<void> notifyReply({
 Future<void> listenForReplyTaps(void Function(String chatId) open) async {
   try {
     _channel.setMethodCallHandler((call) async {
-      if (call.method == 'open' && call.arguments is String) {
+      if (call.method == 'open' &&
+          call.arguments is String &&
+          (call.arguments as String).isNotEmpty) {
         open(call.arguments as String);
       }
     });

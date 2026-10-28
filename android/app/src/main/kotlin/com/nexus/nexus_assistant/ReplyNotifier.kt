@@ -9,6 +9,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 
@@ -31,6 +32,12 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
 
     private val manager get() =
         activity.getSystemService(NotificationManager::class.java)
+
+    // Made up front so Nexus and its kinds of notification show in Android's
+    // settings before the first one arrives.
+    init {
+        ensureChannels()
+    }
 
     private fun allowed(): Boolean =
         Build.VERSION.SDK_INT < 33 ||
@@ -71,7 +78,22 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
 
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
-            "allowed" -> result.success(allowed())
+            "allowed" -> result.success(
+                allowed() && (Build.VERSION.SDK_INT < 24 || manager.areNotificationsEnabled()),
+            )
+            // Android's notification settings for Nexus, for when the ask
+            // was turned down before and Android won't ask again.
+            "openSettings" -> {
+                val open = if (Build.VERSION.SDK_INT >= 26) {
+                    Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, activity.packageName)
+                } else {
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                        .setData(android.net.Uri.parse("package:${activity.packageName}"))
+                }
+                activity.startActivity(open)
+                result.success(null)
+            }
             "ask" -> {
                 if (allowed()) {
                     result.success(true)

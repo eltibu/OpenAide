@@ -76,6 +76,7 @@ class NotificationSettings extends ConsumerWidget {
         ),
         data: (ui) => ListView(
           children: [
+            const _PhoneAllows(),
             SwitchListTile(
               title: const Text('Notify when a reply is ready'),
               subtitle: const Text(
@@ -83,11 +84,11 @@ class NotificationSettings extends ConsumerWidget {
               ),
               value: ui['notificationEnabled'] == true,
               onChanged: (on) async {
-                if (on && !await askForNotifications()) {
+                if (on && !await allowNotifications()) {
                   if (context.mounted) {
                     _say(
                       context,
-                      'Allow notifications for Nexus in Android settings',
+                      'Turn on notifications for Nexus, then try again',
                     );
                   }
                   return;
@@ -172,9 +173,9 @@ class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
   }
 
   Future<void> _set(bool on) async {
-    if (on && !await askForNotifications()) {
+    if (on && !await allowNotifications()) {
       if (mounted) {
-        _say(context, 'Allow notifications for Nexus in Android settings');
+        _say(context, 'Turn on notifications for Nexus, then try again');
       }
       return;
     }
@@ -435,6 +436,81 @@ class _WebhookSheetState extends ConsumerState<_WebhookSheet> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Whether Android lets Nexus post notifications at all, with a way to
+/// turn them on and a test one. Checked again on coming back from Android's
+/// settings.
+class _PhoneAllows extends StatefulWidget {
+  const _PhoneAllows();
+
+  @override
+  State<_PhoneAllows> createState() => _PhoneAllowsState();
+}
+
+class _PhoneAllowsState extends State<_PhoneAllows>
+    with WidgetsBindingObserver {
+  bool? _allowed;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _check();
+  }
+
+  Future<void> _check() async {
+    final on = await notificationsAllowed();
+    if (mounted) setState(() => _allowed = on);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final allowed = _allowed;
+    if (allowed == null) return const SizedBox.shrink();
+    if (!allowed) {
+      return ListTile(
+        leading: Icon(
+          Icons.notifications_off_outlined,
+          color: Theme.of(context).colorScheme.error,
+        ),
+        title: const Text('Notifications are off for Nexus on this phone'),
+        subtitle: const Text('Nothing below can show until they\'re on'),
+        trailing: FilledButton(
+          onPressed: () async {
+            await allowNotifications();
+            await _check();
+          },
+          child: const Text('Turn on'),
+        ),
+      );
+    }
+    return ListTile(
+      leading: const Icon(Icons.notifications_active_outlined),
+      title: const Text('Notifications are on for Nexus'),
+      subtitle: const Text('Change their sound or style in Android settings'),
+      onTap: openNotificationSettings,
+      trailing: TextButton(
+        onPressed: () => notifyReply(
+          title: 'Nexus',
+          reply: 'This is a test notification.',
+          chatId: '',
+        ),
+        child: const Text('Test'),
       ),
     );
   }

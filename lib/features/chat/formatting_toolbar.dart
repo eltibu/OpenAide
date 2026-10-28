@@ -88,6 +88,21 @@ String listLine(String line, int index, String kind) {
   return had ? '$indent$bare' : '$indent$mark$bare';
 }
 
+/// When the toolbar shows, as the web's bubble and floating menus: text is
+/// selected, or the cursor sits on an empty line under some text.
+bool formattingToolbarWanted(TextEditingValue v) {
+  final sel = v.selection;
+  if (!sel.isValid) return false;
+  if (!sel.isCollapsed) return true;
+  final text = v.text;
+  if (text.trim().isEmpty) return false;
+  final at = sel.baseOffset.clamp(0, text.length);
+  final start = text.lastIndexOf('\n', at == 0 ? 0 : at - 1);
+  final end = text.indexOf('\n', at);
+  final line = text.substring(start + 1, end < 0 ? text.length : end);
+  return start >= 0 && line.isEmpty;
+}
+
 class FormattingToolbar extends StatelessWidget {
   const FormattingToolbar({super.key, required this.controller});
   final TextEditingController controller;
