@@ -2,6 +2,8 @@
 /// account so the web and the app share them.
 library;
 
+import '../chat/quick_actions.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -248,6 +250,27 @@ class InterfaceSettings extends ConsumerWidget {
                     value: ui[key] is bool ? ui[key] as bool : start,
                     onChanged: (on) => set({key: on}),
                   ),
+                if (group.key == 'Chat') ...[
+                  SwitchListTile(
+                    title: const Text('Quick Actions'),
+                    subtitle: Text(
+                      'Ask and Explain next to Copy when you select reply text.',
+                      style: TextStyle(color: muted),
+                    ),
+                    value: ui['showFloatingActionButtons'] != false,
+                    onChanged: (on) => set({'showFloatingActionButtons': on}),
+                  ),
+                  ListTile(
+                    title: const Text('Manage Quick Actions'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const QuickActionsScreen(),
+                      ),
+                    ),
+                  ),
+                ],
                 if (group.key == 'Message box')
                   choice(
                     'defaultUploadContext',

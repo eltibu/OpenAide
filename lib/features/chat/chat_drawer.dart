@@ -1,3 +1,5 @@
+import 'search_everywhere.dart';
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -150,6 +152,15 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                     borderSide: BorderSide.none,
                   ),
                 ),
+              ),
+            ),
+          if (_searching)
+            _NavRow(
+              icon: Icons.travel_explore,
+              label: 'Search everywhere',
+              onTap: () => openPlace(
+                context,
+                (_) => SearchEverywhereScreen(query: _search.text),
               ),
             )
           else

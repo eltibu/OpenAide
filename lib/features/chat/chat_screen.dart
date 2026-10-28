@@ -1,3 +1,5 @@
+import 'quick_actions.dart';
+
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -613,6 +615,14 @@ class _MessageList extends ConsumerWidget {
               for (var g = 0; g < groups.length; g++) ...[
                 if (g == firstText) ...embeds,
                 switch (groups[g]) {
+                  // Selectable, with Ask and Explain beside Copy.
+                  final TextPart t when !live => QuickActionSelection(
+                    child: MarkdownBlock(
+                      data: t.text,
+                      config: mdConfig,
+                      generator: generator,
+                    ),
+                  ),
                   final TextPart t => MarkdownBlock(
                     data: t.text,
                     config: mdConfig,

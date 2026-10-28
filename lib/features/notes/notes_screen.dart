@@ -10,6 +10,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
+import '../chat/chat_extras.dart' show titleFromTask;
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import '../workspace/access_editor.dart' show editAccess;
 import 'notes_api.dart';
@@ -349,6 +350,47 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
+  bool _titling = false;
+
+  /// A short title from the note's text, as the web's Generate.
+  Future<void> _generateTitle() async {
+    final model = ref.read(chatControllerProvider).modelId;
+    if (model == null || _body.text.trim().isEmpty) {
+      _say(
+        model == null
+            ? 'Pick a model in a chat first'
+            : 'Write something first',
+      );
+      return;
+    }
+    setState(() => _titling = true);
+    try {
+      final reply = await ref
+          .read(clientProvider)
+          .streamCompletion(
+            model: model,
+            messages: [
+              {'role': 'user', 'content': noteTitlePrompt(_body.text)},
+            ],
+          )
+          .join();
+      final title = titleFromTask({
+        'choices': [
+          {
+            'message': {'content': reply},
+          },
+        ],
+      });
+      if (title != null && mounted) {
+        _title.text = title;
+        _changed();
+      }
+    } catch (e) {
+      if (mounted) _say('$e');
+    }
+    if (mounted) setState(() => _titling = false);
+  }
+
   /// Rewrites the note with the chat's model (the web's Enhance); Undo
   /// brings the old text back.
   Future<void> _enhance() async {
@@ -578,9 +620,22 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     fontWeight: FontWeight.w600,
                   ),
                   textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Title',
                     border: InputBorder.none,
+                    suffixIcon: _titling
+                        ? const Padding(
+                            padding: EdgeInsets.all(14),
+                            child: SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : IconButton(
+                            tooltip: 'Generate',
+                            icon: const Icon(Icons.auto_awesome_outlined),
+                            onPressed: _generateTitle,
+                          ),
                   ),
                 ),
                 if (_preview)
@@ -613,3 +668,21 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     );
   }
 }
+
+/// The web's note title task.
+String noteTitlePrompt(String content) =>
+    '''### Task:
+Generate a concise title summarizing the content in the content's primary language.
+### Guidelines:
+- The title should clearly represent the main theme or subject of the content.
+- Keep it short: 2-4 words is best.
+- Do not use emojis, quotation marks, or special formatting.
+- Write the title in the content's primary language.
+- Prioritize accuracy over creativity.
+- Your entire response must consist solely of the JSON object, without any introductory or concluding text.
+### Output:
+JSON format: { "title": "your concise title here" }
+### Content:
+<content>
+$content
+</content>''';
