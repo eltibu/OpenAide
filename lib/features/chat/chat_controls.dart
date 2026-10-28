@@ -138,8 +138,17 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
       for (final t in ref.watch(chatToolsProvider).value ?? const [])
         t.id: t.name,
     };
-    final tools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
-    final filters = model?.defaultFilterIds ?? const [];
+    // Your own tool servers have no valves on the server.
+    final tools = {
+      for (final id in state.toolIds ?? model?.toolIds ?? const <String>[])
+        if (!id.startsWith('direct_server:')) id,
+    };
+    // The filters and actions the model uses are functions with valves too.
+    final filters = {
+      ...?model?.defaultFilterIds,
+      ...?model?.filterIds,
+      ...?model?.actionIds,
+    };
     if (tools.isEmpty && filters.isEmpty) return const [];
     Widget tile(String name, String base) => ListTile(
       contentPadding: EdgeInsets.zero,
@@ -161,8 +170,8 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
     return [
       heading('Valves'),
       Text(
-        'Your settings for the tools this chat uses. They apply wherever '
-        'you use the tool.',
+        'Your settings for the tools and functions this chat uses. They '
+        'apply wherever you use them.',
         style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
       for (final id in tools) tile(names[id] ?? id, '/api/v1/tools/id/$id'),

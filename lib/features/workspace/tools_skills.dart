@@ -333,6 +333,11 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
   Map<String, dynamic> _props = {};
   final Map<String, Object?> _values = {};
   final Map<String, TextEditingController> _text = {};
+
+  /// Settings given a value of their own; the rest stay on Default (the
+  /// tool's own), as the web's Default / Custom switch.
+  final Set<String> _custom = {};
+  List<Object?> _required = const [];
   bool _loading = true;
   bool _busy = false;
   Object? _error;
@@ -350,9 +355,12 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
       _props =
           ((spec as Map?)?['properties'] as Map?)?.cast<String, dynamic>() ??
           {};
+      _required = (spec?['required'] as List?) ?? const [];
       for (final e in _props.entries) {
         final p = (e.value as Map).cast<String, dynamic>();
-        final v = (values as Map?)?[e.key] ?? p['default'];
+        final saved = (values as Map?)?[e.key];
+        if (saved != null) _custom.add(e.key);
+        final v = saved ?? p['default'];
         _values[e.key] = v;
         if (p['type'] != 'boolean' && p['enum'] == null) {
           _text[e.key] = TextEditingController(text: v == null ? '' : '$v');
@@ -369,7 +377,9 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
     for (final e in _props.entries) {
       final p = (e.value as Map).cast<String, dynamic>();
       final type = p['type'] ?? (p['anyOf'] as List?)?.firstOrNull?['type'];
-      if (_text.containsKey(e.key)) {
+      if (!_custom.contains(e.key)) {
+        out[e.key] = null;
+      } else if (_text.containsKey(e.key)) {
         final t = _text[e.key]!.text;
         out[e.key] = switch (type) {
           'integer' => int.tryParse(t),
@@ -432,46 +442,83 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
                       final p = (e.value as Map).cast<String, dynamic>();
                       final label = '${p['title'] ?? e.key}';
                       final help = p['description'] as String?;
-                      if (p['type'] == 'boolean') {
-                        return SwitchListTile(
+                      final required = _required.contains(e.key);
+                      if (!_custom.contains(e.key)) {
+                        return ListTile(
                           contentPadding: EdgeInsets.zero,
                           title: Text(label),
-                          subtitle: help == null ? null : Text(help),
-                          value: _values[e.key] == true,
-                          onChanged: (v) => setState(() => _values[e.key] = v),
+                          subtitle: Text(
+                            [required ? 'None' : 'Default', ?help].join(' · '),
+                          ),
+                          trailing: TextButton(
+                            onPressed: () => setState(() => _custom.add(e.key)),
+                            child: const Text('Custom'),
+                          ),
+                        );
+                      }
+                      final toDefault = Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () =>
+                              setState(() => _custom.remove(e.key)),
+                          child: Text(required ? 'None' : 'Default'),
+                        ),
+                      );
+                      Widget withDefault(Widget field) => Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [field, toDefault],
+                      );
+                      if (p['type'] == 'boolean') {
+                        return withDefault(
+                          SwitchListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(label),
+                            subtitle: help == null ? null : Text(help),
+                            value: _values[e.key] == true,
+                            onChanged: (v) =>
+                                setState(() => _values[e.key] = v),
+                          ),
                         );
                       }
                       if (p['enum'] is List) {
-                        return DropdownButtonFormField<String>(
-                          initialValue: _values[e.key]?.toString(),
-                          decoration: InputDecoration(
-                            labelText: label,
-                            helperText: help,
+                        return withDefault(
+                          DropdownButtonFormField<String>(
+                            initialValue: _values[e.key]?.toString(),
+                            decoration: InputDecoration(
+                              labelText: label,
+                              helperText: help,
+                            ),
+                            items: [
+                              for (final o in p['enum'] as List)
+                                DropdownMenuItem(
+                                  value: '$o',
+                                  child: Text('$o'),
+                                ),
+                            ],
+                            onChanged: (v) =>
+                                setState(() => _values[e.key] = v),
                           ),
-                          items: [
-                            for (final o in p['enum'] as List)
-                              DropdownMenuItem(value: '$o', child: Text('$o')),
-                          ],
-                          onChanged: (v) => setState(() => _values[e.key] = v),
                         );
                       }
                       final secret =
                           p['input'] is Map &&
                           (p['input'] as Map)['type'] == 'password';
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: TextField(
-                          controller: _text[e.key],
-                          obscureText: secret,
-                          keyboardType:
-                              p['type'] == 'integer' || p['type'] == 'number'
-                              ? TextInputType.number
-                              : null,
-                          maxLines: secret ? 1 : null,
-                          decoration: InputDecoration(
-                            labelText: label,
-                            helperText: help,
-                            helperMaxLines: 3,
+                      return withDefault(
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: TextField(
+                            controller: _text[e.key],
+                            obscureText: secret,
+                            keyboardType:
+                                p['type'] == 'integer' || p['type'] == 'number'
+                                ? TextInputType.number
+                                : null,
+                            maxLines: secret ? 1 : null,
+                            decoration: InputDecoration(
+                              labelText: label,
+                              helperText: help,
+                              helperMaxLines: 3,
+                            ),
                           ),
                         ),
                       );
