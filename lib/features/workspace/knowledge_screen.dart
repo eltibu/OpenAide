@@ -205,6 +205,155 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
     }
   }
 
+  Future<void> _addWebpage() async {
+    final url = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Add webpage'),
+        content: TextField(
+          controller: url,
+          autofocus: true,
+          keyboardType: TextInputType.url,
+          decoration: const InputDecoration(
+            labelText: 'URL',
+            hintText: 'https://',
+            helperText: 'A YouTube link adds its transcript',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    final link = url.text.trim();
+    url.dispose();
+    if (ok != true || link.isEmpty) return;
+    setState(() => _uploading.add(link));
+    try {
+      await _api.addWebpage(_k.id, link, folderId: _folder);
+    } catch (e) {
+      if (mounted) _say(context, '$link: $e');
+    }
+    if (!mounted) return;
+    setState(() => _uploading.remove(link));
+    await _load();
+  }
+
+  Future<void> _addText() async {
+    final name = TextEditingController();
+    final text = TextEditingController();
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (page) => Scaffold(
+          appBar: AppBar(
+            title: const Text('Add text content'),
+            actions: [
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton(
+                  onPressed: () {
+                    if (name.text.trim().isEmpty || text.text.trim().isEmpty) {
+                      _say(page, 'Add a title and some text');
+                      return;
+                    }
+                    Navigator.pop(page, true);
+                  },
+                  child: const Text('Save'),
+                ),
+              ),
+            ],
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                TextField(
+                  controller: name,
+                  autofocus: true,
+                  decoration: const InputDecoration(labelText: 'Title'),
+                ),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: TextField(
+                    controller: text,
+                    expands: true,
+                    maxLines: null,
+                    textAlignVertical: TextAlignVertical.top,
+                    decoration: const InputDecoration(
+                      hintText: 'Write or paste the text',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    final title = name.text.trim();
+    final body = text.text;
+    name.dispose();
+    text.dispose();
+    if (ok != true) return;
+    setState(() => _uploading.add('$title.txt'));
+    try {
+      await _api.addText(_k.id, title, body, folderId: _folder);
+    } catch (e) {
+      if (mounted) _say(context, '$title: $e');
+    }
+    if (!mounted) return;
+    setState(() => _uploading.remove('$title.txt'));
+    await _load();
+  }
+
+  Future<void> _addMenu() async {
+    final pick = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.upload_file),
+              title: const Text('Upload files'),
+              onTap: () => Navigator.pop(sheet, 'files'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.language),
+              title: const Text('Add webpage'),
+              onTap: () => Navigator.pop(sheet, 'web'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.notes),
+              title: const Text('Add text content'),
+              onTap: () => Navigator.pop(sheet, 'text'),
+            ),
+          ],
+        ),
+      ),
+    );
+    switch (pick) {
+      case 'files':
+        await _add();
+      case 'web':
+        await _addWebpage();
+      case 'text':
+        await _addText();
+    }
+  }
+
   Future<void> _remove(KnowledgeFile f) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -328,9 +477,9 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
         ),
         floatingActionButton: _k.writable
             ? FloatingActionButton.extended(
-                onPressed: _add,
-                icon: const Icon(Icons.upload_file),
-                label: const Text('Add files'),
+                onPressed: _addMenu,
+                icon: const Icon(Icons.add),
+                label: const Text('Add'),
               )
             : null,
         body: RefreshIndicator(

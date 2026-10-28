@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../../core/api/openwebui_client.dart';
 import '../notes/notes_api.dart' show fromServerTime;
 
@@ -68,6 +70,12 @@ class KnowledgeListing {
 
   /// Where the listing is, top first.
   final List<KnowledgeFolder> path;
+}
+
+/// A page's address as a file name, as the web names it.
+String webpageFileName(String url) {
+  final name = url.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '_').toLowerCase();
+  return name.length > 50 ? name.substring(0, 50) : name;
 }
 
 class KnowledgeApi {
@@ -157,6 +165,39 @@ class KnowledgeApi {
       body: {'file_id': file['id'], 'directory_id': ?folderId},
     );
   }
+
+  /// Reads a web page (or a video's transcript) on the server and adds what
+  /// it says, as the web's "Add webpage".
+  Future<void> addWebpage(String id, String url, {String? folderId}) async {
+    final res = await client.send(
+      'POST',
+      '/api/v1/retrieval/process/url',
+      body: {'url': url, 'collection_name': null},
+    ) as Map;
+    final type = res['type'];
+    if (type == 'web' || type == 'youtube' || res['file'] == null) {
+      await addText(
+        id,
+        webpageFileName(url),
+        '${res['content'] ?? ''}',
+        folderId: folderId,
+      );
+      return;
+    }
+    await client.send(
+      'POST',
+      '${_id(id)}/file/add',
+      body: {'file_id': (res['file'] as Map)['id'], 'directory_id': ?folderId},
+    );
+  }
+
+  /// Adds typed text as a .txt document.
+  Future<void> addText(
+    String id,
+    String name,
+    String content, {
+    String? folderId,
+  }) => addFile(id, utf8.encode(content), '$name.txt', folderId: folderId);
 
   Future<void> removeFile(String id, String fileId) =>
       client.send('POST', '${_id(id)}/file/remove', body: {'file_id': fileId});

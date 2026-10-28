@@ -50,6 +50,9 @@ void main() {
       await api.removeFile(k.id, l.files.single.id);
       l = await api.files(k.id);
       expect(l.files, isEmpty);
+      await api.addText(k.id, 'Notes', 'Typed straight in.');
+      l = await api.files(k.id);
+      expect(l.files.single.name, 'Notes.txt');
     } finally {
       await api.delete(k.id);
     }
