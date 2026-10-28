@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:uuid/uuid.dart';
 
+import '../../core/api/openwebui_client.dart' show ApiException;
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
@@ -949,6 +950,54 @@ class ChatController extends Notifier<ChatState> {
     } catch (e) {
       state = state.copyWith(error: "Couldn't fork the chat: $e");
     }
+  }
+
+  /// Has the server sum up the older part of this chat so it fits the
+  /// model again (/compact). Returns why nothing changed, or null when it
+  /// was compacted (then the chat is reloaded).
+  Future<String?> compact() async {
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty) return 'No chat to compact';
+    if (state.streaming) {
+      return 'Wait for the current response to finish before compacting.';
+    }
+    final Object? res;
+    try {
+      res = await ref
+          .read(clientProvider)
+          .send(
+            'POST',
+            '/api/v1/chats/${chat.id}/compact',
+            body: {if (state.modelId != null) 'model': state.modelId},
+          );
+    } on ApiException catch (e) {
+      // Still finishing (titles, follow-ups): the server says to wait.
+      if (e.statusCode == 409) return e.message;
+      rethrow;
+    }
+    final out = res is Map ? res : const {};
+    if (out['compacted'] == true) {
+      await open(chat.id);
+      return null;
+    }
+    return switch (out['reason']) {
+      'too_short' => 'Chat is too short to compact',
+      'empty' => 'No chat to compact',
+      'disabled' => 'Context compaction is disabled',
+      _ => 'Nothing to compact',
+    };
+  }
+
+  /// How full the model's context is for this chat, as the server counts
+  /// it ({tokens, threshold, percent}); null when compaction is off.
+  Future<Map<String, dynamic>?> contextUsage() async {
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty) return null;
+    final res = await ref
+        .read(clientProvider)
+        .send('GET', '/api/v1/chats/${chat.id}');
+    final usage = res is Map ? res['context_usage'] : null;
+    return usage is Map ? usage.cast<String, dynamic>() : null;
   }
 
   /// A new answer to the same question, next to [reply] (Regenerate). A

@@ -40,6 +40,7 @@ import 'chat_drawer.dart';
 import 'request_options.dart';
 import 'tool_approval.dart';
 import 'voice_note.dart';
+import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -996,6 +997,18 @@ class _ComposerState extends ConsumerState<_Composer> {
     );
     bool featureOn(String id) =>
         state.features[id] ?? model?.defaultFeatureIds.contains(id) ?? false;
+    final compaction =
+        (ref.read(serverConfigProvider).value?['features']
+            as Map?)?['enable_context_compaction'] ==
+        true;
+    final terminals = ref.read(terminalServersProvider).value ?? const [];
+    final me = ref.read(meProvider).value ?? const {};
+    final canCreateSkill =
+        model?.capabilities['builtin_tools'] != false &&
+        (model?.meta['builtinTools'] as Map?)?['skills'] != false &&
+        (me['role'] == 'admin' ||
+            ((me['permissions'] as Map?)?['workspace'] as Map?)?['skills'] ==
+                true);
 
     return [
       if (state.streaming)
@@ -1043,6 +1056,78 @@ class _ComposerState extends ConsumerState<_Composer> {
           );
         },
       ),
+      if (state.chat != null &&
+          state.chat!.id.isNotEmpty &&
+          !state.temporary &&
+          compaction)
+        SlashCommand(
+          'compact',
+          'Compact: sum up older messages so the chat fits again',
+          Icons.compress,
+          () => run(() async {
+            final messenger = ScaffoldMessenger.of(context);
+            messenger.showSnackBar(
+              const SnackBar(content: Text('Compacting context…')),
+            );
+            try {
+              final why = await controller.compact();
+              messenger
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(content: Text(why ?? 'Context compacted')),
+                );
+            } catch (e) {
+              messenger
+                ..hideCurrentSnackBar()
+                ..showSnackBar(
+                  SnackBar(content: Text('Context compaction failed: $e')),
+                );
+            }
+          }),
+        ),
+      SlashCommand(
+        'status',
+        'Context usage, queued messages and this chat',
+        Icons.info_outline,
+        () => run(() => _showStatus(compaction)),
+      ),
+      SlashCommand(
+        'settings',
+        'Open settings',
+        Icons.settings_outlined,
+        () => run(
+          () => Navigator.push(
+            context,
+            MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+          ),
+        ),
+      ),
+      if (terminals.isNotEmpty || features.contains('code_interpreter'))
+        SlashCommand(
+          'terminal',
+          'Pick where code runs: a terminal or the sandbox',
+          Icons.terminal,
+          () => run(
+            () => _TerminalChip(
+              terminals: terminals,
+              terminal: terminals
+                  .where(
+                    (t) =>
+                        t.id == (state.terminalId ?? model?.terminalId ?? ''),
+                  )
+                  .firstOrNull,
+              sandbox: featureOn('code_interpreter'),
+              canSandbox: features.contains('code_interpreter'),
+            )._pick(context, ref),
+          ),
+        ),
+      if (state.messages.isNotEmpty && !state.streaming && canCreateSkill)
+        SlashCommand(
+          'skills:create',
+          'Create skill: a reusable skill from this chat',
+          Icons.add_task,
+          () => run(() => controller.send('/skills:create')),
+        ),
       // The text box's switches and + menu, without leaving the keyboard.
       for (final id in features)
         SlashCommand(
@@ -1119,6 +1204,82 @@ class _ComposerState extends ConsumerState<_Composer> {
           );
         }),
     ];
+  }
+
+  /// /status: how full the context is, what's waiting and this chat's id.
+  Future<void> _showStatus(bool compaction) async {
+    final state = ref.read(chatControllerProvider);
+    final usage = compaction
+        ? ref
+              .read(chatControllerProvider.notifier)
+              .contextUsage()
+              .then((u) => u, onError: (_) => null)
+        : Future<Map<String, dynamic>?>.value();
+    final id = state.chat?.id ?? '';
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: FutureBuilder<Map<String, dynamic>?>(
+          future: usage,
+          builder: (c, snap) {
+            final u = snap.data;
+            final percent = (u?['percent'] as num?)?.toDouble();
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  title: const Text('Context usage'),
+                  subtitle: snap.connectionState != ConnectionState.done
+                      ? const LinearProgressIndicator()
+                      : u == null
+                      ? Text(
+                          compaction
+                              ? 'Not counted yet'
+                              : 'Context compaction is off on this server',
+                        )
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${u['tokens']} of ${u['threshold']} tokens '
+                              '(${percent?.round() ?? 0}%)',
+                            ),
+                            const SizedBox(height: 6),
+                            LinearProgressIndicator(
+                              value: ((percent ?? 0) / 100).clamp(0, 1),
+                            ),
+                          ],
+                        ),
+                ),
+                if (state.queued.isNotEmpty)
+                  ListTile(
+                    title: const Text('Queued messages'),
+                    trailing: Text('${state.queued.length}'),
+                  ),
+                if (state.streaming)
+                  const ListTile(title: Text('Tasks'), trailing: Text('1')),
+                ListTile(
+                  title: const Text('Chat ID'),
+                  subtitle: Text(id.isEmpty ? 'none' : id),
+                  trailing: id.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Copy chat ID',
+                          icon: const Icon(Icons.copy),
+                          onPressed: () {
+                            Clipboard.setData(ClipboardData(text: id));
+                            Navigator.pop(c);
+                          },
+                        ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
   }
 
   void _pickModel(String id) {

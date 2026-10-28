@@ -415,6 +415,14 @@ final adminConfigSections = <ConfigSection>[
     help: 'The directory server people sign in with.',
   ),
   const ConfigSection(
+    title: 'Chats',
+    read: '/api/v1/chats/config',
+    save: '/api/v1/chats/config',
+    help:
+        'Context compaction (/compact), asking before tools run, and tool '
+        'search.',
+  ),
+  const ConfigSection(
     title: 'Subagents',
     read: '/api/v1/configs/subagents',
     save: '/api/v1/configs/subagents',
