@@ -8,11 +8,14 @@ import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'admin_api.dart';
 import 'admin_models_screen.dart';
+import 'analytics_screen.dart';
 import 'banners_screen.dart';
 import 'config_editor.dart';
+import 'evaluations_screen.dart';
 import 'connections_screen.dart';
 import 'groups_screen.dart';
 import 'integrations_screen.dart';
+import 'pipelines_screen.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -75,6 +78,18 @@ class AdminScreen extends StatelessWidget {
             onTap: () => open(const GroupsScreen()),
           ),
           ListTile(
+            leading: const Icon(Icons.insights_outlined),
+            title: const Text('Analytics'),
+            subtitle: const Text('Messages, models, people and tokens'),
+            onTap: () => open(const AnalyticsScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.emoji_events_outlined),
+            title: const Text('Leaderboard and feedback'),
+            subtitle: const Text('How people rate the models'),
+            onTap: () => open(const EvaluationsScreen()),
+          ),
+          ListTile(
             leading: const Icon(Icons.toggle_on_outlined),
             title: const Text('General'),
             subtitle: const Text('Sign-ups, features and sessions'),
@@ -112,6 +127,12 @@ class AdminScreen extends StatelessWidget {
             title: const Text('Integrations'),
             subtitle: const Text('Tool servers (OpenAPI, MCP) and terminals'),
             onTap: () => open(const IntegrationsScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.account_tree_outlined),
+            title: const Text('Pipelines'),
+            subtitle: const Text('Install, set up and remove pipelines'),
+            onTap: () => open(const PipelinesScreen()),
           ),
           for (final section in adminConfigSections)
             ListTile(
