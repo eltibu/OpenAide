@@ -123,4 +123,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('isn\'t turned on'), findsOneWidget);
   });
+
+  test('playground controls go as request fields', () {
+    expect(
+      playgroundParams({
+        'temperature': 0.2,
+        'top_k': null,
+        'custom_params': {'seed_text': 'x'},
+      }),
+      {'temperature': 0.2, 'seed_text': 'x'},
+    );
+  });
 }

@@ -6,7 +6,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
+import '../../core/models/chat.dart' show Attachment;
 import '../notes/notes_api.dart';
 import '../workspace/knowledge_api.dart';
 import '../workspace/knowledge_screen.dart' show knowledgeListProvider;
@@ -57,8 +59,22 @@ Future<void> attachFromServer(
 ) async {
   final client = ref.read(clientProvider);
   final current = ref.read(chatControllerProvider).chat?.id;
+  final files = <String, Map<String, dynamic>>{};
   Future<List<_Item>> load(String query) async {
     switch (kind) {
+      case 'myfile':
+        final found = await searchMyFiles(client, query);
+        for (final f in found) {
+          files['${f['id']}'] = f;
+        }
+        return [
+          for (final f in found)
+            (
+              id: '${f['id']}',
+              title: '${f['filename'] ?? (f['meta'] as Map?)?['name'] ?? ''}',
+              subtitle: '${(f['meta'] as Map?)?['content_type'] ?? ''}',
+            ),
+        ];
       case 'note':
         return [
           for (final n in await NotesApi(client).list())
@@ -86,16 +102,24 @@ Future<void> attachFromServer(
     isScrollControlled: true,
     builder: (context) => _Picker(
       title: switch (kind) {
+        'myfile' => 'Attach one of your files',
         'note' => 'Attach a note',
         'collection' => 'Attach knowledge',
         _ => 'Attach a past chat',
       },
       load: load,
       // Chats are searched on the server; the others are filtered here.
-      serverSearch: kind == 'chat',
+      serverSearch: kind == 'chat' || kind == 'myfile',
     ),
   );
   if (picked == null) return;
+  if (kind == 'myfile') {
+    final f = files[picked.id];
+    if (f != null) {
+      ref.read(chatControllerProvider.notifier).attachReference(myFileEntry(f));
+    }
+    return;
+  }
   ref.read(chatControllerProvider.notifier).attachReference({
     'type': kind,
     'id': picked.id,
@@ -103,6 +127,52 @@ Future<void> attachFromServer(
     if (kind == 'collection') 'description': picked.subtitle,
     'status': 'uploaded',
   });
+}
+
+/// Your uploaded files whose names match [query], newest first, as the
+/// web's Files picker searches them.
+Future<List<Map<String, dynamic>>> searchMyFiles(
+  OpenWebUiClient client,
+  String query,
+) async {
+  final q = query.trim();
+  final Object? res;
+  try {
+    res = await client.send(
+      'GET',
+      '/api/v1/files/search',
+      query: {
+        'filename': q.isEmpty
+            ? '*'
+            : RegExp(r'[?*]').hasMatch(q)
+            ? q
+            : '*$q*',
+        'skip': '0',
+        'limit': '50',
+        'content': 'false',
+      },
+    );
+  } on ApiException catch (e) {
+    // The server answers 404 when nothing matches.
+    if (e.statusCode == 404) return const [];
+    rethrow;
+  }
+  final list = res is Map ? res['items'] ?? res['data'] : res;
+  return [
+    for (final f in list is List ? list : const [])
+      if (f is Map) f.cast<String, dynamic>(),
+  ];
+}
+
+/// A file already on the server, as the web adds it from the picker.
+Map<String, dynamic> myFileEntry(Map<String, dynamic> f) {
+  final type = '${(f['meta'] as Map?)?['content_type'] ?? ''}';
+  final image = type.startsWith('image/') && !type.startsWith('image/svg');
+  return {
+    ...Attachment.uploaded(f).raw,
+    if (image) 'type': 'image',
+    'status': 'processed',
+  };
 }
 
 /// Your notes, for "#" in the chat box.

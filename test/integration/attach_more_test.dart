@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
 import 'package:nexus_assistant/core/auth/session.dart';
+import 'package:nexus_assistant/features/chat/attach_more.dart';
 import 'package:nexus_assistant/features/chat/chat_controller.dart';
 import 'package:nexus_assistant/features/notes/notes_api.dart';
 
@@ -98,6 +99,52 @@ void main() {
         await client.deleteChat(id);
       }
       await notes.delete(note.id);
+    }
+  }, skip: skip);
+
+  test('one of your files goes with a message', () async {
+    HttpOverrides.global = null;
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    final container = ProviderContainer(
+      overrides: [
+        sessionProvider.overrideWith(
+          () => _Session(Session(serverUrl: url, token: client.token!)),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(sessionProvider.future);
+    final uploaded = await client.uploadFile(
+      'Zebra crossings are white.'.codeUnits,
+      'zebra-notes.txt',
+      contentType: 'text/plain',
+    );
+    await client.waitForFile('${uploaded['id']}');
+    expect(await searchMyFiles(client, 'no-such-file-xyz'), isEmpty);
+    final found = await searchMyFiles(client, 'zebra-notes');
+    final f = found.firstWhere((f) => f['id'] == uploaded['id']);
+    final entry = myFileEntry(f);
+    expect(entry['type'], 'file');
+    expect(entry['url'], uploaded['id']);
+    final models = await container.read(modelsProvider.future);
+    final controller = container.read(chatControllerProvider.notifier)
+      ..selectModel(models.first.id)
+      ..newChat()
+      ..attachReference(entry);
+    String? chatId;
+    try {
+      await controller.send('What colour are they?');
+      for (var i = 0; i < 200; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        if (!container.read(chatControllerProvider).streaming) break;
+      }
+      chatId = container.read(chatControllerProvider).chat!.id;
+      final saved = await client.chat(chatId);
+      expect(saved.thread.first.attachments.single.id, uploaded['id']);
+    } finally {
+      if (chatId != null) await client.deleteChat(chatId);
+      await client.send('DELETE', '/api/v1/files/${uploaded['id']}');
     }
   }, skip: skip);
 }

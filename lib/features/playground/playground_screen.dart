@@ -10,6 +10,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/advanced_params.dart' show AdvancedParamsEditor;
 import '../chat/attachments.dart' show MarkdownImage;
 import '../chat/chat_controller.dart';
 import '../chat/chat_screen.dart' show readingInset;
@@ -83,11 +84,21 @@ class ChatPlayground extends ConsumerStatefulWidget {
   ConsumerState<ChatPlayground> createState() => _ChatPlaygroundState();
 }
 
+/// The playground's controls as request fields: each setting, and custom
+/// parameters as their own fields.
+Map<String, dynamic> playgroundParams(Map<String, dynamic> params) => {
+  for (final e in params.entries)
+    if (e.key != 'custom_params' && e.value != null) e.key: e.value,
+  ...?(params['custom_params'] as Map?)?.cast<String, dynamic>(),
+};
+
 class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
   String? _model;
   final _system = TextEditingController();
   final _turns = [_Turn('user')];
-  final _temperature = TextEditingController();
+
+  /// Controls, as the web playground's: the same settings as a chat's.
+  final _params = <String, dynamic>{};
   StreamSubscription<String>? _run;
   String? _error;
 
@@ -116,7 +127,6 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
       setState(() => _error = 'Write a message first');
       return;
     }
-    final temperature = double.tryParse(_temperature.text.trim());
     final reply = _Turn('assistant');
     setState(() {
       _error = null;
@@ -127,7 +137,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
         .streamCompletion(
           model: model,
           messages: messages,
-          extraParams: {'temperature': ?temperature},
+          extraParams: playgroundParams(_params),
         )
         .listen(
           (delta) => setState(() => reply.text.text += delta),
@@ -212,13 +222,24 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
             ],
             onChanged: _running ? null : (v) => setState(() => _model = v),
           ),
-          TextField(
-            controller: _temperature,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Temperature',
-              hintText: 'Model default',
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Controls'),
+            subtitle: Text(
+              _params.isEmpty ? 'Model defaults' : '${_params.length} changed',
             ),
+            children: [
+              AdvancedParamsEditor(
+                params: _params,
+                onChanged: (k, v) => setState(() {
+                  if (v == null) {
+                    _params.remove(k);
+                  } else {
+                    _params[k] = v;
+                  }
+                }),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           TextField(

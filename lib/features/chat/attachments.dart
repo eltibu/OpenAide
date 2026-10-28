@@ -98,6 +98,11 @@ class AttachButton extends ConsumerWidget {
                   onTap: () => Navigator.pop(context, 'collection'),
                 ),
                 ListTile(
+                  leading: const Icon(Icons.folder_open_outlined),
+                  title: const Text('Your files'),
+                  onTap: () => Navigator.pop(context, 'myfile'),
+                ),
+                ListTile(
                   leading: const Icon(Icons.forum_outlined),
                   title: const Text('Past chat'),
                   onTap: () => Navigator.pop(context, 'chat'),
@@ -121,7 +126,7 @@ class AttachButton extends ConsumerWidget {
         return pickToolApprovalMode(context, ref, mode);
       }
       if (choice == 'web') return attachWebpage(context, ref);
-      if (const {'note', 'collection', 'chat'}.contains(choice)) {
+      if (const {'note', 'collection', 'chat', 'myfile'}.contains(choice)) {
         return attachFromServer(context, ref, choice);
       }
       final controller = ref.read(chatControllerProvider.notifier);
