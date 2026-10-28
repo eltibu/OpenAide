@@ -11,6 +11,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_extras.dart' show titleFromTask;
+import '../chat/file_details.dart' show FileDetailsScreen;
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import '../workspace/access_editor.dart' show editAccess;
 import 'notes_api.dart';
@@ -246,6 +247,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   bool _preview = false;
   bool _dirty = false;
   bool _saving = false;
+  bool _uploading = false;
+  List<Map<String, dynamic>> _files = const [];
   Object? _error;
   Timer? _debounce;
 
@@ -260,6 +263,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       final n = await widget.api.get(widget.id);
       _title.text = n.title;
       _body.text = n.markdown;
+      _files = n.files;
       _preview = n.markdown.trim().isNotEmpty;
       _loaded = true;
     } catch (e) {
@@ -465,12 +469,50 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           ),
         );
         _say('Link copied');
+      case 'upload':
+        await _upload();
       case 'chat':
         await _chat();
       case 'enhance':
         await _enhance();
       default:
         await _download(v);
+    }
+  }
+
+  /// Upload files: added to the note on the server, as on the web.
+  Future<void> _upload() async {
+    final picked = await FilePicker.pickFiles();
+    if (picked.isEmpty) return;
+    setState(() => _uploading = true);
+    final client = ref.read(clientProvider);
+    final added = <Map<String, dynamic>>[];
+    for (final f in picked) {
+      try {
+        final bytes = await f.readAsBytes();
+        if (bytes.isEmpty) {
+          _say("${f.name} is empty, so it wasn't added.");
+          continue;
+        }
+        added.add(noteFileItem(await client.uploadFile(bytes, f.name)));
+      } catch (e) {
+        if (mounted) _say("Couldn't upload ${f.name}: $e");
+      }
+    }
+    if (added.isNotEmpty) await _setFiles([..._files, ...added]);
+    if (mounted) setState(() => _uploading = false);
+  }
+
+  Future<void> _setFiles(List<Map<String, dynamic>> files) async {
+    final before = _files;
+    setState(() => _files = files);
+    try {
+      await widget.api.update(widget.id, files: files);
+    } catch (e) {
+      if (mounted) {
+        setState(() => _files = before);
+        _say("Couldn't save the files: $e");
+      }
     }
   }
 
@@ -498,7 +540,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           style: TextStyle(color: muted, fontSize: 14),
         ),
         actions: [
-          if (_enhancing)
+          if (_enhancing || _uploading)
             const Padding(
               padding: EdgeInsets.all(14),
               child: SizedBox.square(
@@ -550,6 +592,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   child: ListTile(
                     leading: Icon(Icons.chat_bubble_outline),
                     title: Text('Chat about this note'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'upload',
+                  child: ListTile(
+                    leading: Icon(Icons.cloud_upload_outlined),
+                    title: Text('Upload files'),
                   ),
                 ),
                 PopupMenuDivider(),
@@ -638,6 +687,43 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                           ),
                   ),
                 ),
+                if (_files.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final f in _files)
+                          InputChip(
+                            avatar: Icon(
+                              f['type'] == 'image'
+                                  ? Icons.image_outlined
+                                  : Icons.description_outlined,
+                              size: 18,
+                            ),
+                            label: Text(
+                              '${f['name'] ?? 'File'}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute<void>(
+                                builder: (_) => FileDetailsScreen(
+                                  fileId: '${f['id']}',
+                                  name: '${f['name'] ?? 'File'}',
+                                ),
+                              ),
+                            ),
+                            deleteButtonTooltipMessage: 'Remove',
+                            onDeleted: () => _setFiles([
+                              for (final o in _files)
+                                if (o['id'] != f['id']) o,
+                            ]),
+                          ),
+                      ],
+                    ),
+                  ),
                 if (_preview)
                   GestureDetector(
                     onDoubleTap: () => setState(() => _preview = false),

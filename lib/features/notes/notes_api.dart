@@ -18,6 +18,7 @@ class Note {
     required this.markdown,
     required this.pinned,
     required this.updated,
+    this.files = const [],
   });
 
   factory Note.fromJson(Map j) {
@@ -28,6 +29,12 @@ class Note {
       markdown: '${content['md'] ?? ''}',
       pinned: j['is_pinned'] == true,
       updated: fromServerTime((j['updated_at'] as num?) ?? 0),
+      files: [
+        for (final f
+            in ((j['data'] as Map?)?['files'] as List? ?? const [])
+                .whereType<Map>())
+          if (f['id'] != null) f.cast<String, dynamic>(),
+      ],
     );
   }
 
@@ -38,7 +45,25 @@ class Note {
   final String markdown;
   final bool pinned;
   final DateTime updated;
+
+  /// Files added to the note (Upload files), as the web keeps them.
+  final List<Map<String, dynamic>> files;
 }
+
+/// How the web lists an uploaded [file] (the server's record) in a note.
+Map<String, dynamic> noteFileItem(Map<String, dynamic> file) => {
+  'type': '${file['meta']?['content_type'] ?? ''}'.startsWith('image/')
+      ? 'image'
+      : 'file',
+  'file': file,
+  'id': file['id'],
+  'url': '${file['id']}',
+  'name': file['filename'] ?? file['meta']?['name'] ?? 'File',
+  'collection_name':
+      file['meta']?['collection_name'] ?? file['collection_name'] ?? '',
+  'status': 'uploaded',
+  'size': file['meta']?['size'],
+};
 
 class NotesApi {
   NotesApi(this.client);
@@ -80,15 +105,25 @@ class NotesApi {
         ) as Map,
       );
 
-  Future<void> update(String id, {String? title, String? markdown}) =>
-      client.send(
-        'POST',
-        '$_base/${Uri.encodeComponent(id)}/update',
-        body: {
-          'title': ?title,
-          if (markdown != null) 'data': _content(markdown),
+  /// Changes the title, the text and the files given; the rest stays.
+  Future<void> update(
+    String id, {
+    String? title,
+    String? markdown,
+    List<Map<String, dynamic>>? files,
+  }) => client.send(
+    'POST',
+    '$_base/${Uri.encodeComponent(id)}/update',
+    body: {
+      'title': ?title,
+      if (markdown != null || files != null)
+        'data': {
+          if (markdown != null) ..._content(markdown),
+          // The web clears the list with null when the last one goes.
+          if (files != null) 'files': files.isEmpty ? null : files,
         },
-      );
+    },
+  );
 
   Future<void> togglePin(String id) =>
       client.send('POST', '$_base/${Uri.encodeComponent(id)}/pin');

@@ -44,6 +44,28 @@ void main() {
     expect((await api.list()).where((n) => n.id == note.id), isEmpty);
   }, skip: skip);
 
+  test('adds files to a note and keeps them when the text changes', () async {
+    final api = NotesApi(client);
+    final note = await api.create('nexus files note');
+    final up = await client.uploadFile(
+      'minutes from Tuesday'.codeUnits,
+      'minutes.txt',
+      contentType: 'text/plain',
+    );
+    final item = noteFileItem(up);
+    expect(item['name'], 'minutes.txt');
+    expect(item['type'], 'file');
+    await api.update(note.id, files: [item]);
+    await api.update(note.id, markdown: 'see the file');
+    var got = await api.get(note.id);
+    expect(got.markdown, 'see the file');
+    expect(got.files.map((f) => f['id']), [up['id']]);
+    await api.update(note.id, files: []);
+    got = await api.get(note.id);
+    expect(got.files, isEmpty);
+    await api.delete(note.id);
+  }, skip: skip);
+
   test('creates, pauses, runs and deletes automations', () async {
     final api = AutomationsApi(client);
     final models =
