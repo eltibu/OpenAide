@@ -278,3 +278,28 @@ Future<String?> runPhoneAction(
       return r == 'on' || r == 'off' ? 'Flashlight $r.' : r;
   }
 }
+
+/// Opens the calendar app with a new event filled in, for you to save.
+/// Times are milliseconds since the epoch.
+Future<String> addCalendarEvent({
+  required String title,
+  int? start,
+  int? end,
+  bool allDay = false,
+  String? location,
+  String? description,
+}) async {
+  try {
+    return await _channel.invokeMethod<String>('calendar', {
+          'title': title,
+          'start': start,
+          'end': end,
+          'allDay': allDay,
+          'location': location,
+          'description': description,
+        }) ??
+        'done';
+  } on MissingPluginException {
+    return 'Calendar works on the phone only.';
+  }
+}

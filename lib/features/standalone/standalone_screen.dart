@@ -12,12 +12,20 @@ import 'package:image_picker/image_picker.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/agent/agent_loop.dart';
 import '../../core/ai/ai_providers.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/nexus_logo.dart';
+import '../agent/agent_settings_screen.dart';
+import '../agent/agent_tools.dart';
+import '../chat/reply_parts.dart';
+import '../chat/reply_steps.dart';
+import '../phone/phone_action_ui.dart';
 import '../providers/ai_keys.dart';
+import '../providers/local_models.dart';
+import '../providers/local_models_screen.dart';
 import '../providers/ai_providers_screen.dart';
 import '../providers/provider_chat.dart';
 import 'local_chats.dart';
@@ -40,7 +48,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
   bool _streaming = false;
   String? _error;
   final _images = <String>[];
-  StreamSubscription<AiChunk>? _sub;
+  StreamSubscription<AgentEvent>? _sub;
   Completer<void>? _running;
 
   @override
@@ -206,23 +214,27 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
       _error = null;
     });
     _toBottom();
-    var thinking = '';
+    final out = AgentOutput();
     try {
-      final stream = streamDirectReply(
+      final small = usesPromptTools(
+        parseProviderModel(model)?.provider ?? AiProvider.openAi,
+      );
+      final kit = await buildAgentKitFor(
+        ref,
+        small: small,
+        pickContact: (people) => pickContactSheet(context, people),
+      );
+      final stream = streamAgentReply(
         keys: await ref.read(aiKeysProvider.future),
         modelId: model,
         history: history,
+        tools: kit.tools,
+        system: kit.instructions,
       );
-      final sub = _sub = stream.listen((c) {
-        reply.content += c.text;
-        thinking += c.thinking;
-        if (thinking.isNotEmpty) {
-          reply.extra['output'] = directOutput(
-            reply.content,
-            thinking,
-            done: false,
-          );
-        }
+      final sub = _sub = stream.listen((e) {
+        out.add(e);
+        reply.content = out.content;
+        reply.extra['output'] = out.output();
         if (mounted && identical(_chat, chat)) setState(() {});
         _toBottom(onlyIfNear: true);
       });
@@ -233,9 +245,8 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
       if (mounted && identical(_chat, chat)) setState(() => _error = '$e');
     }
     _sub = null;
-    if (thinking.isNotEmpty) {
-      reply.extra['output'] = directOutput(reply.content, thinking, done: true);
-    }
+    reply.content = out.content;
+    reply.extra['output'] = out.output(done: true);
     reply.extra['done'] = true;
     try {
       final store = await ref.read(localChatStoreProvider.future);
@@ -294,13 +305,17 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
   @override
   Widget build(BuildContext context) {
     final keys = ref.watch(aiKeysProvider).value ?? const {};
+    // A provider key or a model on the phone is enough to chat.
+    final canChat =
+        keys.isNotEmpty ||
+        (ref.watch(localPickerModelsProvider).value?.isNotEmpty ?? false);
     final modelsAsync = ref.watch(providerModelsProvider);
     final models = modelsAsync.value ?? const <ModelInfo>[];
     final model = _effectiveModel(models);
     final modelName = models.where((m) => m.id == model).firstOrNull?.name;
     return Scaffold(
       appBar: AppBar(
-        title: keys.isEmpty
+        title: !canChat
             ? const Text('OpenAide')
             : TextButton(
                 onPressed: models.isEmpty ? null : () => _pickModel(models),
@@ -321,7 +336,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                 ),
               ),
         actions: [
-          if (keys.isNotEmpty)
+          if (canChat)
             IconButton(
               tooltip: 'New chat',
               icon: const Icon(Icons.edit_square),
@@ -330,7 +345,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
         ],
       ),
       drawer: _drawer(context),
-      body: keys.isEmpty
+      body: !canChat
           ? AiProviderList(intro: _welcome(context))
           : Column(
               children: [
@@ -383,7 +398,8 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
       Text(
         'Pick at least one to start chatting. OpenRouter is the quickest: '
         'one sign-in gives you models from every big AI company. Keys stay '
-        'on this phone.',
+        'on this phone. Or download a model to run on the phone itself, '
+        'offline (at the bottom).',
         textAlign: TextAlign.center,
         style: TextStyle(color: context.nexus.muted),
       ),
@@ -439,6 +455,19 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             ),
             const Divider(height: 1),
             ListTile(
+              leading: const Icon(Icons.handyman_outlined),
+              title: const Text('Tools and skills'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AgentSettingsScreen(),
+                  ),
+                );
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.hub_outlined),
               title: const Text('AI providers'),
               onTap: () {
@@ -446,6 +475,17 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const AiProvidersScreen()),
+                );
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.phone_android),
+              title: const Text('Models on this phone'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LocalModelsScreen()),
                 );
               },
             ),
@@ -526,48 +566,31 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
         ),
       );
     }
-    final thinking = [
-      for (final item
-          in (m.extra['output'] as List? ?? const []).whereType<Map>())
-        if (item['type'] == 'reasoning')
-          for (final p
-              in (item['content'] as List? ?? const []).whereType<Map>())
-            '${p['text'] ?? ''}',
-    ].join();
     final busy = last && _streaming;
+    final groups = groupParts(replyParts(m, live: busy));
+    final working =
+        busy && groups.any((g) => g is List<StepPart> && g.any((s) => !s.done));
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (thinking.isNotEmpty)
-            Theme(
-              data: Theme.of(context)
-                  .copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                title: Text(
-                  busy && m.content.isEmpty ? 'Thinking…' : 'Thought',
-                  style: TextStyle(color: context.nexus.muted),
-                ),
-                children: [
-                  Text(thinking, style: TextStyle(color: context.nexus.muted)),
-                ],
-              ),
-            ),
-          if (m.content.isEmpty && busy && thinking.isEmpty)
+          for (final g in groups)
+            if (g is TextPart)
+              MarkdownBlock(
+                data: g.text,
+                selectable: true,
+                config: nexusMarkdown(context),
+              )
+            else
+              ReplySteps(steps: g as List<StepPart>, live: busy),
+          if (busy && !working && (groups.isEmpty || groups.last is! TextPart))
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 8),
               child: SizedBox.square(
                 dimension: 18,
                 child: CircularProgressIndicator(strokeWidth: 2),
               ),
-            )
-          else if (m.content.isNotEmpty)
-            MarkdownBlock(
-              data: m.content,
-              selectable: true,
-              config: nexusMarkdown(context),
             ),
           if (m.error != null && !(last && _error != null))
             Text(
