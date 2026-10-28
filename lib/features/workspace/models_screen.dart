@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/advanced_params.dart';
+import '../chat/model_controls.dart';
 import '../chat/chat_controller.dart';
 import 'knowledge_screen.dart' show knowledgeListProvider;
 import 'access_editor.dart' show ItemMenu, readGrants, writeGrants;
@@ -163,6 +164,9 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   Set<String> _skills = {};
   Map<String, dynamic> _params = {};
 
+  /// Model controls, kept apart from the parameters while editing.
+  List<ModelControl> _controls = [];
+
   /// meta.tts.voice and meta.terminalId; empty for none.
   String _voice = '';
   String _terminal = '';
@@ -201,6 +205,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _tools = m.ids('toolIds').toSet();
       _skills = m.ids('skillIds').toSet();
       _params = {...m.params}..remove('system');
+      _controls = readModelControls(_params.remove('model_controls'));
       _suggestions = readSuggestions(m.meta['suggestion_prompts']);
       _image = m.meta['profile_image_url'] as String?;
       _voice = '${(m.meta['tts'] as Map?)?['voice'] ?? ''}';
@@ -216,6 +221,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _tools = c.ids('toolIds').toSet();
       _skills = c.ids('skillIds').toSet();
       _params = {...c.params}..remove('system');
+      _controls = readModelControls(_params.remove('model_controls'));
       _suggestions = readSuggestions(c.meta['suggestion_prompts']);
       _image = c.meta['profile_image_url'] as String?;
       _voice = '${(c.meta['tts'] as Map?)?['voice'] ?? ''}';
@@ -271,7 +277,10 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     final old = _m?.json ?? <String, dynamic>{};
     final source = _m ?? widget.copyOf;
     final meta = {...?source?.meta};
-    final params = {..._params};
+    final params = {
+      ..._params,
+      if (_controls.isNotEmpty) 'model_controls': writeModelControls(_controls),
+    };
     meta['description'] = _description.text.trim();
     meta['capabilities'] = _caps;
     meta['toolIds'] = _tools.toList();
@@ -644,6 +653,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ModelControlsEditor(
+                    value: _controls,
+                    onChanged: (v) => setState(() => _controls = v),
                   ),
                 ),
                 Padding(

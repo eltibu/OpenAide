@@ -54,6 +54,7 @@ import '../../core/models/model_info.dart';
 import 'model_pins.dart';
 import 'chat_variables.dart';
 import 'compare_text.dart';
+import 'model_controls.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -1731,6 +1732,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                   children: [
                     AttachButton(onCompare: _compare),
                     const _FeaturesButton(),
+                    const ModelControlsButton(),
                     const _ChatVariablesButton(),
                     const SizedBox(width: 4),
                     const Expanded(
