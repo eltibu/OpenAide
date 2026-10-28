@@ -31,18 +31,28 @@ List<String> availableFeatures(ModelInfo? model, Map<String, dynamic>? config) {
 
 /// A tool or skill the person can switch on for a chat.
 class Pickable {
-  const Pickable({required this.id, required this.name, this.description});
+  const Pickable({
+    required this.id,
+    required this.name,
+    this.description,
+    this.authenticated,
+  });
 
   factory Pickable.fromJson(Map<String, dynamic> j) => Pickable(
     id: '${j['id']}',
     name: '${j['name'] ?? j['id']}',
     description:
         (j['description'] ?? (j['meta'] as Map?)?['description']) as String?,
+    authenticated: j['authenticated'] as bool?,
   );
 
   final String id;
   final String name;
   final String? description;
+
+  /// For a tool server with its own sign-in: false until you sign in
+  /// (Auth required), true once you have; null when it has none.
+  final bool? authenticated;
 }
 
 /// [toolIds] and [skillIds] are what the person picked in this chat (null:

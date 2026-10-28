@@ -44,6 +44,7 @@ import 'composer_draft.dart';
 import 'reply_notify.dart';
 import 'chat_drawer.dart';
 import 'request_options.dart';
+import 'tool_auth.dart';
 import 'tool_approval.dart';
 import 'voice_note.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
@@ -2774,15 +2775,65 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                       ),
                 children: [
                   for (final t in shownTools)
-                    item(
-                      t,
-                      activeTools.contains(t.id),
-                      (v) => chat.setTool(t.id, v),
-                      // Tool servers have no valves; workspace tools do.
-                      valves: t.id.contains(':')
-                          ? null
-                          : '/api/v1/tools/id/${t.id}',
-                    ),
+                    if (t.authenticated == false)
+                      ListTile(
+                        dense: true,
+                        title: Text(t.name),
+                        subtitle: const Text(
+                          'Auth required',
+                          style: TextStyle(color: Colors.amber),
+                        ),
+                        trailing: TextButton(
+                          onPressed: () => reconnectTool(
+                            context,
+                            ref,
+                            id: t.id,
+                            name: t.name,
+                          ),
+                          child: const Text('Reconnect'),
+                        ),
+                        onTap: () =>
+                            reconnectTool(context, ref, id: t.id, name: t.name),
+                      )
+                    else if (t.authenticated == true &&
+                        t.id.startsWith('server:mcp:'))
+                      ListTile(
+                        dense: true,
+                        title: Text(t.name),
+                        subtitle: const Text(
+                          'Connected',
+                          style: TextStyle(color: Colors.green),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Disconnect OAuth',
+                              icon: const Icon(Icons.link_off, size: 20),
+                              onPressed: () async {
+                                chat.setTool(t.id, false);
+                                await disconnectTool(context, ref, id: t.id);
+                              },
+                            ),
+                            Switch(
+                              value: activeTools.contains(t.id),
+                              onChanged: (v) => chat.setTool(t.id, v),
+                            ),
+                          ],
+                        ),
+                        onTap: () =>
+                            chat.setTool(t.id, !activeTools.contains(t.id)),
+                      )
+                    else
+                      item(
+                        t,
+                        activeTools.contains(t.id),
+                        (v) => chat.setTool(t.id, v),
+                        // Tool servers have no valves; workspace tools do.
+                        valves: t.id.contains(':')
+                            ? null
+                            : '/api/v1/tools/id/${t.id}',
+                      ),
                 ],
               ),
             if (shownSkills.isNotEmpty)
