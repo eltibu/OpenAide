@@ -19,6 +19,7 @@ jobs:
     # Job-level, so a step's `if` can test it (a step's own env can't).
     env:
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      RELEASE_KEYSTORE_BASE64: ${{ secrets.NEXUS_RELEASE_KEYSTORE_BASE64 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -139,19 +140,64 @@ jobs:
               | head -40 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1
           }
-      # The last line of defence: the APK must carry the signature pinned in
-      # android/signing-sha256.txt, or Android refuses it as an update.
+      # Re-sign with the Nexus release key. Play Protect treats the generic
+      # debug key as untrusted, so the release key replaces it. A signed
+      # rotation proof (lineage) from the old key lets Android 9+ install the
+      # new builds over the app already on the phone, with no reinstall. The
+      # old key keeps the rollback right, so builds still signed with it (other
+      # branches) also keep installing over the top.
+      - name: Sign with the release key (rotated from the old key)
+        if: ${{ env.RELEASE_KEYSTORE_BASE64 != '' }}
+        env:
+          RELEASE_KEY_PASSWORD: ${{ secrets.NEXUS_RELEASE_KEY_PASSWORD }}
+        run: |
+          set -e
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          prop() { grep "^$1=" android/key.properties | cut -d= -f2-; }
+          OLD_KS=$(prop storeFile); OLD_ALIAS=$(prop keyAlias)
+          case "$OLD_KS" in /*) ;; *) OLD_KS="android/app/$OLD_KS" ;; esac
+          export OLD_STORE_PASS=$(prop storePassword) OLD_KEY_PASS=$(prop keyPassword)
+          NEW_KS="$RUNNER_TEMP/nexus-release.p12"
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$NEW_KS"
+          OLD=(--ks "$OLD_KS" --ks-key-alias "$OLD_ALIAS" --ks-pass env:OLD_STORE_PASS --key-pass env:OLD_KEY_PASS)
+          NEW=(--ks "$NEW_KS" --ks-key-alias nexus --ks-pass env:RELEASE_KEY_PASSWORD --key-pass env:RELEASE_KEY_PASSWORD)
+          LINEAGE="$RUNNER_TEMP/lineage.bin"
+          "$APKSIGNER" rotate --out "$LINEAGE.tmp" --old-signer "${OLD[@]}" --new-signer "${NEW[@]}"
+          "$APKSIGNER" lineage --in "$LINEAGE.tmp" --out "$LINEAGE" --signer "${OLD[@]}" --set-rollback true
+          "$APKSIGNER" lineage --in "$LINEAGE" --print-certs -v
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          "$APKSIGNER" sign "${NEW[@]}" --lineage "$LINEAGE" \
+            --rotation-min-sdk-version 28 --v3-signing-enabled true \
+            --out "$RUNNER_TEMP/signed.apk" "$APK"
+          mv "$RUNNER_TEMP/signed.apk" "$APK"
+          rm -f "$NEW_KS"
+      # The last line of defence: the APK must be signed with the key pinned in
+      # android/signing-sha256.txt, or with the release key pinned in
+      # android/release-signing-sha256.txt and a rotation proof from the pinned
+      # key. Anything else Android refuses as an update.
       - name: Check the APK's signature
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          ACTUAL=$("$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk \
+          APK=build/app/outputs/flutter-apk/app-release.apk
+          ACTUAL=$("$APKSIGNER" verify --print-certs "$APK" \
             | grep -m1 'SHA-256 digest' | awk '{print $NF}')
           echo "::notice::APK signing certificate SHA-256: $ACTUAL"
           EXPECTED=$(tr -d '[:space:]' < android/signing-sha256.txt 2>/dev/null || true)
-          if [ -n "$EXPECTED" ] && [ "$ACTUAL" != "$EXPECTED" ]; then
-            echo "::error::APK is signed with $ACTUAL, expected $EXPECTED. Not publishing: it would not install over the app."
+          RELEASE=$(tr -d '[:space:]' < android/release-signing-sha256.txt 2>/dev/null || true)
+          if [ -z "$EXPECTED" ] || [ "$ACTUAL" = "$EXPECTED" ]; then
+            exit 0
+          fi
+          if [ -n "$RELEASE" ] && [ "$ACTUAL" = "$RELEASE" ]; then
+            LINEAGE=$("$APKSIGNER" lineage --in "$APK" --print-certs | grep 'SHA-256 digest' | awk '{print $NF}')
+            echo "::notice::Rotation proof: $(echo $LINEAGE)"
+            if echo "$LINEAGE" | grep -qx "$EXPECTED"; then
+              exit 0
+            fi
+            echo "::error::APK has the release key but no rotation proof from $EXPECTED. Not publishing: it would not install over the app."
             exit 1
           fi
+          echo "::error::APK is signed with $ACTUAL, expected $EXPECTED. Not publishing: it would not install over the app."
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: nexus-assistant-apk
