@@ -80,24 +80,20 @@ void main() {
       'format': 'skill',
       'ids': id,
     });
-    final preview =
-        await client.sendFiles('/api/v1/skills/import/preview', [
-              (package, '$id.skill'),
-            ])
-            as List;
+    final preview = await client.sendFiles('/api/v1/skills/import/preview', [
+      (package, '$id.skill'),
+    ]) as List;
     expect(preview.single['id_taken'], isTrue);
     final choice = ImportChoice((preview.single as Map).cast())
       ..action = 'copy';
     choice.id.text = copy;
-    final done =
-        await client.sendFiles(
-              '/api/v1/skills/import',
-              [(package, '$id.skill')],
-              fields: {
-                'decisions': jsonEncode([choice.decision()]),
-              },
-            )
-            as List;
+    final done = await client.sendFiles(
+      '/api/v1/skills/import',
+      [(package, '$id.skill')],
+      fields: {
+        'decisions': jsonEncode([choice.decision()]),
+      },
+    ) as List;
     expect(done.single['status'], 'saved', reason: '$done');
     final copied =
         await client.send('GET', '/api/v1/skills/id/$copy/files') as Map;

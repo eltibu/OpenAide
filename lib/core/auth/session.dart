@@ -76,6 +76,94 @@ class SessionNotifier extends AsyncNotifier<Session?> {
   Future<void> signInWithPassword(String url, String email, String password) =>
       _signIn(url, (c) => c.signIn(email, password));
 
+  /// Sign-in with a directory (LDAP) account.
+  Future<void> signInWithLdap(String url, String user, String password) =>
+      _signIn(
+        url,
+        (c) async => c.authStep('/api/v1/auths/ldap', {
+          'user': user,
+          'password': password,
+        }),
+      );
+
+  /// A new account (when the server allows sign-ups).
+  Future<void> signUp(String url, String name, String email, String password) =>
+      _signIn(
+        url,
+        (c) async => c.authStep('/api/v1/auths/signup', {
+          'name': name,
+          'email': email,
+          'password': password,
+        }),
+      );
+
+  /// Sends a two-step code (or a reset token) for [step]. Signs in when
+  /// that's the last step; otherwise the state holds the next [SignInStep].
+  Future<void> answerStep(
+    SignInStep step,
+    String code, {
+    bool recovery = false,
+  }) async {
+    final path = switch (step.next) {
+      'enroll' => '/api/v1/auths/mfa/enroll/confirm',
+      'recover' => '/api/v1/auths/mfa/recover',
+      _ => '/api/v1/auths/mfa/verify',
+    };
+    state = await AsyncValue.guard(() async {
+      final client = step.client;
+      final Map<String, dynamic> res;
+      try {
+        res = await client.authStep(path, {
+          'challenge_token': step.challenge,
+          if (step.next == 'recover')
+            'reset_token': code
+          else ...{
+            'code': code,
+            'recovery': recovery,
+          },
+        });
+      } on SignInStep catch (next) {
+        // A reset token leads to setting up a new authenticator.
+        throw SignInStep(
+          client,
+          {...step.reply, ...next.reply}..remove('error'),
+        );
+      } catch (e) {
+        // A wrong code: same step again, saying why.
+        throw SignInStep(client, {...step.reply, 'error': '$e'});
+      }
+      // A new authenticator comes with recovery codes, shown once.
+      if ((res['recovery_codes'] as List?)?.isNotEmpty == true) {
+        throw SignInStep(client, {...res, 'next_step': 'codes'});
+      }
+      return _save(client, await client.me());
+    });
+  }
+
+  /// After the recovery codes were seen: signed in.
+  Future<void> finishStep(SignInStep step) async {
+    state = await AsyncValue.guard(
+      () async => _save(step.client, await step.client.me()),
+    );
+  }
+
+  /// Looks again at a pending account, after an admin may have approved it.
+  Future<void> recheck() async {
+    final s = state.value;
+    if (s == null) return;
+    state = await AsyncValue.guard(
+      () async => Session(
+        serverUrl: s.serverUrl,
+        token: s.token,
+        cookie: s.cookie,
+        user: await s.client().me(),
+      ),
+    );
+  }
+
+  /// Back to the sign-in form, dropping a half-done two-step sign-in.
+  void restart() => state = const AsyncData(null);
+
   Future<void> signInWithApiKey(String url, String apiKey) =>
       _signIn(url, (c) async => c.token = apiKey.trim());
 

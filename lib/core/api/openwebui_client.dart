@@ -217,15 +217,29 @@ class OpenWebUiClient {
   Future<Map<String, dynamic>> config() async =>
       (await _send('GET', '/api/config') as Map).cast<String, dynamic>();
 
-  /// Email/password sign-in. Stores and returns the JWT.
-  Future<String> signIn(String email, String password) async {
-    final res = await _send(
-      'POST',
-      '/api/v1/auths/signin',
-      body: {'email': email, 'password': password},
-    ) as Map;
-    token = res['token'] as String;
-    return token!;
+  /// Email/password sign-in. Stores and returns the JWT; throws
+  /// [SignInStep] when the server wants a code or an admin's approval first.
+  Future<String> signIn(String email, String password) async =>
+      (await authStep('/api/v1/auths/signin', {
+            'email': email,
+            'password': password,
+          }))['token']
+          as String;
+
+  /// Posts one sign-in form (sign in, LDAP, sign up, a two-step code) and
+  /// stores the token it returns, or throws [SignInStep] for what's next.
+  Future<Map<String, dynamic>> authStep(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final res = ((await _send('POST', path, body: body)) as Map)
+        .cast<String, dynamic>();
+    final t = res['token'];
+    if (t is String && t.isNotEmpty) {
+      token = t;
+      return res;
+    }
+    throw SignInStep(this, res);
   }
 
   /// The signed-in user; also validates a stored token or API key.
@@ -795,4 +809,31 @@ class OpenWebUiClient {
   /// Stops a running reply; what was written so far stays saved.
   Future<void> stopTask(String taskId) =>
       _send('POST', '/api/tasks/stop/$taskId');
+}
+
+/// The server answered a sign-in with something to do before it's done:
+/// a two-step code (enroll, verify, recover) or waiting for approval
+/// (pending). [reply] is what it said; [client] carries on from here.
+class SignInStep implements Exception {
+  SignInStep(this.client, this.reply);
+  final OpenWebUiClient client;
+  final Map<String, dynamic> reply;
+
+  String get next => '${reply['next_step'] ?? ''}';
+  String get challenge => '${reply['challenge_token'] ?? ''}';
+
+  /// Recovery codes to show once, when setting up two-step sign-in.
+  List<String> get recoveryCodes => [
+    for (final c in reply['recovery_codes'] as List? ?? const []) '$c',
+  ];
+
+  @override
+  String toString() => switch (next) {
+    'pending' => 'Your account is waiting for an admin to approve it.',
+    'enroll' => 'Set up two-step sign-in to continue.',
+    'verify' => 'Enter the code from your authenticator app.',
+    'recover' => 'Enter the reset token your admin gave you.',
+    'codes' => 'Save your recovery codes.',
+    _ => 'The server did not sign you in.',
+  };
 }

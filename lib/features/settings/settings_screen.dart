@@ -17,6 +17,7 @@ import 'data_controls.dart';
 import 'interface_settings.dart';
 import 'notification_settings.dart';
 import 'settings_api.dart';
+import 'two_step_settings.dart';
 import 'usage_screen.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
@@ -468,6 +469,7 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                 ),
                 const Divider(),
                 const AccountStatus(),
+                const TwoStepSettings(),
                 const Divider(),
                 const ApiKeys(),
               ],

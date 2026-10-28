@@ -5,6 +5,7 @@ import 'core/auth/session.dart';
 import 'core/theme.dart';
 import 'core/widgets/nexus_logo.dart';
 import 'features/auth/login_screen.dart';
+import 'features/auth/sign_in_steps.dart';
 import 'features/chat/chat_controller.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/phone/app_lock.dart';
@@ -34,6 +35,12 @@ class NexusApp extends ConsumerWidget {
         _ => ThemeMode.system,
       },
       home: switch (session) {
+        // Signed in, but an admin hasn't approved the account yet.
+        AsyncData(value: final s?) when s.user?['role'] == 'pending' =>
+          PendingScreen(
+            signedIn: true,
+            onCheck: () => ref.read(sessionProvider.notifier).recheck(),
+          ),
         AsyncData(value: != null) => const ChatScreen(),
         // Spinner only while restoring a saved session; during sign-in the
         // login screen stays up so what was typed isn't lost.
