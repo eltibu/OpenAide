@@ -411,18 +411,22 @@ class ChannelsApi {
   );
 
   /// Renames a channel; the rest of it stays as it was.
-  Future<void> update(Channel c, {String? name, String? description}) =>
-      client.send(
-        'POST',
-        '${_c(c.id)}/update',
-        body: {
-          'name': name ?? c.name,
-          'description': description ?? c.description,
-          'is_private': c.raw['is_private'],
-          'data': c.raw['data'],
-          'meta': c.raw['meta'],
-        },
-      );
+  Future<void> update(
+    Channel c, {
+    String? name,
+    String? description,
+    bool? isPrivate,
+  }) => client.send(
+    'POST',
+    '${_c(c.id)}/update',
+    body: {
+      'name': name ?? c.name,
+      'description': description ?? c.description,
+      'is_private': isPrivate ?? c.raw['is_private'],
+      'data': c.raw['data'],
+      'meta': c.raw['meta'],
+    },
+  );
 
   Future<void> deleteChannel(String id) =>
       client.send('DELETE', '${_c(id)}/delete');

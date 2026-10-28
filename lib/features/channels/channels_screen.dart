@@ -15,6 +15,7 @@ import '../chat/chat_controller.dart';
 import '../studio/record_notes.dart' show dictate;
 import 'channel_manage.dart';
 import 'encrypted_chat.dart';
+import '../workspace/access_editor.dart' show editAccess;
 import '../settings/settings_screen.dart' show meProvider;
 import 'channels_api.dart';
 
@@ -775,6 +776,19 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
           _channel = await _api.get(_id);
           if (mounted) setState(() {});
           ref.invalidate(channelListProvider);
+        case 'access':
+          await editAccess(
+            context,
+            ref,
+            kind: 'channel',
+            id: _id,
+            name: _channel.name,
+          );
+        case 'visibility':
+          await _api.update(_channel, isPrivate: !_channel.isPrivate);
+          _channel = await _api.get(_id);
+          if (mounted) setState(() {});
+          ref.invalidate(channelListProvider);
         case 'delete':
           final ok = await showDialog<bool>(
             context: context,
@@ -911,6 +925,34 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                           title: Text('Edit channel'),
                         ),
                       ),
+                      // A channel: who may read and write, by group
+                      // and person (the web's Manage).
+                      if (_channel.type.isEmpty)
+                        const PopupMenuItem(
+                          value: 'access',
+                          child: ListTile(
+                            leading: Icon(Icons.lock_person_outlined),
+                            title: Text('Access'),
+                          ),
+                        ),
+                      // A group: open to anyone to join, or members only.
+                      if (_channel.type == 'group')
+                        PopupMenuItem(
+                          value: 'visibility',
+                          child: ListTile(
+                            leading: Icon(
+                              _channel.isPrivate
+                                  ? Icons.lock_outline
+                                  : Icons.public,
+                            ),
+                            title: const Text('Visibility'),
+                            subtitle: Text(
+                              _channel.isPrivate
+                                  ? 'Private: members only'
+                                  : 'Public: anyone can join',
+                            ),
+                          ),
+                        ),
                       const PopupMenuItem(
                         value: 'delete',
                         child: ListTile(

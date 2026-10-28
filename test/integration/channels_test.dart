@@ -121,6 +121,12 @@ void main() {
       await api.pin(c.id, m.id, false);
       expect(await api.pinned(c.id), isEmpty);
 
+      final private = c.isPrivate;
+      await api.update(c, isPrivate: !private);
+      c = await api.get(c.id);
+      expect(c.isPrivate, !private);
+      expect(c.name, 'nexus test');
+
       await api.setMuted(c.id, true);
       expect((await api.get(c.id)).muted, isTrue);
       await api.setMuted(c.id, false);

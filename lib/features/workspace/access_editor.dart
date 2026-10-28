@@ -48,6 +48,7 @@ String accessPath(String kind, String id) => switch (kind) {
   'skill' => '/api/v1/skills/id/$id/access/update',
   'knowledge' => '/api/v1/knowledge/$id/access/update',
   'note' => '/api/v1/notes/$id/access/update',
+  'channel' => '/api/v1/channels/$id/access/update',
   _ => throw ArgumentError(kind),
 };
 
@@ -59,6 +60,7 @@ String itemPath(String kind, String id) => switch (kind) {
   'skill' => '/api/v1/skills/id/$id',
   'knowledge' => '/api/v1/knowledge/$id',
   'note' => '/api/v1/notes/$id',
+  'channel' => '/api/v1/channels/$id',
   _ => throw ArgumentError(kind),
 };
 
