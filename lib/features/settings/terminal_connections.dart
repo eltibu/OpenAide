@@ -29,7 +29,7 @@ Future<String?> checkTerminal(String url, String key) async {
     await TerminalApi(
       OpenWebUiClient(baseUrl: url),
       TerminalServer(id: url, name: url, url: url, key: key.trim()),
-    ).cwd();
+    ).cwd().timeout(const Duration(seconds: 10));
     return null;
   } on ApiException catch (e) {
     return switch (e.statusCode) {
