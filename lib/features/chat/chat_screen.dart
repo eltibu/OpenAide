@@ -2896,7 +2896,6 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
             onTap: () => onChanged(!value),
           )
         : SwitchListTile(
-            dense: true,
             title: Text(p.name),
             subtitle: (p.description ?? '').isEmpty
                 ? null
@@ -2963,7 +2962,6 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                 children: [
                   for (final id in features)
                     SwitchListTile(
-                      dense: true,
                       secondary: Icon(_featureIcon(id)),
                       title: Text(featureLabels[id] ?? id),
                       value: featureOn(id),
