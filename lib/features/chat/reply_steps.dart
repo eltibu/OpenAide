@@ -224,6 +224,19 @@ class _StepState extends State<_Step> {
     final muted = theme.colorScheme.onSurfaceVariant;
     final small = theme.textTheme.bodySmall?.copyWith(color: muted);
     final mono = small?.copyWith(fontFamily: 'monospace', fontSize: 12);
+    String full(String label) => label == 'Result'
+        ? prettyJson((s as ToolPart).result ?? '')
+        : prettyJson((s as ToolPart).arguments);
+    void open(String label) => showBeside(
+      context,
+      'step:${identityHashCode(s)}:$label',
+      (_) => _StepPage(
+        title:
+            '${_capital(toolLabel((s as ToolPart).name))}: '
+            '${label.toLowerCase()}',
+        text: full(label),
+      ),
+    );
     Widget box(String label, String text) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Column(
@@ -239,18 +252,7 @@ class _StepState extends State<_Step> {
               ),
               InkWell(
                 borderRadius: BorderRadius.circular(12),
-                onTap: () => showBeside(
-                  context,
-                  'step:${identityHashCode(s)}:$label',
-                  (_) => _StepPage(
-                    title:
-                        '${_capital(toolLabel((s as ToolPart).name))}: '
-                        '${label.toLowerCase()}',
-                    text: label == 'Result'
-                        ? prettyJson(s.result ?? '')
-                        : prettyJson(s.arguments),
-                  ),
-                ),
+                onTap: () => open(label),
                 child: Padding(
                   padding: const EdgeInsets.all(4),
                   child: Icon(Icons.open_in_new, size: 14, color: muted),
@@ -271,6 +273,12 @@ class _StepState extends State<_Step> {
               child: SelectableText(text, style: mono),
             ),
           ),
+          // Long results are cut short here, as on the web.
+          if (text.length < full(label).length)
+            TextButton(
+              onPressed: () => open(label),
+              child: Text('Show all (${full(label).length} characters)'),
+            ),
         ],
       ),
     );
