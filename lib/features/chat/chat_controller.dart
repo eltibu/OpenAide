@@ -177,6 +177,7 @@ class ChatState {
     this.compareIds = const [],
     this.params = const {},
     this.variables = const {},
+    this.folderId,
     this.revision = 0,
   });
 
@@ -222,6 +223,10 @@ class ChatState {
   /// system prompt asks for, such as a language or a tone).
   final Map<String, dynamic> variables;
 
+  /// A new chat started from a folder's menu: saved in that folder, with
+  /// its system prompt and files.
+  final String? folderId;
+
   /// Bumped on every in-place change to [chat] so listeners rebuild.
   final int revision;
 
@@ -247,6 +252,7 @@ class ChatState {
     List<String>? compareIds,
     Map<String, dynamic>? params,
     Map<String, dynamic>? variables,
+    bool clearFolder = false,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -264,6 +270,7 @@ class ChatState {
     compareIds: compareIds ?? this.compareIds,
     params: params ?? this.params,
     variables: variables ?? this.variables,
+    folderId: clearFolder ? null : folderId,
     revision: revision + 1,
   );
 }
@@ -389,7 +396,7 @@ class ChatController extends Notifier<ChatState> {
 
   /// A new chat; temporary unless asked otherwise when Settings > Interface
   /// says to start chats that way.
-  void newChat({bool? temporary}) {
+  void newChat({bool? temporary, String? folderId}) {
     temporary ??= _uiFlag(
       ref.read(userSettingsProvider).value,
       'temporaryChatByDefault',
@@ -402,6 +409,7 @@ class ChatController extends Notifier<ChatState> {
       attachments: state.attachments,
       temporary: temporary,
       compareIds: state.compareIds,
+      folderId: folderId,
     );
   }
 
@@ -722,6 +730,7 @@ class ChatController extends Notifier<ChatState> {
       queued: const [],
       params: const {},
       variables: const {},
+      clearFolder: true,
     );
     try {
       final chat = await ref.read(clientProvider).chat(id);
@@ -737,10 +746,18 @@ class ChatController extends Notifier<ChatState> {
         },
         loading: false,
       );
+      _markRead(id);
     } catch (e) {
       if (view != _view) return;
       state = state.copyWith(loading: false, error: '$e');
     }
+  }
+
+  /// Clears the chat's unread mark, here and on the web.
+  void _markRead(String id) {
+    try {
+      ref.read(chatSocketProvider).markRead(id);
+    } catch (_) {}
   }
 
   /// Stops the reply on the server; what it wrote so far stays saved.
@@ -1371,6 +1388,7 @@ class ChatController extends Notifier<ChatState> {
             ),
           ),
           'files': ?_documents(chat),
+          if (chat.id.isEmpty && !temporary) 'folder_id': ?state.folderId,
           // Not saved on the server yet: the answers go with the request.
           if ((temporary || chat.id.isEmpty) && state.variables.isNotEmpty)
             'chat_variables': state.variables,
@@ -1432,6 +1450,7 @@ class ChatController extends Notifier<ChatState> {
         final saved = await client.chat(chat.id);
         if (view != _view) return;
         state = state.copyWith(chat: saved);
+        _markRead(chat.id);
         refreshChatLists(ref.invalidate);
       } catch (_) {}
     }

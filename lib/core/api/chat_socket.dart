@@ -67,6 +67,13 @@ class ChatSocket {
     'auth': {'token': _token},
   });
 
+  /// Tells the server you have read chat [chatId] (clears its unread dot
+  /// here and on the web).
+  void markRead(String chatId) => _socket.emit('events:chat', {
+    'chat_id': chatId,
+    'data': {'type': 'last_read_at'},
+  });
+
   /// The connection's session id, or null if it can't connect in [timeout].
   /// Replies still run and are saved without it; only live text is lost.
   Future<String?> ready({Duration timeout = const Duration(seconds: 3)}) async {

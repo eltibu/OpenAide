@@ -1,5 +1,8 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -222,14 +225,19 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
 
   bool _open(String section) => !ref.watch(_foldedProvider).contains(section);
 
-  _Section _section(String name, {VoidCallback? onAdd, String? addTip}) =>
-      _Section(
-        name,
-        open: _open(name),
-        onToggle: () => ref.read(_foldedProvider.notifier).toggle(name),
-        onAdd: onAdd,
-        addTip: addTip,
-      );
+  _Section _section(
+    String name, {
+    VoidCallback? onAdd,
+    String? addTip,
+    IconData addIcon = Icons.add,
+  }) => _Section(
+    name,
+    open: _open(name),
+    onToggle: () => ref.read(_foldedProvider.notifier).toggle(name),
+    onAdd: onAdd,
+    addTip: addTip,
+    addIcon: addIcon,
+  );
 
   List<Widget> _results(AsyncValue<List<ChatSummary>> found) => found.when(
     data: (list) => list.isEmpty
@@ -327,8 +335,27 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
 
   List<Widget> _chats() {
     final pages = ref.watch(chatPagesProvider);
+    final unread = (ref.watch(chatListProvider).value ?? const []).any(
+      (c) => c.unread,
+    );
     return [
-      _section('Chats'),
+      _section(
+        'Chats',
+        addTip: 'Mark all as read',
+        addIcon: Icons.done_all,
+        onAdd: unread
+            ? () async {
+                try {
+                  await ref
+                      .read(clientProvider)
+                      .send('POST', '/api/v1/chats/read');
+                } catch (e) {
+                  if (mounted) _showError(context, e);
+                }
+                refreshChatLists(ref.invalidate);
+              }
+            : null,
+      ),
       if (_open('Chats'))
         ...ref
             .watch(chatListProvider)
@@ -459,12 +486,14 @@ class _Section extends StatelessWidget {
     required this.onToggle,
     this.onAdd,
     this.addTip,
+    this.addIcon = Icons.add,
   });
   final String name;
   final bool open;
   final VoidCallback onToggle;
   final VoidCallback? onAdd;
   final String? addTip;
+  final IconData addIcon;
 
   @override
   Widget build(BuildContext context) {
@@ -496,7 +525,7 @@ class _Section extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   iconSize: 18,
                   color: muted,
-                  icon: const Icon(Icons.add),
+                  icon: Icon(addIcon),
                   onPressed: onAdd,
                 ),
             ],
@@ -568,17 +597,31 @@ class _FolderTileState extends ConsumerState<FolderTile> {
       dense: true,
       shape: const Border(),
       leading: Icon(_open ? Icons.folder_open : Icons.folder_outlined),
-      title: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+          if (f.unread > 0) ...[
+            const SizedBox(width: 6),
+            Badge(label: Text('${f.unread}')),
+          ],
+        ],
+      ),
       onExpansionChanged: (open) => setState(() => _open = open),
       trailing: PopupMenuButton<String>(
         tooltip: 'Folder options',
         icon: const Icon(Icons.more_vert, size: 20),
         onSelected: (action) => _folderAction(context, action),
-        itemBuilder: (_) => const [
-          PopupMenuItem(value: 'edit', child: Text('Folder settings')),
-          PopupMenuItem(value: 'rename', child: Text('Rename')),
-          PopupMenuItem(value: 'sub', child: Text('New folder inside')),
-          PopupMenuItem(value: 'delete', child: Text('Delete folder')),
+        itemBuilder: (_) => [
+          const PopupMenuItem(value: 'new', child: Text('New Chat')),
+          if (f.unread > 0)
+            const PopupMenuItem(value: 'read', child: Text('Mark all as read')),
+          const PopupMenuItem(value: 'edit', child: Text('Folder settings')),
+          const PopupMenuItem(value: 'rename', child: Text('Rename')),
+          const PopupMenuItem(value: 'sub', child: Text('New folder inside')),
+          const PopupMenuItem(value: 'export', child: Text('Export')),
+          const PopupMenuItem(value: 'delete', child: Text('Delete folder')),
         ],
       ),
       childrenPadding: const EdgeInsets.only(left: 12),
@@ -610,6 +653,28 @@ class _FolderTileState extends ConsumerState<FolderTile> {
     final f = widget.folder;
     try {
       switch (action) {
+        case 'new':
+          ref
+              .read(chatControllerProvider.notifier)
+              .newChat(temporary: false, folderId: f.id);
+          closeDrawer(context);
+          return;
+        case 'read':
+          await client.send('POST', '/api/v1/folders/${f.id}/read');
+        case 'export':
+          final chats = await client.send(
+            'GET',
+            '/api/v1/chats/folder/${f.id}',
+          );
+          final name =
+              'folder-${f.name}-export-${DateTime.now().millisecondsSinceEpoch}'
+              '.json';
+          await FilePicker.saveFile(
+            fileName: name,
+            bytes: Uint8List.fromList(utf8.encode(jsonEncode(chats))),
+            mimeType: 'application/json',
+          );
+          return;
         case 'edit':
           await editFolder(context, f.id);
           return;
@@ -689,7 +754,17 @@ class ChatTile extends ConsumerWidget {
       selectedColor: scheme.onSurface,
       selectedTileColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      title: Text(chat.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+      title: Text(
+        chat.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: chat.unread && chat.id != current
+            ? const TextStyle(fontWeight: FontWeight.w600)
+            : null,
+      ),
+      trailing: chat.unread && chat.id != current
+          ? const Icon(Icons.circle, size: 8, color: NexusColors.accent)
+          : null,
       onTap: () {
         closeDrawer(context);
         ref.read(chatControllerProvider.notifier).open(chat.id);
@@ -730,6 +805,8 @@ class ChatTile extends ConsumerWidget {
               ),
               ('move', Icons.drive_file_move_outline, 'Move to folder'),
               ('tags', Icons.sell_outlined, 'Tags'),
+              if (!chat.unread)
+                ('unread', Icons.mark_chat_unread_outlined, 'Mark as unread'),
               ('share', Icons.ios_share, 'Share'),
               ('export', Icons.download_outlined, 'Export'),
               ('clone', Icons.copy_all_outlined, 'Clone'),
@@ -750,6 +827,11 @@ class ChatTile extends ConsumerWidget {
     final controller = ref.read(chatControllerProvider.notifier);
     try {
       switch (action) {
+        case 'unread':
+          await ref
+              .read(clientProvider)
+              .send('POST', '/api/v1/chats/${chat.id}/unread');
+          refreshChatLists(ref.invalidate);
         case 'rename':
           final title = await _askText(context, 'Rename chat', chat.title);
           if (title != null) await controller.renameChat(chat.id, title);

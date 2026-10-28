@@ -313,6 +313,14 @@ class _EmptyState extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final name = ref.watch(sessionProvider).value?.userName.split(' ').first;
+    final folderId = ref.watch(
+      chatControllerProvider.select((s) => s.folderId),
+    );
+    final folder = folderId == null
+        ? null
+        : (ref.watch(foldersProvider).value ?? const <Folder>[])
+              .where((f) => f.id == folderId)
+              .firstOrNull;
     final style = Theme.of(context).textTheme.headlineSmall
         ?.copyWith(fontFamily: 'serif', fontWeight: FontWeight.w400);
     // Scrolls when the keyboard leaves too little room.
@@ -331,6 +339,17 @@ class _EmptyState extends ConsumerWidget {
               textAlign: TextAlign.center,
               style: style,
             ),
+            // Started from a folder's menu: saved there, with its prompt.
+            if (folder != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Chip(
+                  avatar: const Icon(Icons.folder_outlined, size: 18),
+                  label: Text(folder.name),
+                  onDeleted: () =>
+                      ref.read(chatControllerProvider.notifier).newChat(),
+                ),
+              ),
             const _Suggestions(),
           ],
         ),

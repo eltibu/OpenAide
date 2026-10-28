@@ -399,30 +399,53 @@ class Chat {
 }
 
 class ChatSummary {
-  ChatSummary({required this.id, required this.title, required this.updatedAt});
+  ChatSummary({
+    required this.id,
+    required this.title,
+    required this.updatedAt,
+    this.unread = false,
+  });
 
-  factory ChatSummary.fromJson(Map<String, dynamic> json) => ChatSummary(
-    id: json['id'] as String,
-    title: json['title'] as String? ?? 'New Chat',
-    updatedAt: DateTime.fromMillisecondsSinceEpoch(
-      ((json['updated_at'] as num?)?.toInt() ?? 0) * 1000,
-    ),
-  );
+  factory ChatSummary.fromJson(Map<String, dynamic> json) {
+    final updated = (json['updated_at'] as num?)?.toInt() ?? 0;
+    return ChatSummary(
+      id: json['id'] as String,
+      title: json['title'] as String? ?? 'New Chat',
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(updated * 1000),
+      // As the server counts it: changed since you last read it. Servers
+      // that don't track reading leave the key out.
+      unread:
+          json.containsKey('last_read_at') &&
+          updated > ((json['last_read_at'] as num?)?.toInt() ?? 0),
+    );
+  }
 
   final String id;
   final String title;
   final DateTime updatedAt;
+
+  /// New replies since you last opened it.
+  final bool unread;
 }
 
 /// A chat folder; folders nest through [parentId].
 class Folder {
-  const Folder({required this.id, required this.name, this.parentId});
+  const Folder({
+    required this.id,
+    required this.name,
+    this.parentId,
+    this.unread = 0,
+  });
 
   factory Folder.fromJson(Map<String, dynamic> json) => Folder(
     id: json['id'] as String,
     name: json['name'] as String? ?? '',
     parentId: json['parent_id'] as String?,
+    unread: (json['unread_count'] as num?)?.toInt() ?? 0,
   );
+
+  /// Unread chats in it and the folders inside it.
+  final int unread;
 
   final String id;
   final String name;
