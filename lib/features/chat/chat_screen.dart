@@ -33,6 +33,7 @@ import 'chat_panel.dart';
 import 'emoji.dart';
 import 'formatting_toolbar.dart';
 import 'embeds_view.dart';
+import 'folder_home.dart';
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
 import 'reply_actions.dart';
@@ -395,17 +396,8 @@ class _EmptyState extends ConsumerWidget {
               style: style,
             ),
             // Started from a folder's menu: saved there, with its prompt.
-            if (folder != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Chip(
-                  avatar: const Icon(Icons.folder_outlined, size: 18),
-                  label: Text(folder.name),
-                  onDeleted: () =>
-                      ref.read(chatControllerProvider.notifier).newChat(),
-                ),
-              ),
-            const _Suggestions(),
+            if (folder == null) const _Suggestions(),
+            if (folder != null) FolderHome(folder: folder),
           ],
         ),
       ),
