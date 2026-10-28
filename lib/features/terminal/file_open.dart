@@ -205,14 +205,17 @@ MarkdownGenerator withFileTaps(
 );
 
 /// [base] whose links open files in Files, and the web as before.
+/// [onLink] goes first and says whether it opened the link itself.
 MarkdownConfig withFileLinks(
   MarkdownConfig base,
-  void Function(FileRef file) onFile,
-) => base.copy(
+  void Function(FileRef file) onFile, {
+  bool Function(String url)? onLink,
+}) => base.copy(
   configs: [
     LinkConfig(
       style: base.a.style,
       onTap: (url) {
+        if (onLink?.call(url) == true) return;
         final file = fileRefIn(url);
         if (file != null) {
           onFile(file);

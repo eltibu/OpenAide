@@ -50,6 +50,8 @@ import 'tool_approval.dart';
 import 'voice_note.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
 import '../settings/tool_servers.dart' show chatToolsProvider;
+import '../notes/notes_api.dart' show NotesApi, noteIdIn;
+import '../notes/notes_screen.dart' show NoteEditorScreen;
 import '../admin/ollama_pulls.dart';
 import '../admin/connections_screen.dart' show ConnectionsScreen;
 import '../../core/models/model_info.dart';
@@ -592,6 +594,24 @@ class _MessageList extends ConsumerWidget {
         },
       ),
       openFile,
+      // A link to one of the server's notes opens it here, as on the web.
+      onLink: (url) {
+        final id = noteIdIn(
+          url,
+          ref.read(sessionProvider).value?.serverUrl ?? '',
+        );
+        if (id == null) return false;
+        Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => NoteEditorScreen(
+              api: NotesApi(ref.read(clientProvider)),
+              id: id,
+            ),
+          ),
+        );
+        return true;
+      },
     );
     final generator = withFileTaps(replyMarkdownGenerator(), openFile);
     final body = Theme.of(context).textTheme.bodyLarge;

@@ -11,6 +11,22 @@ DateTime fromServerTime(num t) {
   return DateTime.fromMillisecondsSinceEpoch((t * 1000).toInt());
 }
 
+/// The note a link points at: the server's own `/notes/{id}` page (or that
+/// path alone), else null.
+String? noteIdIn(String url, String serverUrl) {
+  final server = Uri.tryParse(serverUrl);
+  final link = Uri.tryParse(url);
+  if (server == null || link == null) return null;
+  final at = server.resolveUri(link);
+  if (link.hasScheme && at.origin != server.origin) return null;
+  var path = at.path;
+  final base = server.path.replaceAll(RegExp(r'/+$'), '');
+  if (base.isNotEmpty && path.startsWith(base)) {
+    path = path.substring(base.length);
+  }
+  return RegExp(r'^/notes/([^/]+)$').firstMatch(path)?.group(1);
+}
+
 class Note {
   const Note({
     required this.id,
