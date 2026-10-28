@@ -7,6 +7,7 @@ import 'core/widgets/nexus_logo.dart';
 import 'features/auth/login_screen.dart';
 import 'features/chat/chat_controller.dart';
 import 'features/chat/chat_screen.dart';
+import 'features/phone/app_lock.dart';
 
 void main() {
   runApp(const ProviderScope(child: NexusApp()));
@@ -21,6 +22,8 @@ class NexusApp extends ConsumerWidget {
     return MaterialApp(
       title: 'Nexus Assistant',
       debugShowCheckedModeBanner: false,
+      // Settings > Phone and assistant > App lock.
+      builder: (context, child) => AppLockGate(child: child!),
       theme: nexusTheme(Brightness.light),
       darkTheme: nexusTheme(Brightness.dark),
       // Settings > Theme, kept on the server with the rest.

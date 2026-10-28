@@ -18,6 +18,7 @@ import java.io.File
 class MainActivity : FlutterActivity() {
     private var voice: VoiceAudio? = null
     private var notifier: ReplyNotifier? = null
+    private var launches: PhoneLaunch? = null
     private var speech: MediaPlayer? = null
     private var speechDone: MethodChannel.Result? = null
 
@@ -77,6 +78,12 @@ class MainActivity : FlutterActivity() {
             it.setMethodCallHandler(replies)
         }
 
+        // Assistant, Share, shortcuts, tile and app lock, see PhoneLaunch.
+        val phone = launches ?: PhoneLaunch(this).also { launches = it }
+        phone.channel = MethodChannel(messenger, "nexus/launch").also {
+            it.setMethodCallHandler(phone)
+        }
+
         // In-app updates: Dart downloads the APK to [apkPath], then [install]
         // hands it to Android's installer.
         MethodChannel(messenger, "nexus/updates")
@@ -100,11 +107,21 @@ class MainActivity : FlutterActivity() {
         super.onCreate(savedInstanceState)
         // A cold start from a reply notification: Dart asks for the chat.
         notifier?.rememberInitial(intent)
+        (launches ?: PhoneLaunch(this).also { launches = it }).rememberInitial(intent)
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         notifier?.handleIntent(intent)
+        launches?.handleIntent(intent)
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PhoneLaunch.UNLOCK_REQUEST) {
+            launches?.onUnlockResult(resultCode == RESULT_OK)
+        }
     }
 
     override fun onRequestPermissionsResult(

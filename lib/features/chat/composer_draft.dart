@@ -33,3 +33,16 @@ String insertedText(String before, String after) {
   }
   return after.substring(start, after.length - end);
 }
+
+/// Asks the chat box to start dictating (the phone's assistant button, or
+/// the Dictate shortcut). Each request counts up.
+class DictateRequest extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void start() => state++;
+}
+
+final dictateRequestProvider = NotifierProvider<DictateRequest, int>(
+  DictateRequest.new,
+);

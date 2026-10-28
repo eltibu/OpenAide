@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_new">New chat</string>
+    <string name="shortcut_call">Voice call</string>
+    <string name="shortcut_dictate">Dictate</string>
+    <string name="ask_nexus">Ask Nexus</string>
+</resources>

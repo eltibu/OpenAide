@@ -20,6 +20,7 @@ import 'artifacts_view.dart';
 import '../workspace/prompts_api.dart' show Prompt;
 import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
+import '../phone/phone_launch.dart';
 import 'attachments.dart';
 import 'autocomplete.dart';
 import 'attach_more.dart';
@@ -74,6 +75,52 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       Navigator.of(context).popUntil((r) => r.isFirst);
       ref.read(chatControllerProvider.notifier).open(id);
     });
+    // The phone's assistant button, Share, shortcuts and the tile.
+    listenForLaunches(_launched);
+  }
+
+  Future<void> _launched(PhoneLaunch launch) async {
+    Map? ui;
+    try {
+      ui =
+          (await ref
+                  .read(userSettingsProvider.future)
+                  .timeout(const Duration(seconds: 3)))['ui']
+              as Map?;
+    } catch (_) {
+      // Offline or slow: the assistant button starts a call.
+    }
+    if (!mounted) return;
+    Navigator.of(context).popUntil((r) => r.isFirst);
+    final chat = ref.read(chatControllerProvider.notifier);
+    final action = launchAction(launch, ui);
+    chat.newChat();
+    switch (action) {
+      case 'call':
+        await Navigator.push(
+          context,
+          MaterialPageRoute<void>(builder: (_) => const CallScreen()),
+        );
+      case 'dictate':
+        ref.read(dictateRequestProvider.notifier).start();
+      case 'share':
+        if (launch.text.trim().isNotEmpty) {
+          ref.read(composerDraftProvider.notifier).put(launch.text.trim());
+        }
+        for (final path in launch.files) {
+          final file = await readShared(path);
+          if (file == null) continue;
+          try {
+            await chat.attach(file.$1, file.$2);
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Couldn't attach ${file.$2}: $e")),
+              );
+            }
+          }
+        }
+    }
   }
 
   @override
@@ -987,6 +1034,9 @@ class _ComposerState extends ConsumerState<_Composer> {
   @override
   void initState() {
     super.initState();
+    ref.listenManual(dictateRequestProvider, (_, _) {
+      if (mounted && !_recording) setState(() => _recording = true);
+    });
     ref.listenManual(composerDraftProvider, (_, text) {
       if (text == null) return;
       _fill(text);

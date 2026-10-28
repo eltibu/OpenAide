@@ -1,3 +1,5 @@
+import '../phone/phone_settings.dart';
+
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -172,6 +174,14 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Notifications'),
             subtitle: const Text('When a reply is ready, and webhooks'),
             onTap: () => open(const NotificationSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.phone_android),
+            title: const Text('Phone and assistant'),
+            subtitle: const Text(
+              'Default assistant, shortcuts, Share, app lock',
+            ),
+            onTap: () => open(const PhoneSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.storage_outlined),
