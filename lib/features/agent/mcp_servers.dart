@@ -69,9 +69,13 @@ class McpPool {
       final off = {...?(s['off_tools'] as List?)?.map((e) => '$e')};
       for (final t in r) {
         if (off.contains(t.name)) continue;
-        var name = toolName('${slug}__${t.name}');
-        while (!used.add(name)) {
-          name = toolName('${name}_');
+        final base = toolName('${slug}__${t.name}');
+        var name = base;
+        // A number on the end, with room kept for it within 64 letters.
+        for (var n = 2; !used.add(name); n++) {
+          final end = '_$n';
+          name =
+              '${base.length + end.length > 64 ? base.substring(0, 64 - end.length) : base}$end';
         }
         out.add(
           AgentTool(

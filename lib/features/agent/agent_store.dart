@@ -118,7 +118,20 @@ class AgentStore extends AsyncNotifier<AgentConfig> {
   Future<AgentConfig> current() async => state.value ?? await future;
 
   /// Changes the saved settings with [change] and saves them.
-  Future<void> edit(void Function(Map<String, dynamic> data) change) async {
+  /// One change at a time, so two quick edits can't both start from the
+  /// same settings or write the same .tmp file at once.
+  Future<void> _queue = Future.value();
+
+  Future<void> _inTurn(Future<void> Function() step) {
+    final next = _queue.then((_) => step());
+    _queue = next.catchError((_) {});
+    return next;
+  }
+
+  Future<void> edit(void Function(Map<String, dynamic> data) change) =>
+      _inTurn(() => _edit(change));
+
+  Future<void> _edit(void Function(Map<String, dynamic> data) change) async {
     final now = await current();
     final data = jsonDecode(jsonEncode(now.data)) as Map<String, dynamic>;
     change(data);
@@ -133,6 +146,10 @@ class AgentStore extends AsyncNotifier<AgentConfig> {
 
   /// Changes the keystore part with [change] and saves it.
   Future<void> editSecrets(
+    void Function(Map<String, dynamic> secrets) change,
+  ) => _inTurn(() => _editSecrets(change));
+
+  Future<void> _editSecrets(
     void Function(Map<String, dynamic> secrets) change,
   ) async {
     final now = await current();
