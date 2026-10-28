@@ -1,3 +1,4 @@
+import 'arena_screen.dart';
 import 'events_screen.dart';
 
 import 'dart:convert';
@@ -96,6 +97,12 @@ class AdminScreen extends StatelessWidget {
             title: const Text('Leaderboard and feedback'),
             subtitle: const Text('How people rate the models'),
             onTap: () => open(const EvaluationsScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.casino_outlined),
+            title: const Text('Evaluations'),
+            subtitle: const Text('Arena models for blind comparisons'),
+            onTap: () => open(const ArenaScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.toggle_on_outlined),

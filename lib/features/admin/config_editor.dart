@@ -474,12 +474,6 @@ final adminConfigSections = <ConfigSection>[
     save: '/api/v1/configs/subagents',
     help: 'Models handing parts of a task to helpers.',
   ),
-  const ConfigSection(
-    title: 'Evaluations',
-    read: '/api/v1/evaluations/config',
-    save: '/api/v1/evaluations/config',
-    help: 'Arena models for blind comparisons.',
-  ),
 ];
 
 Object? _deepCopy(Object? v) => v == null ? null : jsonDecode(jsonEncode(v));
