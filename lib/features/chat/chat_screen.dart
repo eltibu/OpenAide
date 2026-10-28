@@ -52,6 +52,7 @@ import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
 import '../admin/ollama_pulls.dart';
 import '../admin/connections_screen.dart' show ConnectionsScreen;
 import '../../core/models/model_info.dart';
+import 'model_avatar.dart';
 import 'model_pins.dart';
 import 'chat_variables.dart';
 import 'compare_text.dart';
@@ -395,6 +396,22 @@ class _EmptyState extends ConsumerWidget {
               textAlign: TextAlign.center,
               style: style,
             ),
+            // As the web: the model's description (or the server's own
+            // line for this screen) under the greeting.
+            if (placeholderDescription(ref) case final about?)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Text(
+                    about,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: context.nexus.muted),
+                  ),
+                ),
+              ),
             // Started from a folder's menu: saved there, with its prompt.
             if (folder == null) const _Suggestions(),
             if (folder != null) FolderHome(folder: folder),
@@ -403,6 +420,25 @@ class _EmptyState extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// What the new-chat screen says under the greeting, as the web: the
+/// server's placeholder text, else the chosen model's description.
+String? placeholderDescription(WidgetRef ref) {
+  final config = ref.watch(serverConfigProvider).value;
+  final own =
+      ((config?['license_metadata'] as Map?)?['chat_placeholder_description']
+              as String?)
+          ?.trim();
+  if (own != null && own.isNotEmpty) return own;
+  final at = ref.watch(atModelProvider);
+  final id = at ?? ref.watch(chatControllerProvider.select((s) => s.modelId));
+  final about = (ref.watch(modelsProvider).value ?? const [])
+      .where((m) => m.id == id)
+      .firstOrNull
+      ?.description
+      ?.trim();
+  return about == null || about.isEmpty ? null : about;
 }
 
 bool insertSuggestion(WidgetRef ref) =>
@@ -2140,6 +2176,7 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
                     ),
                   for (final m in list)
                     ListTile(
+                      leading: ModelAvatar(model: m),
                       title: Text(m.name),
                       subtitle: m.description == null
                           ? null
