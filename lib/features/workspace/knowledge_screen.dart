@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../studio/record_notes.dart' show dictate;
 import 'access_editor.dart' show editAccess;
 import 'knowledge_api.dart';
 import 'owner_filter.dart';
@@ -332,6 +333,19 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
           appBar: AppBar(
             title: const Text('Add text content'),
             actions: [
+              // Speak the text in, as the web's mic button here.
+              IconButton(
+                tooltip: 'Dictate',
+                icon: const Icon(Icons.mic_none),
+                onPressed: () async {
+                  final said = await dictate(page, ref.read(clientProvider));
+                  if (said == null || said.isEmpty) return;
+                  final t = text.text;
+                  text.text = t.isEmpty || t.endsWith('\n') || t.endsWith(' ')
+                      ? '$t$said'
+                      : '$t $said';
+                },
+              ),
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilledButton(

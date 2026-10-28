@@ -9,6 +9,7 @@ import '../notes/notes_api.dart';
 import 'chat_controller.dart';
 import 'composer_draft.dart';
 import 'file_details.dart' show FileDetailsScreen;
+import 'output_editor.dart';
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
 
@@ -380,6 +381,16 @@ Future<void> editReply(
   WidgetRef ref,
   ChatMessage reply,
 ) async {
+  // A reply with structured output edits item by item, as on the web.
+  final output = reply.extra['output'];
+  if (output is List && output.isNotEmpty) {
+    final edit = await editOutput(context, output);
+    if (edit == null) return;
+    await ref
+        .read(chatControllerProvider.notifier)
+        .editReplyOutput(reply, edit.output, asCopy: edit.asCopy);
+    return;
+  }
   final text = TextEditingController(text: reply.content);
   final choice = await showDialog<String>(
     context: context,

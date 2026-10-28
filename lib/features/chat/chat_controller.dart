@@ -1205,6 +1205,43 @@ class ChatController extends Notifier<ChatState> {
     }
   }
 
+  /// Saves a reply's edited structured [output] (its text, thoughts and
+  /// tool calls), in place or with [asCopy] as another version; its text
+  /// follows from the output, as on the web.
+  Future<void> editReplyOutput(
+    ChatMessage reply,
+    List output, {
+    bool asCopy = false,
+  }) async {
+    final chat = state.chat;
+    if (chat == null || chat.id.isEmpty || state.streaming) return;
+    final text = ChatMessage.outputText(output);
+    try {
+      if (asCopy) {
+        chat.append(
+          ChatMessage.fromJson({
+              ...reply.toJson(),
+              'id': _uuid.v4(),
+              'content': text,
+              'output': output,
+              'childrenIds': <String>[],
+              'timestamp': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+            })
+            ..extra.remove('annotation')
+            ..extra.remove('feedbackId')
+            ..extra.remove('files'),
+        );
+      } else {
+        reply.content = text;
+        reply.extra['output'] = output;
+      }
+      state = state.copyWith(chat: chat);
+      await ref.read(clientProvider).saveChat(chat);
+    } catch (e) {
+      state = state.copyWith(error: "Couldn't save the change: $e");
+    }
+  }
+
   /// Deletes [message] and the answers right under it, as the web does.
   Future<void> deleteMessage(ChatMessage message) async {
     final chat = state.chat;
