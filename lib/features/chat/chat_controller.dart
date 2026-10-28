@@ -6,10 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderOrFamily;
 import 'package:uuid/uuid.dart';
 
+import '../../core/ai/ai_providers.dart' show isProviderModel;
 import '../../core/api/openwebui_client.dart' show ApiException;
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
+import '../providers/ai_keys.dart';
+import '../providers/provider_chat.dart';
 import '../studio/listen.dart' show transcribe;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../voice/realtime_call.dart' show BridgeSubmission;
@@ -30,18 +33,23 @@ const _uuid = Uuid();
 /// Models come from the server every time, so anything added in Open WebUI
 /// (new connections, custom models, presets) shows up without an app update.
 /// Models from your own connections (Settings > Connections) join them.
+/// Models from AI providers you signed in to on the phone (Settings > AI
+/// providers) come last.
 final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
   final direct = ref
       .watch(directModelsProvider.future)
       .catchError((_) => const <ModelInfo>[]);
+  final providers = ref
+      .watch(providerModelsProvider.future)
+      .catchError((_) => const <ModelInfo>[]);
   final server = await ref.watch(clientProvider).models();
   final mine = await direct;
-  if (mine.isEmpty) return server;
   final ids = {for (final m in mine) m.id};
   return [
     for (final m in server)
       if (!ids.contains(m.id)) m,
     ...mine,
+    ...await providers,
   ];
 });
 
@@ -1375,7 +1383,8 @@ class ChatController extends Notifier<ChatState> {
   }) async {
     final client = ref.read(clientProvider);
     final socket = ref.read(chatSocketProvider);
-    if (continuing != null || redoOf != null) also = const [];
+    final direct = isProviderModel(modelId);
+    if (continuing != null || redoOf != null || direct) also = const [];
     // What the model reads: the conversation up to the new reply; when
     // continuing, the reply so far; with a hint, the old answer too.
     final history = [
@@ -1426,6 +1435,12 @@ class ChatController extends Notifier<ChatState> {
       clearError: true,
       clearStatus: true,
     );
+
+    // A model from Settings > AI providers: the phone asks it directly.
+    if (direct) {
+      await _directReply(chat, run, history, view, continuing: continuing);
+      return;
+    }
 
     final sub = socket.events
         .where((e) => runs.containsKey(e['message_id']))
@@ -1606,6 +1621,105 @@ class ChatController extends Notifier<ChatState> {
     if (!run.stopped && state.error == null && pendingCall(saved) == null) {
       unawaited(sendQueued());
     }
+  }
+
+  /// A reply from a provider's model, streamed by the phone and then saved
+  /// with the chat on the server, so it's in the chat list everywhere.
+  Future<void> _directReply(
+    Chat chat,
+    _Run run,
+    List<ChatMessage> history,
+    int view, {
+    ChatMessage? continuing,
+  }) async {
+    final reply = run.reply;
+    final client = ref.read(clientProvider);
+    final settings = await _optional(userSettingsProvider);
+    final me = ref.read(sessionProvider).value?.user;
+    final system =
+        '${state.params['system'] ?? (settings?['ui'] as Map?)?['system'] ?? ''}'
+            .trim();
+    var thinking = '';
+    String? failed;
+    try {
+      final stream = streamDirectReply(
+        keys: await ref.read(aiKeysProvider.future),
+        modelId: reply.model ?? '',
+        history: [
+          for (final m in history)
+            if (m.id != reply.id || continuing != null) m,
+        ],
+        system: system.isEmpty
+            ? null
+            : fillSystemVariables(
+                system,
+                userName: me?['name'] as String?,
+                userEmail: me?['email'] as String?,
+              ),
+        params: state.params,
+        imageBytes: (a) => client.getBytes('/api/v1/files/${a.fileId}/content'),
+      );
+      final sub = stream.listen((c) {
+        if (run.finished.isCompleted) return;
+        reply.content += c.text;
+        thinking += c.thinking;
+        if (thinking.isNotEmpty) {
+          reply.extra['output'] = directOutput(
+            reply.content,
+            thinking,
+            done: false,
+          );
+        }
+        if (view == _view) state = state.copyWith(chat: chat);
+        _speak(run, reply.content);
+      });
+      await Future.any([sub.asFuture<void>(), run.finished.future]);
+      await sub.cancel();
+    } catch (e) {
+      failed = '$e';
+      reply.extra['error'] = {'content': failed};
+    } finally {
+      run.finish();
+      if (identical(_run, run)) _run = null;
+    }
+    if (thinking.isNotEmpty) {
+      reply.extra['output'] = directOutput(reply.content, thinking, done: true);
+    }
+    reply.extra['done'] = true;
+    if (!state.temporary) {
+      try {
+        if (chat.id.isEmpty) {
+          final made = await client.createChat(chat);
+          chat.id = made.id;
+          if (state.params.isNotEmpty) {
+            unawaited(
+              client.saveChatParams(chat.id, state.params).catchError((_) {}),
+            );
+          }
+        } else {
+          await client.saveChat(chat);
+        }
+        refreshChatLists(ref.invalidate);
+      } catch (_) {
+        // Not saved on the server; the reply still shows here.
+      }
+    }
+    if (view != _view) return;
+    if (!run.stopped && failed == null) {
+      _speak(run, reply.content, done: true);
+      unawaited(_afterDone(reply.content, chat.id, chat.title));
+    }
+    state = state.copyWith(
+      chat: chat,
+      streaming: false,
+      clearStatus: true,
+      error:
+          failed ??
+          (reply.content.isEmpty && !run.stopped
+              ? 'No reply came back. Tap Retry to ask again.'
+              : null),
+    );
+    if (!run.stopped && state.error == null) unawaited(sendQueued());
   }
 
   void _onEvent(Chat chat, _Run run, Map<String, dynamic> event) {
