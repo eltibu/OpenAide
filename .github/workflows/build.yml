@@ -21,8 +21,9 @@ on:
 
 # One runner (Joel's PC) builds everything, about 30 minutes a build. A new
 # push to a branch replaces that branch's older queued or running build.
+# A public release has its own group, so a push never cancels it.
 concurrency:
-  group: build-${{ github.head_ref || github.ref_name }}
+  group: build-${{ github.head_ref || github.ref_name }}${{ inputs.public_release && '-public' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -30,8 +31,9 @@ jobs:
     # Joel's PC (WSL Ubuntu) runs the builds: GitHub-hosted minutes for this
     # private repo are blocked by billing. It has the Android SDK and JDK 17.
     runs-on: [self-hosted, nexus-build]
-    # Never run a stranger's code on Joel's PC: pull requests from forks
-    # don't build here.
+    # Never build pull requests from forks: the runner is Joel's own PC, and
+    # a fork's pull request could run any code on it. Only branches of this
+    # repo (pushed by people with write access) are built.
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
       contents: write
@@ -39,6 +41,10 @@ jobs:
     env:
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       RELEASE_KEYSTORE_BASE64: ${{ secrets.NEXUS_RELEASE_KEYSTORE_BASE64 }}
+      # A public repo's releases need no token, and an APK anyone can
+      # download must not carry one. Once the repo is public, builds leave
+      # the token out by themselves.
+      BUILT_IN_TOKEN: ${{ github.event.repository.private && !inputs.tester_build && !inputs.public_release }}
     steps:
       - name: Public releases come from the default branch
         if: ${{ inputs.public_release && github.ref_name != github.event.repository.default_branch }}
@@ -50,7 +56,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: subosito/flutter-action@v2
+      # Pinned to a commit (v2.23.0): a moved tag can't change what runs here.
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           channel: stable
           cache: true
@@ -142,10 +149,8 @@ jobs:
       # checks API without the raw log.
       # The built-in token must be able to see this repo's releases, or the
       # app can never find an update. Never prints the token.
-      # Only while the repo is private: public releases are readable without
-      # a token, so no build carries one once the repo is public.
       - name: Check the update token
-        if: ${{ github.event.repository.private && !inputs.tester_build && !inputs.public_release }}
+        if: ${{ env.BUILT_IN_TOKEN == 'true' }}
         env:
           NEXUS_UPDATE_TOKEN: ${{ secrets.NEXUS_UPDATE_TOKEN }}
         run: |
@@ -181,7 +186,7 @@ jobs:
           # never asks for one while the repo is private. Left out of tester
           # and public builds, and of every build once the repo is public:
           # anyone holding the APK can read it.
-          NEXUS_UPDATE_TOKEN: ${{ github.event.repository.private && !inputs.tester_build && !inputs.public_release && secrets.NEXUS_UPDATE_TOKEN || '' }}
+          NEXUS_UPDATE_TOKEN: ${{ env.BUILT_IN_TOKEN == 'true' && secrets.NEXUS_UPDATE_TOKEN || '' }}
         run: |
           set -o pipefail
           flutter build apk --release \

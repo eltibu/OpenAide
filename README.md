@@ -68,6 +68,10 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how the app is put together
 
 Issues and pull requests are welcome. Please describe what you changed and how you tested it. Pull requests from forks don't run the build workflow automatically.
 
+## Privacy and security
+
+See [PRIVACY.md](PRIVACY.md) for what the app stores and sends, and [SECURITY.md](SECURITY.md) to report a vulnerability.
+
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE). Third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
