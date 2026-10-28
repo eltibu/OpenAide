@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
+import '../chat/file_details.dart' show FileDetailsScreen;
 import 'settings_screen.dart';
 
 /// Chats from an export file: a JSON list (the web's export), one chat, or
@@ -394,10 +395,82 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
   bool _done = false;
   Object? _error;
 
+  /// Files picked with a long press, for the web's selection actions.
+  final _picked = <String>{};
+  bool _busy = false;
+
   @override
   void initState() {
     super.initState();
     _more();
+  }
+
+  List<Map> get _selected => [
+    for (final f in _files)
+      if (_picked.contains('${f['id']}')) f,
+  ];
+
+  Future<void> _downloadPicked() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final client = ref.read(clientProvider);
+    setState(() => _busy = true);
+    var saved = 0;
+    try {
+      for (final f in _selected) {
+        final bytes = await client.getBytes('/api/v1/files/${f['id']}/content');
+        final path = await FilePicker.saveFile(
+          fileName: '${f['filename']}',
+          bytes: Uint8List.fromList(bytes),
+        );
+        if (path != null) saved++;
+      }
+      messenger.showSnackBar(
+        SnackBar(content: Text('Saved $saved file${saved == 1 ? '' : 's'}')),
+      );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't download: $e")));
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _deletePicked() async {
+    final picked = _selected;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Delete ${picked.length} file${picked.length == 1 ? '' : 's'}?',
+        ),
+        content: const Text(
+          'They are removed from the server, and from any knowledge they '
+          'were in.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final client = ref.read(clientProvider);
+    for (final f in picked) {
+      try {
+        await client.send('DELETE', '/api/v1/files/${f['id']}');
+        _files.remove(f);
+        _picked.remove('${f['id']}');
+        _total = _total > 0 ? _total - 1 : 0;
+      } catch (e) {
+        if (mounted) _say(context, "Couldn't delete ${f['filename']}: $e");
+      }
+    }
+    if (mounted) setState(() => _busy = false);
   }
 
   @override
@@ -487,9 +560,44 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_total > 0 ? 'Your files ($_total)' : 'Your files'),
-      ),
+      appBar: _picked.isNotEmpty
+          ? AppBar(
+              leading: IconButton(
+                tooltip: 'Clear selection',
+                icon: const Icon(Icons.close),
+                onPressed: () => setState(_picked.clear),
+              ),
+              title: Text('${_picked.length} selected'),
+              actions: [
+                IconButton(
+                  tooltip: 'Select all',
+                  icon: const Icon(Icons.select_all),
+                  onPressed: () => setState(
+                    () =>
+                        _picked.addAll([for (final f in _files) '${f['id']}']),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Download',
+                  icon: const Icon(Icons.download_outlined),
+                  onPressed: _busy ? null : _downloadPicked,
+                ),
+                IconButton(
+                  tooltip: 'Delete',
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _busy ? null : _deletePicked,
+                ),
+              ],
+              bottom: _busy
+                  ? const PreferredSize(
+                      preferredSize: Size.fromHeight(2),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    )
+                  : null,
+            )
+          : AppBar(
+              title: Text(_total > 0 ? 'Your files ($_total)' : 'Your files'),
+            ),
       body: Column(
         children: [
           Padding(
@@ -532,7 +640,34 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
                       ),
                     for (final f in _files)
                       ListTile(
-                        leading: Icon(_icon(f)),
+                        selected: _picked.contains('${f['id']}'),
+                        onLongPress: () => setState(
+                          () => _picked.contains('${f['id']}')
+                              ? _picked.remove('${f['id']}')
+                              : _picked.add('${f['id']}'),
+                        ),
+                        onTap: _picked.isNotEmpty
+                            ? () => setState(
+                                () => _picked.contains('${f['id']}')
+                                    ? _picked.remove('${f['id']}')
+                                    : _picked.add('${f['id']}'),
+                              )
+                            : () => Navigator.push(
+                                context,
+                                MaterialPageRoute<void>(
+                                  builder: (_) => FileDetailsScreen(
+                                    fileId: '${f['id']}',
+                                    name: '${f['filename']}',
+                                  ),
+                                ),
+                              ),
+                        leading: _picked.isNotEmpty
+                            ? Icon(
+                                _picked.contains('${f['id']}')
+                                    ? Icons.check_circle
+                                    : Icons.radio_button_unchecked,
+                              )
+                            : Icon(_icon(f)),
                         title: Text(
                           '${f['filename']}',
                           maxLines: 1,
@@ -545,11 +680,13 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
                           ].where((s) => s.isNotEmpty).join(' · '),
                           style: TextStyle(color: muted),
                         ),
-                        trailing: IconButton(
-                          tooltip: 'Delete',
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: () => _delete(f),
-                        ),
+                        trailing: _picked.isNotEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Delete',
+                                icon: const Icon(Icons.delete_outline),
+                                onPressed: () => _delete(f),
+                              ),
                       ),
                     if (_loading)
                       const Padding(
