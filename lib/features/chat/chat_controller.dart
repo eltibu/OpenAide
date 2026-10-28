@@ -13,6 +13,7 @@ import '../../core/models/model_info.dart';
 import '../studio/listen.dart' show transcribe;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../voice/realtime_call.dart' show BridgeSubmission;
+import '../settings/direct_connections.dart';
 import '../settings/user_location.dart';
 import '../workspace/prompts_api.dart'
     show fillSystemVariables, promptVariables;
@@ -27,9 +28,44 @@ const _uuid = Uuid();
 
 /// Models come from the server every time, so anything added in Open WebUI
 /// (new connections, custom models, presets) shows up without an app update.
-final modelsProvider = FutureProvider<List<ModelInfo>>(
-  (ref) => ref.watch(clientProvider).models(),
-);
+/// Models from your own connections (Settings > Connections) join them.
+final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  final direct = ref
+      .watch(directModelsProvider.future)
+      .catchError((_) => const <ModelInfo>[]);
+  final server = await ref.watch(clientProvider).models();
+  final mine = await direct;
+  if (mine.isEmpty) return server;
+  final ids = {for (final m in mine) m.id};
+  return [
+    for (final m in server)
+      if (!ids.contains(m.id)) m,
+    ...mine,
+  ];
+});
+
+/// Re-read only when your connections or the admin's switch change.
+final directModelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  final saved = await ref.watch(
+    userSettingsProvider.selectAsync(
+      (s) => jsonEncode((s['ui'] as Map?)?[directConnectionsKey]),
+    ),
+  );
+  final allowed = await ref.watch(
+    serverConfigProvider.selectAsync(
+      (c) => (c['features'] as Map?)?['enable_direct_connections'] == true,
+    ),
+  );
+  final list = directConnectionsOf(
+    {
+      'ui': {directConnectionsKey: jsonDecode(saved)},
+    },
+    {
+      'features': {'enable_direct_connections': allowed},
+    },
+  );
+  return [for (final m in await directModels(list)) ModelInfo.fromJson(m)];
+});
 
 /// The person's settings and the server's config, read once per sign-in for
 /// what each message carries (memory, default features, params).

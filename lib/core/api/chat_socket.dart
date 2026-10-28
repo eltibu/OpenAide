@@ -120,6 +120,9 @@ class ChatSocket {
 
   /// Tells the server you have read chat [chatId] (clears its unread dot
   /// here and on the web).
+  /// Sends [data] on [event], as replies from your own connections go back.
+  void emit(String event, Object? data) => _socket.emit(event, data);
+
   void markRead(String chatId) => _socket.emit('events:chat', {
     'chat_id': chatId,
     'data': {'type': 'last_read_at'},

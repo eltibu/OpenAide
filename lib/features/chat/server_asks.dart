@@ -14,6 +14,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/chat_socket.dart';
 import '../../core/auth/session.dart';
 import 'tool_approval.dart';
+import '../settings/direct_connections.dart';
+import 'chat_controller.dart' show serverConfigProvider, userSettingsProvider;
 
 /// What the app answers for events it can't do (running JavaScript, or a
 /// tool that lives in a browser), so the server isn't left waiting.
@@ -157,12 +159,29 @@ class _ServerAsksState extends ConsumerState<ServerAsks> {
   Widget build(BuildContext context) => widget.child;
 
   void _onCall(SocketCall call) {
+    if (call.type == 'request:chat:completion') {
+      _direct(call);
+      return;
+    }
     if (!askTypes.contains(call.type)) {
       call.reply(cantRunHere);
       return;
     }
     _queue.add(call);
     _next();
+  }
+
+  /// A chat with one of your own connections: the phone sends it.
+  Future<void> _direct(SocketCall call) async {
+    try {
+      final list = directConnectionsOf(
+        await ref.read(userSettingsProvider.future),
+        await ref.read(serverConfigProvider.future),
+      );
+      await runDirectCompletion(call, list, ref.read(chatSocketProvider).emit);
+    } catch (e) {
+      call.reply({'error': '$e'});
+    }
   }
 
   /// The server gave up waiting (or another device answered): close it.

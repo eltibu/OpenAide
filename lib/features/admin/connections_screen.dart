@@ -252,9 +252,20 @@ extension on String {
 
 /// Adds a connection or changes one; pops the connection, or 'delete'.
 class ConnectionEditor extends ConsumerStatefulWidget {
-  const ConnectionEditor({super.key, required this.kind, this.connection});
+  const ConnectionEditor({
+    super.key,
+    required this.kind,
+    this.connection,
+    this.verify,
+  });
   final ConnectionKind kind;
   final Connection? connection;
+
+  /// Set for your own (direct) connections: the phone itself checks the
+  /// server, and only what the phone can send is offered (no headers,
+  /// cookies, provider or server-side options). Null when it answers, else
+  /// what went wrong.
+  final Future<String?> Function(Connection c)? verify;
 
   @override
   ConsumerState<ConnectionEditor> createState() => _ConnectionEditorState();
@@ -361,8 +372,10 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
       ..['tags'] = [
         for (final t in _split(_tags.text)) {'name': t},
       ]
+      ..['auth_type'] = _authType;
+    if (_direct) return true;
+    _c.config
       ..['connection_type'] = _local ? 'local' : 'external'
-      ..['auth_type'] = _authType
       ..['passthrough_params'] = _split(_passthrough.text);
     if (headers == null) {
       _c.config.remove('headers');
@@ -394,9 +407,20 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
     return true;
   }
 
+  bool get _direct => widget.verify != null;
+
   Future<void> _verify() async {
     if (!_apply()) return;
     setState(() => _checking = true);
+    final verify = widget.verify;
+    if (verify != null) {
+      final problem = await verify(_c);
+      if (mounted) {
+        _say(context, problem ?? 'Connection works');
+        setState(() => _checking = false);
+      }
+      return;
+    }
     try {
       await ref
           .read(clientProvider)
@@ -414,7 +438,8 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final openAi = widget.kind == openAiConnections;
+    final openAi = widget.kind == openAiConnections && !_direct;
+    final direct = _direct;
     return Scaffold(
       appBar: AppBar(
         title: Text(
@@ -495,7 +520,17 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
               ],
               onChanged: (v) => setState(() => _authType = v ?? 'bearer'),
             ),
-          if (!openAi || _authType == 'bearer')
+          if (direct)
+            DropdownButtonFormField<String>(
+              initialValue: _authType == 'none' ? 'none' : 'bearer',
+              decoration: const InputDecoration(labelText: 'Auth'),
+              items: const [
+                DropdownMenuItem(value: 'bearer', child: Text('Bearer key')),
+                DropdownMenuItem(value: 'none', child: Text('None')),
+              ],
+              onChanged: (v) => setState(() => _authType = v ?? 'bearer'),
+            ),
+          if (direct ? _authType != 'none' : !openAi || _authType == 'bearer')
             TextField(
               controller: _key,
               obscureText: _hidden,
@@ -528,22 +563,24 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
               labelText: 'Tags (comma separated)',
             ),
           ),
-          TextField(
-            controller: _headers,
-            minLines: 1,
-            maxLines: 6,
-            decoration: const InputDecoration(
-              labelText: 'Headers',
-              helperText: 'JSON, sent with every request',
+          if (!direct)
+            TextField(
+              controller: _headers,
+              minLines: 1,
+              maxLines: 6,
+              decoration: const InputDecoration(
+                labelText: 'Headers',
+                helperText: 'JSON, sent with every request',
+              ),
             ),
-          ),
-          TextField(
-            controller: _passthrough,
-            decoration: const InputDecoration(
-              labelText: 'Passthrough params (comma separated)',
-              helperText: 'Request fields sent to the server as they are',
+          if (!direct)
+            TextField(
+              controller: _passthrough,
+              decoration: const InputDecoration(
+                labelText: 'Passthrough params (comma separated)',
+                helperText: 'Request fields sent to the server as they are',
+              ),
             ),
-          ),
           if (openAi)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -554,15 +591,16 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
               value: _cookies,
               onChanged: (on) => setState(() => _cookies = on),
             ),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Local'),
-            subtitle: const Text(
-              'On this network, rather than an outside service',
+          if (!direct)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Local'),
+              subtitle: const Text(
+                'On this network, rather than an outside service',
+              ),
+              value: _local,
+              onChanged: (on) => setState(() => _local = on),
             ),
-            value: _local,
-            onChanged: (on) => setState(() => _local = on),
-          ),
           const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: _checking ? null : _verify,

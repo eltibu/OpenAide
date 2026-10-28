@@ -108,6 +108,9 @@ Map<String, dynamic> requestOptions(
       'filter_ids': model.defaultFilterIds,
     if (terminal != null && terminal.isNotEmpty) 'terminal_id': terminal,
     'features': features,
+    // One of your own connections: the server hands the request back to
+    // this phone, which needs the model as the list had it.
+    if (model?.raw['direct'] == true) 'model_item': model!.raw,
     // Settings > General's model settings, then this chat's own (Controls).
     if (ui['params'] is Map || chatParams.isNotEmpty)
       'params': {

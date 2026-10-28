@@ -14,6 +14,7 @@ import '../update/update_screen.dart';
 import 'audio_settings.dart';
 import 'account_extras.dart';
 import 'data_controls.dart';
+import 'direct_connections.dart';
 import 'interface_settings.dart';
 import 'notification_settings.dart';
 import 'settings_api.dart';
@@ -186,6 +187,15 @@ class SettingsScreen extends ConsumerWidget {
             ),
             onTap: () => open(const PhoneSettings()),
           ),
+          if ((ref.watch(serverConfigProvider).value?['features']
+                  as Map?)?['enable_direct_connections'] ==
+              true)
+            ListTile(
+              leading: const Icon(Icons.cable),
+              title: const Text('Connections'),
+              subtitle: const Text('Your own OpenAI-compatible servers'),
+              onTap: () => open(const DirectConnectionsScreen()),
+            ),
           ListTile(
             leading: const Icon(Icons.terminal),
             title: const Text('Terminal connections'),
