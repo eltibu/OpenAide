@@ -3,6 +3,8 @@
 /// map, so settings the app doesn't show are saved back untouched.
 library;
 
+import 'external_knowledge.dart';
+
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -190,7 +192,7 @@ class IntegrationsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DefaultTabController(
-    length: 2,
+    length: 3,
     child: Scaffold(
       appBar: AppBar(
         title: const Text('Integrations'),
@@ -198,6 +200,7 @@ class IntegrationsScreen extends StatelessWidget {
           tabs: [
             Tab(text: 'Tool servers'),
             Tab(text: 'Terminal servers'),
+            Tab(text: 'Knowledge'),
           ],
         ),
       ),
@@ -205,6 +208,7 @@ class IntegrationsScreen extends StatelessWidget {
         children: [
           ServerList(kind: toolServerKind),
           ServerList(kind: terminalServerKind),
+          ExternalKnowledgeScreen(embedded: true),
         ],
       ),
     ),
