@@ -1,5 +1,6 @@
 import '../agent/agent_settings_screen.dart';
 import '../providers/ai_providers_screen.dart';
+import '../providers/local_models_screen.dart';
 import '../phone/phone_settings.dart';
 
 import 'dart:convert';
@@ -206,10 +207,16 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const AiProvidersScreen()),
           ),
           ListTile(
+            leading: const Icon(Icons.phone_android),
+            title: const Text('Models on this phone'),
+            subtitle: const Text('Download models that run offline'),
+            onTap: () => open(const LocalModelsScreen()),
+          ),
+          ListTile(
             leading: const Icon(Icons.handyman_outlined),
             title: const Text('Tools and skills on this phone'),
             subtitle: const Text(
-              'For provider models: web, phone, skills, MCP servers',
+              'Web, phone, skills and MCP for models without a server',
             ),
             onTap: () => open(const AgentSettingsScreen()),
           ),

@@ -38,7 +38,7 @@ Stream<AiChunk> streamDirectReply({
 
 /// Models that can't call tools themselves (small ones on the phone): they
 /// get the tools in their instructions instead.
-bool usesPromptTools(AiProvider p) => p.id == 'local';
+bool usesPromptTools(AiProvider p) => p == AiProvider.local;
 
 /// [modelId]'s reply to [history] with [tools]: the model may call them
 /// as many times as it needs before answering.
@@ -85,8 +85,8 @@ Future<(AiProvider, String, String, List<AiMessage>)> _prepare(
 ) async {
   final parsed = parseProviderModel(modelId);
   if (parsed == null) throw AiException('$modelId is not a provider model.');
-  final key =
-      keys[parsed.provider] ?? (usesPromptTools(parsed.provider) ? '' : null);
+  // Models on the phone need no key.
+  final key = parsed.provider == AiProvider.local ? '' : keys[parsed.provider];
   if (key == null) {
     throw AiException(
       'Add your ${parsed.provider.label} key in Settings > AI providers '

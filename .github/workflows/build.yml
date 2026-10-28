@@ -35,6 +35,20 @@ jobs:
       - run: flutter pub get
       - run: flutter analyze
       - run: flutter test
+      # The recommended models on the phone (lib/core/ai/local_llm.dart) must
+      # still be on Hugging Face. A warning, not a failure: the app also
+      # finds any model by search.
+      - name: Check recommended model links
+        continue-on-error: true
+        run: |
+          sed -n '/^const recommendedModels/,/^];/p' lib/core/ai/local_llm.dart \
+            | grep -oE "repo: '[^']+'|file: '[^']+'" \
+            | sed -E "s/^(repo|file): '(.*)'$/\2/" | paste - - | while read -r repo file; do
+            CODE=$(curl -s -o /dev/null -w '%{http_code}' -I -L "https://huggingface.co/$repo/resolve/main/$file")
+            SIZE=$(curl -sI "https://huggingface.co/$repo/resolve/main/$file" | grep -i '^x-linked-size' | tr -dc '0-9')
+            if [ "$CODE" = "200" ]; then echo "::notice::$repo/$file OK, ${SIZE:-?} bytes"
+            else echo "::warning::$repo/$file answered $CODE"; fi
+          done
       - name: Use the fixed signing key, if configured
         env:
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
