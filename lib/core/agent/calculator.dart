@@ -154,7 +154,8 @@ class _Parser {
         if (v < 0 || v != v.roundToDouble() || v > 170) {
           throw CalcException('Factorial needs a whole number up to 170');
         }
-        num f = 1;
+        // A double: whole numbers overflow past 20!.
+        num f = 1.0;
         for (var k = 2; k <= v; k++) {
           f *= k;
         }

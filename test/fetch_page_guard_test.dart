@@ -96,4 +96,62 @@ void main() {
     expect(text, contains('https://example.com/new'));
     expect(text, contains('Hello'));
   });
+
+  test('a name that does not resolve is refused, not let through', () async {
+    var asked = false;
+    final client = MockClient((_) async {
+      asked = true;
+      return http.Response('x', 200);
+    });
+    await expectLater(
+      fetchPage(
+        'https://nowhere.example/',
+        httpClient: client,
+        lookup: (h) async => throw SocketException('no such host $h'),
+      ),
+      throwsA(isA<Exception>()),
+    );
+    expect(asked, isFalse);
+  });
+
+  test('a huge page is cut off instead of filling memory', () async {
+    final client = MockClient.streaming(
+      (req, _) async => http.StreamedResponse(
+        Stream.fromIterable(
+          List.generate(64, (_) => List.filled(64 * 1024, 0x61)),
+        ),
+        200,
+        headers: {'content-type': 'text/plain'},
+      ),
+    );
+    final text = await fetchPage(
+      'https://example.com/big',
+      httpClient: client,
+      lookup: public,
+    );
+    expect(text.length, 2 * 1024 * 1024);
+  });
+
+  test('a file is turned away without downloading it', () async {
+    var read = false;
+    final client = MockClient.streaming(
+      (req, _) async => http.StreamedResponse(
+        Stream.fromFuture(
+          Future(() {
+            read = true;
+            return [1, 2, 3];
+          }),
+        ),
+        200,
+        headers: {'content-type': 'video/mp4'},
+      ),
+    );
+    final text = await fetchPage(
+      'https://example.com/v.mp4',
+      httpClient: client,
+      lookup: public,
+    );
+    expect(text, contains('is a file'));
+    expect(read, isFalse);
+  });
 }

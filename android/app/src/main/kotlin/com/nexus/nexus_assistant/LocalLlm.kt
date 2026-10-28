@@ -14,6 +14,7 @@ import io.flutter.plugin.common.MethodChannel
 import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Models on the phone: downloads GGUF files (Android's download manager, so
@@ -35,6 +36,7 @@ class LocalLlm(private val context: Context) :
     private val main = Handler(Looper.getMainLooper())
     private var loadedPath: String? = null
     private var loadedContext = 0
+    @Volatile private var replyCancelled: AtomicBoolean? = null
 
     private val downloads =
         context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -62,6 +64,7 @@ class LocalLlm(private val context: Context) :
             }
             // Straight away, not on the worker: the worker is busy replying.
             "stop" -> {
+                replyCancelled?.set(true)
                 if (ready) nativeStop()
                 result.success(null)
             }
@@ -125,6 +128,9 @@ class LocalLlm(private val context: Context) :
         val think = args["think"] as Boolean? ?: true
         val path = args["path"] as String
         val ctx = (args["context"] as Number?)?.toInt() ?: 4096
+        // The native stop flag is cleared when a reply starts, so a stop that
+        // comes while the model loads would be lost: this one is kept.
+        val cancelled = AtomicBoolean(false).also { replyCancelled = it }
         worker.execute {
             val loaded = load(path, ctx)
             if (JSONObject(loaded).has("error")) {
@@ -134,8 +140,13 @@ class LocalLlm(private val context: Context) :
                 }
                 return@execute
             }
+            if (cancelled.get()) {
+                main.post { events.endOfStream() }
+                return@execute
+            }
             main.post { events.success(mapOf("loaded" to true)) }
             val stats = nativeGenerate(roles, contents, temp, topP, maxTokens, think) { bytes ->
+                if (cancelled.get()) nativeStop()
                 val text = String(bytes, Charsets.UTF_8)
                 main.post { events.success(mapOf("text" to text)) }
             }
@@ -152,6 +163,7 @@ class LocalLlm(private val context: Context) :
     }
 
     override fun onCancel(arguments: Any?) {
+        replyCancelled?.set(true)
         if (ready) nativeStop()
     }
 
