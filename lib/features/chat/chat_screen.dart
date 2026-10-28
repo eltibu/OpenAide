@@ -1,3 +1,4 @@
+import '../phone/phone_action_ui.dart';
 import 'quick_actions.dart';
 
 import 'dart:convert';
@@ -968,6 +969,12 @@ class _ComposerState extends ConsumerState<_Composer> {
     )) {
       if (!await editChatVariables(context, ref) || !mounted) return;
     }
+    // "Set a timer", "call Mom"...: done on the phone, not sent.
+    if (!files && await tryPhoneAction(context, ref, value) != null) {
+      if (mounted) _text.clear();
+      return;
+    }
+    if (!mounted) return;
     _text.clear();
     controller.send(value);
   }

@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../phone/phone_action_ui.dart';
 import '../../core/auth/session.dart';
 import '../chat/chat_controller.dart';
 import '../chat/read_aloud.dart';
@@ -17,9 +18,13 @@ import '../studio/listen.dart' as listen;
 import 'classic_call.dart';
 
 class _Host implements ClassicCallHost {
-  _Host(this.ref, this.camera) : _speaker = ref.read(readAloudProvider);
+  _Host(this.ref, this.camera, this.phone)
+    : _speaker = ref.read(readAloudProvider);
   final WidgetRef ref;
   final CameraController? Function() camera;
+
+  /// Runs a phone action ("set a timer..."); what was done, or null.
+  final Future<String?> Function(String text) phone;
 
   /// Kept, so the call can still be quieted as the screen closes.
   final ReadAloud _speaker;
@@ -32,6 +37,11 @@ class _Host implements ClassicCallHost {
 
   @override
   Future<void> send(String text, Uint8List? photo) async {
+    final done = await phone(text);
+    if (done != null) {
+      if (done.isNotEmpty) _speaker.say(done);
+      return;
+    }
     if (photo != null) {
       await _chat.attach(photo, 'camera.jpg', mimeType: 'image/jpeg');
     }
@@ -67,7 +77,13 @@ class ClassicCallView extends ConsumerStatefulWidget {
 }
 
 class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
-  late final ClassicCall _call = ClassicCall(_Host(ref, () => _camera));
+  late final ClassicCall _call = ClassicCall(
+    _Host(
+      ref,
+      () => _camera,
+      (text) async => mounted ? tryPhoneAction(context, ref, text) : null,
+    ),
+  );
   late final ChatController _controller;
   CameraController? _camera;
   List<CameraDescription> _cameras = const [];

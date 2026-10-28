@@ -19,6 +19,7 @@ class MainActivity : FlutterActivity() {
     private var voice: VoiceAudio? = null
     private var notifier: ReplyNotifier? = null
     private var launches: PhoneLaunch? = null
+    private var actions: PhoneActions? = null
     private var speech: MediaPlayer? = null
     private var speechDone: MethodChannel.Result? = null
 
@@ -84,6 +85,10 @@ class MainActivity : FlutterActivity() {
             it.setMethodCallHandler(phone)
         }
 
+        // Timers, alarms, calls, texts, apps, directions, see PhoneActions.
+        val doer = actions ?: PhoneActions(this).also { actions = it }
+        MethodChannel(messenger, "nexus/actions").setMethodCallHandler(doer)
+
         // In-app updates: Dart downloads the APK to [apkPath], then [install]
         // hands it to Android's installer.
         MethodChannel(messenger, "nexus/updates")
@@ -135,6 +140,9 @@ class MainActivity : FlutterActivity() {
                 grantResults.isNotEmpty() &&
                     grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED,
             )
+        }
+        if (requestCode == PhoneActions.CONTACTS_REQUEST) {
+            actions?.onContactsPermission()
         }
         if (requestCode == VoiceAudio.PERMISSION_REQUEST) {
             voice?.onPermission(

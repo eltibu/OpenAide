@@ -3,6 +3,8 @@
 /// box to edit first. Separate from a live call.
 library;
 
+import '../phone/phone_action_ui.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -172,6 +174,10 @@ class _VoiceNoteBarState extends ConsumerState<VoiceNoteBar> {
       );
       // Settings > Audio can send the words straight away, as on the web.
       if (text.isNotEmpty && speechAutoSend(settings)) {
+        if (mounted && await tryPhoneAction(context, ref, text) != null) {
+          widget.onDone();
+          return;
+        }
         unawaited(ref.read(chatControllerProvider.notifier).send(text));
       } else if (text.isNotEmpty) {
         widget.onWords(text);

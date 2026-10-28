@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../settings/settings_screen.dart';
 import 'app_lock.dart';
+import 'phone_actions.dart';
 import 'phone_launch.dart';
 
 class PhoneSettings extends ConsumerStatefulWidget {
@@ -173,6 +174,20 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
               'Nexus to ask about it.',
               style: TextStyle(color: muted),
             ),
+          ),
+          SwitchListTile(
+            secondary: const Icon(Icons.alarm_on_outlined),
+            title: const Text('Phone actions'),
+            subtitle: Text(
+              'Say or type "set a timer for 10 minutes", "wake me up at 6:30", '
+              '"call Mom", "text Sam saying running late", "open Spotify", '
+              '"directions to the airport" or "turn on the flashlight" and '
+              'the phone does it. Calls and texts open ready for you to press '
+              'call or send. Everything else goes to Nexus.',
+              style: TextStyle(color: muted),
+            ),
+            value: phoneActionsOn(ui),
+            onChanged: (on) => _set({phoneActionsKey: on}),
           ),
           title('App lock'),
           SwitchListTile(
