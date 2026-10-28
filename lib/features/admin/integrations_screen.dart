@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../server/server_page.dart';
+import 'orchestrator_policy.dart';
 
 /// A connection as the web exports it: one item in a list, without who may
 /// use it or the OAuth client the server registered.
@@ -386,6 +387,59 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
   /// Bumped when an import replaces the fields, so they show the new values.
   int _form = 0;
 
+  late final _policy = OrchestratorPolicy(id: '${_c['policy_id'] ?? ''}');
+  String? _policyError;
+  bool _policyLoading = false;
+  bool _onlyIdle = true;
+  bool _resetTerminals = false;
+  bool _saving = false;
+
+  bool get _orchestrator => !_tool && _c['server_type'] == 'orchestrator';
+
+  @override
+  void initState() {
+    super.initState();
+    if (_orchestrator && _policy.id.isNotEmpty && !widget.isNew) {
+      _loadPolicy();
+    }
+  }
+
+  Future<void> _loadPolicy() async {
+    setState(() {
+      _policyLoading = true;
+      _policyError = null;
+    });
+    try {
+      await _policy.load(ref.read(clientProvider), _c);
+    } catch (e) {
+      _policyError = '$e';
+    }
+    if (mounted) {
+      setState(() {
+        _policyLoading = false;
+        _form++;
+      });
+    }
+  }
+
+  Future<void> _refreshTerminals() async {
+    if (_policy.id.trim().isEmpty) return _say(context, 'Add a policy id');
+    setState(() => _verifying = true);
+    try {
+      final n = await _policy.refresh(
+        ref.read(clientProvider),
+        _c,
+        onlyIdle: _onlyIdle,
+        reset: _resetTerminals,
+      );
+      if (mounted) _say(context, 'Refresh asked for $n terminal(s)');
+    } catch (e) {
+      if (mounted) _say(context, 'Couldn\'t refresh: $e');
+    } finally {
+      if (mounted) setState(() => _verifying = false);
+    }
+  }
+
   bool get _tool => widget.kind == toolServerKind;
 
   Map<String, dynamic> get _info =>
@@ -534,10 +588,26 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
           .read(clientProvider)
           .send('POST', '${widget.kind.path}/verify', body: _c);
       if (!mounted) return;
-      if (!_tool && res is Map && res['type'] == 'orchestrator') {
+      final type = res is Map ? res['type'] : null;
+      if (!_tool && type == 'orchestrator') {
         _c['server_type'] = 'orchestrator';
+        if (_policy.id.isEmpty) {
+          final from = '${_c['id'] ?? ''}'.isNotEmpty ? _c['id'] : _c['name'];
+          _policy.id = slugId('${from ?? ''}');
+          if (_policy.id.isEmpty) _policy.id = 'default';
+          _form++;
+        }
+      } else if (!_tool && type == 'terminal') {
+        _c['server_type'] = 'terminal';
       }
-      _say(context, 'Connected');
+      _say(
+        context,
+        type == 'orchestrator'
+            ? 'Connected (Orchestrator)'
+            : type == 'terminal'
+            ? 'Connected (Terminal)'
+            : 'Connected',
+      );
     } catch (e) {
       if (mounted) _say(context, 'Couldn\'t connect: $e');
     } finally {
@@ -545,7 +615,8 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
     }
   }
 
-  void _done() {
+  Future<void> _done() async {
+    if (_saving) return;
     if ('${_c['url'] ?? ''}'.trim().isEmpty) {
       _say(context, 'Add the server\'s URL');
       return;
@@ -580,7 +651,131 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
         }
       }
     }
-    Navigator.pop(context, _c);
+    if (!_tool) {
+      _c['url'] = '${_c['url']}'.replaceAll(RegExp(r'/$'), '');
+      _c['key'] = '${_c['key'] ?? ''}'.trim();
+    }
+    if (_orchestrator && _policy.id.trim().isNotEmpty) {
+      if (_policyLoading) return _say(context, 'The policy is still loading');
+      if (_policyError != null) {
+        return _say(context, 'Couldn\'t load the policy: $_policyError');
+      }
+      _policy.id = _policy.id.trim();
+      setState(() => _saving = true);
+      try {
+        await _policy.save(ref.read(clientProvider), _c);
+      } catch (e) {
+        if (mounted) {
+          setState(() => _saving = false);
+          _say(context, 'Policy not saved: $e');
+        }
+        return;
+      }
+      _c['policy_id'] = _policy.id;
+    } else if (!_tool) {
+      _c.remove('policy_id');
+      _config.remove('contexts');
+    }
+    if (mounted) Navigator.pop(context, _c);
+  }
+
+  List<Widget> _orchestratorFields(Color muted) {
+    final p = _policy;
+    return [
+      const Divider(),
+      ListTile(
+        title: const Text('Orchestrator'),
+        subtitle: Text(
+          'Each person gets their own terminal, made from this policy.',
+          style: TextStyle(color: muted),
+        ),
+        trailing: _policyLoading
+            ? const SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : null,
+      ),
+      if (_policyError != null)
+        ListTile(
+          leading: const Icon(Icons.error_outline),
+          title: Text('Couldn\'t load the policy: $_policyError'),
+          trailing: TextButton(
+            onPressed: _loadPolicy,
+            child: const Text('Retry'),
+          ),
+        ),
+      _choice('Chat', contextMode(_config, 'chat'), const {
+        'default': 'One terminal per person',
+        'chat_id': 'One terminal per chat',
+        'off': 'Off in chats',
+      }, (v) => setContexts(_config, v, contextMode(_config, 'automation'))),
+      _choice('Automation', contextMode(_config, 'automation'), const {
+        'default': 'One terminal per person',
+        'automation_id': 'One terminal per automation',
+        'off': 'Off in automations',
+      }, (v) => setContexts(_config, contextMode(_config, 'chat'), v)),
+      _field('Policy id', p.id, (v) => p.id = v),
+      _field(
+        'Image',
+        p.image,
+        (v) => p.image = v,
+        hint: 'Empty uses the orchestrator\'s default',
+      ),
+      Row(
+        children: [
+          Expanded(child: _field('CPU', p.cpu, (v) => p.cpu = v)),
+          Expanded(child: _field('Memory', p.memory, (v) => p.memory = v)),
+        ],
+      ),
+      _choice('Storage', p.persistent ? 'persistent' : 'ephemeral', const {
+        'ephemeral': 'Ephemeral (lost on restart)',
+        'persistent': 'Persistent',
+      }, (v) => p.persistent = v == 'persistent'),
+      if (p.persistent)
+        _field('Storage size', p.storageSize, (v) => p.storageSize = v),
+      _field(
+        'Idle timeout (minutes)',
+        p.idleMinutes,
+        (v) => p.idleMinutes = int.tryParse(v.trim()) ?? 0,
+        hint: '0 keeps terminals running',
+      ),
+      _field(
+        'Environment',
+        p.env,
+        (v) => p.env = v,
+        hint: 'One KEY=value per line',
+        lines: 2,
+      ),
+      _field(
+        'Lifecycle JSON',
+        p.lifecycle,
+        (v) => p.lifecycle = v,
+        hint: 'Hooks the orchestrator runs, as a JSON object',
+        lines: 3,
+      ),
+      if (!widget.isNew) ...[
+        SwitchListTile(
+          title: const Text('Only idle terminals'),
+          value: _onlyIdle,
+          onChanged: (on) => setState(() => _onlyIdle = on),
+        ),
+        SwitchListTile(
+          title: const Text('Reset their files'),
+          subtitle: const Text('Start from a clean image'),
+          value: _resetTerminals,
+          onChanged: (on) => setState(() => _resetTerminals = on),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+          child: OutlinedButton.icon(
+            onPressed: _verifying ? null : _refreshTerminals,
+            icon: const Icon(Icons.restart_alt),
+            label: Text(_verifying ? 'Refreshing...' : 'Refresh terminals'),
+          ),
+        ),
+      ],
+    ];
   }
 
   @override
@@ -609,7 +804,10 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
             ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: FilledButton(onPressed: _done, child: const Text('Save')),
+            child: FilledButton(
+              onPressed: _saving ? null : _done,
+              child: const Text('Save'),
+            ),
           ),
         ],
       ),
@@ -794,6 +992,7 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
               (v) => _config['chat_uploads'] = v,
             ),
           ],
+          if (_orchestrator) ..._orchestratorFields(muted),
           SwitchListTile(
             title: const Text('Everyone can use it'),
             subtitle: const Text('Off: only admins'),
