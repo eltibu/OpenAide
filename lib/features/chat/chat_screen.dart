@@ -25,6 +25,7 @@ import 'attach_more.dart';
 import 'chat_controls.dart';
 import 'chat_panel.dart';
 import 'emoji.dart';
+import 'formatting_toolbar.dart';
 import 'embeds_view.dart';
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
@@ -1272,6 +1273,11 @@ class _ComposerState extends ConsumerState<_Composer> {
                   onPick: _usePrompt,
                   commands: _commands(),
                 ),
+              // Settings > Interface > Formatting toolbar.
+              if ((ref.watch(userSettingsProvider).value?['ui']
+                      as Map?)?['showFormattingToolbar'] ==
+                  true)
+                FormattingToolbar(controller: _text),
               TextField(
                 controller: _text,
                 minLines: 1,
@@ -1863,7 +1869,8 @@ class _TerminalChip extends ConsumerWidget {
           ..setFeature('code_interpreter', false);
         // Settings > Interface > Show files on terminal select.
         final ui = ref.read(userSettingsProvider).value?['ui'] as Map?;
-        if (ui?['showFilesOnTerminalSelect'] != false && choice != terminal?.id) {
+        if (ui?['showFilesOnTerminalSelect'] != false &&
+            choice != terminal?.id) {
           showChatPanel(context, tab: 1, serverId: choice);
         }
     }

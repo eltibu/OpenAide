@@ -50,15 +50,50 @@ class SettingsApi {
 
   Future<Map<String, dynamic>> me() => client.me();
 
+  /// Saves the profile. Gender and birth date go every time, since the
+  /// server clears what isn't sent.
   Future<void> updateProfile({
     required String name,
     required String imageUrl,
     String? bio,
+    String? gender,
+    String? dateOfBirth,
   }) => client.send(
     'POST',
     '/api/v1/auths/update/profile',
-    body: {'name': name, 'profile_image_url': imageUrl, 'bio': ?bio},
+    body: {
+      'name': name,
+      'profile_image_url': imageUrl,
+      'bio': ?bio,
+      'gender': (gender ?? '').isEmpty ? null : gender,
+      'date_of_birth': (dateOfBirth ?? '').isEmpty ? null : dateOfBirth,
+    },
   );
+
+  /// Your API key, or null when you have none.
+  Future<String?> apiKey() async {
+    try {
+      final res = await client.send('GET', '/api/v1/auths/api_key') as Map?;
+      return res?['api_key'] as String?;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<String> createApiKey() async =>
+      '${(await client.send('POST', '/api/v1/auths/api_key') as Map)['api_key']}';
+
+  Future<void> deleteApiKey() => client.send('DELETE', '/api/v1/auths/api_key');
+
+  /// Your status (emoji and message) others see. The server keeps what
+  /// isn't sent, so clearing sends empty text.
+  Future<void> setStatus({String emoji = '', String message = ''}) =>
+      client.send(
+        'POST',
+        '/api/v1/users/user/status/update',
+        body: {'status_emoji': emoji, 'status_message': message},
+      );
 
   // ---- Memory ----
 

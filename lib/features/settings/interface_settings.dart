@@ -83,7 +83,7 @@ const interfaceSwitches = <String, List<UiSwitch>>{
       'showFormattingToolbar',
       false,
       'Formatting toolbar',
-      'Bold, lists, headings and more above the keyboard.',
+      'Bold, lists, headings and more above the message box.',
     ),
     (
       'insertPromptAsRichText',
@@ -165,6 +165,7 @@ const appFollows = {
   'imageCompression',
   'imageCompressionInChannels',
   'showFilesOnTerminalSelect',
+  'showFormattingToolbar',
 };
 
 class InterfaceSettings extends ConsumerWidget {

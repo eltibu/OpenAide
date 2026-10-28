@@ -10,6 +10,7 @@ import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
+import 'account_extras.dart';
 import 'data_controls.dart';
 import 'interface_settings.dart';
 import 'notification_settings.dart';
@@ -269,6 +270,9 @@ class AccountSettings extends ConsumerStatefulWidget {
 class _AccountSettingsState extends ConsumerState<AccountSettings> {
   final _name = TextEditingController();
   final _bio = TextEditingController();
+  final _gender = TextEditingController();
+  String _genderChoice = '';
+  String _birth = '';
   String _image = '';
   bool _loaded = false;
   bool _busy = false;
@@ -282,6 +286,10 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
         _name.text = '${me['name'] ?? ''}';
         _bio.text = '${me['bio'] ?? ''}';
         _image = '${me['profile_image_url'] ?? ''}';
+        final g = '${me['gender'] ?? ''}';
+        _genderChoice = const ['', 'male', 'female'].contains(g) ? g : 'custom';
+        _gender.text = _genderChoice == 'custom' ? g : '';
+        _birth = '${me['date_of_birth'] ?? ''}';
         _loaded = true;
       });
     }, onError: (Object e) => setState(() => _loaded = true));
@@ -313,7 +321,15 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
     try {
       await ref
           .read(settingsApiProvider)
-          .updateProfile(name: name, imageUrl: _image, bio: _bio.text.trim());
+          .updateProfile(
+            name: name,
+            imageUrl: _image,
+            bio: _bio.text.trim(),
+            gender: _genderChoice == 'custom'
+                ? _gender.text.trim()
+                : _genderChoice,
+            dateOfBirth: _birth,
+          );
       ref.invalidate(meProvider);
       if (mounted) {
         _say(context, 'Saved');
@@ -385,6 +401,51 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                   decoration: const InputDecoration(labelText: 'About you'),
                 ),
                 const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: _genderChoice,
+                  decoration: const InputDecoration(labelText: 'Gender'),
+                  items: const [
+                    DropdownMenuItem(
+                      value: '',
+                      child: Text('Prefer not to say'),
+                    ),
+                    DropdownMenuItem(value: 'male', child: Text('Male')),
+                    DropdownMenuItem(value: 'female', child: Text('Female')),
+                    DropdownMenuItem(value: 'custom', child: Text('Custom')),
+                  ],
+                  onChanged: (v) => setState(() => _genderChoice = v ?? ''),
+                ),
+                if (_genderChoice == 'custom')
+                  TextField(
+                    controller: _gender,
+                    decoration: const InputDecoration(labelText: 'Your gender'),
+                  ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Birth date'),
+                  subtitle: Text(_birth.isEmpty ? 'Not set' : _birth),
+                  trailing: _birth.isEmpty
+                      ? const Icon(Icons.calendar_today_outlined)
+                      : IconButton(
+                          tooltip: 'Clear',
+                          onPressed: () => setState(() => _birth = ''),
+                          icon: const Icon(Icons.close),
+                        ),
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                      initialDate: DateTime.tryParse(_birth) ?? DateTime(1990),
+                    );
+                    if (picked != null) {
+                      setState(
+                        () =>
+                            _birth = picked.toIso8601String().substring(0, 10),
+                      );
+                    }
+                  },
+                ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Email'),
@@ -395,6 +456,10 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                   title: const Text('Role'),
                   subtitle: Text('${me?['role'] ?? ''}'),
                 ),
+                const Divider(),
+                const AccountStatus(),
+                const Divider(),
+                const ApiKeys(),
               ],
             ),
     );
