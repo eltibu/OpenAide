@@ -5,6 +5,7 @@
 /// Files.
 library;
 
+import '../../core/widgets/empty_state.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -118,12 +119,10 @@ class _TerminalConnectionsScreenState
               ),
             ),
             if (list.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'No terminal connections yet. Tap + to add one.',
-                  style: TextStyle(color: muted),
-                ),
+              const EmptyState(
+                icon: Icons.terminal,
+                title: 'No terminal connections yet',
+                message: 'Tap + to add one.',
               ),
             for (var i = 0; i < list.length; i++)
               ListTile(

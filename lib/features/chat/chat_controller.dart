@@ -39,11 +39,14 @@ const _uuid = Uuid();
 /// Models from AI providers you signed in to on the phone (Settings > AI
 /// providers) come last.
 final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  // Extra model sources never hold up the server's own list for long.
   final direct = ref
       .watch(directModelsProvider.future)
+      .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
   final providers = ref
       .watch(providerModelsProvider.future)
+      .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
   final server = await ref.watch(clientProvider).models();
   final mine = await direct;

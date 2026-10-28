@@ -2,6 +2,8 @@
 /// in to on the phone, with chats kept on the phone.
 library;
 
+import '../../core/widgets/search_field.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -763,13 +765,8 @@ class _ModelSheetState extends State<_ModelSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: TextField(
-                autofocus: false,
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search a model',
-                  isDense: true,
-                ),
+              child: SearchField(
+                hint: 'Search a model',
                 onChanged: (v) => setState(() => _query = v),
               ),
             ),

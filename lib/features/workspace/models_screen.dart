@@ -884,7 +884,6 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                 ),
                 for (final c in modelCapabilities.entries)
                   SwitchListTile(
-                    dense: true,
                     title: Text(c.value),
                     value: _caps[c.key] == true,
                     onChanged: (on) => setState(() => _caps[c.key] = on),

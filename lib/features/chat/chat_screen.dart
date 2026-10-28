@@ -1,4 +1,5 @@
 import '../phone/phone_action_ui.dart';
+import '../../core/widgets/search_field.dart';
 import 'quick_actions.dart';
 
 import 'dart:convert';
@@ -2215,12 +2216,8 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: TextField(
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  hintText: 'Search a model',
-                  isDense: true,
-                ),
+              child: SearchField(
+                hint: 'Search a model',
                 onChanged: (v) => setState(() => _query = v),
               ),
             ),
@@ -2899,7 +2896,6 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
             onTap: () => onChanged(!value),
           )
         : SwitchListTile(
-            dense: true,
             title: Text(p.name),
             subtitle: (p.description ?? '').isEmpty
                 ? null
@@ -2948,13 +2944,8 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
             if (searchable)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-                child: TextField(
-                  decoration: const InputDecoration(
-                    hintText: 'Search tools and skills',
-                    prefixIcon: Icon(Icons.search),
-                    isDense: true,
-                    border: OutlineInputBorder(),
-                  ),
+                child: SearchField(
+                  hint: 'Search tools and skills',
                   onChanged: (v) => setState(() => _query = v),
                 ),
               ),
@@ -2971,7 +2962,6 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                 children: [
                   for (final id in features)
                     SwitchListTile(
-                      dense: true,
                       secondary: Icon(_featureIcon(id)),
                       title: Text(featureLabels[id] ?? id),
                       value: featureOn(id),
