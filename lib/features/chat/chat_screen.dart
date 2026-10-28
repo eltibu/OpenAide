@@ -41,6 +41,7 @@ import 'reply_actions.dart';
 import 'reply_parts.dart';
 import 'reply_steps.dart';
 import 'side_panel.dart';
+import 'streaming_fade.dart';
 import 'chat_controller.dart';
 import 'composer_draft.dart';
 import 'reply_notify.dart';
@@ -713,6 +714,15 @@ class _MessageList extends ConsumerWidget {
                       generator: generator,
                     ),
                   ),
+                  final TextPart t when ui['chatFadeStreamingText'] != false =>
+                    StreamingFade(
+                      text: t.text,
+                      child: MarkdownBlock(
+                        data: t.text,
+                        config: mdConfig,
+                        generator: generator,
+                      ),
+                    ),
                   final TextPart t => MarkdownBlock(
                     data: t.text,
                     config: mdConfig,
