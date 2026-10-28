@@ -153,6 +153,9 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   Set<String> _tools = {};
   Set<String> _skills = {};
   Map<String, dynamic> _params = {};
+
+  /// The model's starter prompts; null uses the server's defaults.
+  List<Map<String, dynamic>>? _suggestions;
   bool _idEdited = false;
 
   bool get _isNew => widget.model == null;
@@ -182,6 +185,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _tools = m.ids('toolIds').toSet();
       _skills = m.ids('skillIds').toSet();
       _params = {...m.params}..remove('system');
+      _suggestions = readSuggestions(m.meta['suggestion_prompts']);
     } else if (widget.copyOf case final c?) {
       _name.text = '${c.name} (copy)';
       _id.text = modelIdFrom(_name.text);
@@ -193,6 +197,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _tools = c.ids('toolIds').toSet();
       _skills = c.ids('skillIds').toSet();
       _params = {...c.params}..remove('system');
+      _suggestions = readSuggestions(c.meta['suggestion_prompts']);
     } else {
       // A new model starts with the abilities the web turns on by default.
       _caps = {for (final k in defaultModelCapabilities) k: true};
@@ -234,6 +239,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
               };
         }(),
     ];
+    meta['suggestion_prompts'] = _suggestions;
     meta['profile_image_url'] ??= '/static/favicon.png';
     final system = _system.text.trim();
     if (system.isEmpty) {
@@ -481,6 +487,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                     ],
                   ),
                 ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: PromptSuggestionsEditor(
+                    value: _suggestions,
+                    onChanged: (v) => setState(() => _suggestions = v),
+                  ),
+                ),
               ],
             ),
     );
@@ -543,4 +556,151 @@ class _WorkspaceModelMenu extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Starter prompts as the server keeps them: `{title: [line 1, line 2],
+/// content}`.
+List<Map<String, dynamic>>? readSuggestions(Object? raw) => raw is! List
+    ? null
+    : [
+        for (final s in raw.whereType<Map>())
+          {
+            'title': switch (s['title']) {
+              final String t => [t, ''],
+              final List t => [
+                for (final p in t) '$p',
+                '',
+                '',
+              ].take(2).toList(),
+              _ => ['', ''],
+            },
+            'content': '${s['content'] ?? ''}',
+          },
+      ];
+
+/// The model's prompt suggestions: the server's defaults, or its own list
+/// to add to and remove from.
+class PromptSuggestionsEditor extends StatelessWidget {
+  const PromptSuggestionsEditor({
+    super.key,
+    required this.value,
+    required this.onChanged,
+  });
+  final List<Map<String, dynamic>>? value;
+  final ValueChanged<List<Map<String, dynamic>>?> onChanged;
+
+  Future<Map<String, dynamic>?> _edit(
+    BuildContext context, [
+    Map<String, dynamic>? s,
+  ]) async {
+    final title = (s?['title'] as List?) ?? const ['', ''];
+    final t1 = TextEditingController(text: '${title[0]}');
+    final t2 = TextEditingController(text: '${title[1]}');
+    final content = TextEditingController(text: '${s?['content'] ?? ''}');
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: Text(s == null ? 'Add prompt suggestion' : 'Prompt suggestion'),
+        scrollable: true,
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: t1,
+              decoration: const InputDecoration(labelText: 'Title'),
+            ),
+            TextField(
+              controller: t2,
+              decoration: const InputDecoration(labelText: 'Subtitle'),
+            ),
+            TextField(
+              controller: content,
+              minLines: 2,
+              maxLines: 6,
+              decoration: const InputDecoration(labelText: 'Prompt'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || content.text.trim().isEmpty) return null;
+    return {
+      'title': [t1.text.trim(), t2.text.trim()],
+      'content': content.text.trim(),
+    };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final list = value;
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      title: const Text('Prompt suggestions'),
+      subtitle: Text(list == null ? 'Default' : 'Custom · ${list.length}'),
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Use default'),
+          subtitle: const Text("The server's starter prompts"),
+          value: list == null,
+          onChanged: (on) => onChanged(on ? null : []),
+        ),
+        if (list != null) ...[
+          for (final (i, s) in list.indexed)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                [
+                  for (final t in s['title'] as List)
+                    if ('$t'.isNotEmpty) '$t',
+                ].join(' · ').ifEmpty('${s['content']}'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${s['content']}',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              onTap: () async {
+                final changed = await _edit(context, s);
+                if (changed != null) {
+                  onChanged([...list]..[i] = changed);
+                }
+              },
+              trailing: IconButton(
+                tooltip: 'Remove prompt suggestion',
+                icon: const Icon(Icons.close),
+                onPressed: () => onChanged([...list]..removeAt(i)),
+              ),
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Add prompt suggestion'),
+              onPressed: () async {
+                final added = await _edit(context);
+                if (added != null) onChanged([...list, added]);
+              },
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+extension on String {
+  String ifEmpty(String other) => isEmpty ? other : this;
 }
