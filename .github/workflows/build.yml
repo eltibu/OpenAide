@@ -224,6 +224,27 @@ jobs:
               | head -40 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1
           }
+      # Models on the phone need llama.cpp's libraries in the APK. A build
+      # without them still installs but can't run any model, so it must
+      # never be published. Also lists every native library with its size.
+      - name: Check the on-device model engine is in the APK
+        run: |
+          python3 - build/app/outputs/flutter-apk/app-release.apk <<'PY'
+          import sys, zipfile
+          libs = {i.filename: i for i in zipfile.ZipFile(sys.argv[1]).infolist()
+                  if i.filename.startswith("lib/")}
+          for name, i in sorted(libs.items()):
+              print(f"::notice::{name} {i.file_size / 2**20:.1f} MB")
+          arm = [n.split("/")[-1] for n in libs if n.startswith("lib/arm64-v8a/")]
+          need = ["libopenaide_llm.so", "libllama.so", "libggml-base.so"]
+          missing = [n for n in need if n not in arm]
+          if not any(n.startswith("libggml-cpu") for n in arm):
+              missing.append("libggml-cpu-*.so")
+          if missing:
+              print("::error::The APK lacks the model engine for 64-bit ARM: "
+                    + ", ".join(missing) + ". Not publishing.")
+              sys.exit(1)
+          PY
       # Re-sign with the Nexus release key. Play Protect treats the generic
       # debug key as untrusted, so the release key replaces it. A signed
       # rotation proof (lineage) from the old key lets Android 9+ install the
