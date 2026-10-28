@@ -99,7 +99,9 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
           final tts = ((ui['audio'] as Map?)?['tts'] as Map?) ?? const {};
           final voice = '${tts['voice'] ?? ''}';
           final rate = _rate ?? speechRate(settings);
-          final heading = Theme.of(context).textTheme.titleSmall;
+          // Section names in the accent colour, as on every settings page.
+          final heading = Theme.of(context).textTheme.titleSmall
+              ?.copyWith(color: Theme.of(context).colorScheme.primary);
           return ListView(
             children: [
               Padding(
