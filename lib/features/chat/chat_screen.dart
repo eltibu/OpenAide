@@ -92,6 +92,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
     // The phone's assistant button, Share, shortcuts and the tile.
     listenForLaunches(_launched);
+    _askIfNotifying();
     // Closed-app checks get the current sign-in each start.
     backgroundChecksOn().then((on) {
       if (!on || !mounted) return;
@@ -103,6 +104,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         cookie: client.cookie,
       );
     });
+  }
+
+  /// Notifications turned on (here, or on the web) but not allowed by
+  /// Android yet: ask once at start, as Android 13 and later need.
+  Future<void> _askIfNotifying() async {
+    if (await notificationsAllowed()) return;
+    var wanted = await backgroundChecksOn();
+    if (!wanted) {
+      try {
+        final ui = (await ref.read(userSettingsProvider.future))['ui'] as Map?;
+        wanted = ui?['notificationEnabled'] == true;
+      } catch (_) {
+        return;
+      }
+    }
+    if (wanted && mounted) await askForNotifications();
   }
 
   Future<void> _launched(PhoneLaunch launch) async {

@@ -36,4 +36,23 @@ void main() {
     await setBackgroundChecks(false);
     expect(await backgroundChecksOn(), isFalse);
   });
+
+  test('turned-down notifications open Android settings', () async {
+    final calls = <String>[];
+    var granted = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('nexus/notify'), (
+          c,
+        ) async {
+          calls.add(c.method);
+          if (c.method == 'ask' || c.method == 'allowed') return granted;
+          return null;
+        });
+    expect(await allowNotifications(), isFalse);
+    expect(calls, ['ask', 'openSettings']);
+    calls.clear();
+    granted = true;
+    expect(await allowNotifications(), isTrue);
+    expect(calls, ['ask', 'allowed']);
+  });
 }
