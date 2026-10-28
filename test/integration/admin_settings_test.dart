@@ -139,6 +139,19 @@ void main() {
     expect(preview['models'], contains('items'));
   }, skip: skip);
 
+  test('settings export imports back', () async {
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    final config = await client.send('GET', '/api/v1/configs/export');
+    expect(config, isA<Map>());
+    await client.send(
+      'POST',
+      '/api/v1/configs/import',
+      body: {'config': config},
+    );
+    expect(await client.send('GET', '/api/v1/configs/export'), config);
+  }, skip: skip);
+
   test('groups give permissions to their members', () async {
     final client = OpenWebUiClient(baseUrl: url!);
     await client.signIn(email!, password!);

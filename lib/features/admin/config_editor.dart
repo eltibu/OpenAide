@@ -132,7 +132,16 @@ class ConfigAction {
     this.confirm,
     this.saveAs,
     this.icon = Icons.play_arrow_outlined,
+    this.toFile,
+    this.importAs,
   });
+
+  /// Makes the saved file from the JSON the server sends, instead of
+  /// saving what it sends as it is.
+  final List<int> Function(Object? json)? toFile;
+
+  /// Picks a JSON file and sends it to [path] inside this field.
+  final String? importAs;
 
   final String label;
   final String path;
@@ -145,6 +154,22 @@ class ConfigAction {
   final String? saveAs;
   final IconData icon;
 }
+
+/// Everyone as the web's users.csv: id, name, email and role.
+List<int> usersCsv(Object? json) {
+  final users = json is Map ? json['users'] : json;
+  const headers = ['id', 'name', 'email', 'role'];
+  String cell(Object? v) => v == null ? '' : '"${'$v'.replaceAll('"', '""')}"';
+  return utf8.encode(
+    [
+      headers.join(','),
+      for (final u in users as List? ?? const [])
+        if (u is Map) headers.map((h) => cell(u[h])).join(','),
+    ].join('\n'),
+  );
+}
+
+List<int> _jsonFile(Object? json) => utf8.encode(jsonEncode(json));
 
 Map<String, dynamic> _ldapSwitch(Map<String, dynamic> read) => {
   'enable_ldap': read['ENABLE_LDAP'] == true,
@@ -286,6 +311,27 @@ final adminConfigSections = <ConfigSection>[
         path: '/api/v1/configs/export',
         saveAs: 'config.json',
         icon: Icons.settings_backup_restore,
+      ),
+      ConfigAction(
+        label: 'Import settings',
+        path: '/api/v1/configs/import',
+        importAs: 'config',
+        confirm: 'The settings in the file replace the server\'s current ones.',
+        icon: Icons.upload_file,
+      ),
+      ConfigAction(
+        label: 'Export all chats',
+        path: '/api/v1/chats/all/db',
+        saveAs: 'all-chats-export.json',
+        toFile: _jsonFile,
+        icon: Icons.forum_outlined,
+      ),
+      ConfigAction(
+        label: 'Export users',
+        path: '/api/v1/users/all',
+        saveAs: 'users.csv',
+        toFile: usersCsv,
+        icon: Icons.people_outline,
       ),
     ],
   ),
@@ -534,8 +580,17 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
     }
     final client = ref.read(clientProvider);
     try {
-      if (a.saveAs != null) {
-        final bytes = await client.getBytes(a.path);
+      if (a.importAs != null) {
+        final picked = await FilePicker.pickFiles();
+        if (picked.isEmpty) return;
+        final json = jsonDecode(utf8.decode(await picked.first.readAsBytes()));
+        await client.send(a.method, a.path, body: {a.importAs!: json});
+        if (mounted) _say(context, 'Imported');
+        await _load();
+      } else if (a.saveAs != null) {
+        final bytes = a.toFile != null
+            ? a.toFile!(await client.send('GET', a.path))
+            : await client.getBytes(a.path);
         final saved = await FilePicker.saveFile(
           fileName: a.saveAs!,
           bytes: Uint8List.fromList(bytes),
