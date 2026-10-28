@@ -19,7 +19,7 @@ void main() {
   test('home network names and addresses are local', () {
     for (final h in [
       'localhost',
-      '192.168.1.209',
+      '192.168.1.20',
       '10.0.0.5',
       '[::1]',
       'nas',
@@ -37,7 +37,7 @@ void main() {
   test('only plain http to the internet counts as insecure', () {
     expect(isInsecureRemote(Uri.parse('http://chat.example.com')), isTrue);
     expect(isInsecureRemote(Uri.parse('https://chat.example.com')), isFalse);
-    expect(isInsecureRemote(Uri.parse('http://192.168.1.209/chat')), isFalse);
+    expect(isInsecureRemote(Uri.parse('http://192.168.1.20/chat')), isFalse);
   });
 
   test('plain http on the home network still connects', () async {

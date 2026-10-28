@@ -1651,6 +1651,24 @@ class ChatController extends Notifier<ChatState> {
             .trim();
     final out = AgentOutput();
     final before = continuing == null ? '' : reply.content;
+    // A continued reply keeps its earlier steps and text; the reply shows
+    // its output items when it has any, so the new ones go after them.
+    final earlier = <Map<String, dynamic>>[
+      if (before.isNotEmpty)
+        if (reply.extra['output'] case final List items when items.isNotEmpty)
+          for (final i in items.whereType<Map>()) i.cast<String, dynamic>()
+        else
+          {
+            'type': 'message',
+            'content': [
+              {'type': 'output_text', 'text': before},
+            ],
+          },
+    ];
+    final hadOutput =
+        reply.extra['output'] is List &&
+        (reply.extra['output'] as List).isNotEmpty;
+    bool showSteps() => out.hasSteps || (before.isNotEmpty && hadOutput);
     String? failed;
     try {
       final provider = parseProviderModel(reply.model)?.provider;
@@ -1684,8 +1702,8 @@ class ChatController extends Notifier<ChatState> {
         if (run.finished.isCompleted) return;
         out.add(e);
         reply.content = '$before${out.content}';
-        if (out.hasSteps && before.isEmpty) {
-          reply.extra['output'] = out.output();
+        if (showSteps()) {
+          reply.extra['output'] = [...earlier, ...out.output()];
         }
         if (view == _view) state = state.copyWith(chat: chat);
         _speak(run, reply.content);
@@ -1699,8 +1717,8 @@ class ChatController extends Notifier<ChatState> {
       run.finish();
       if (identical(_run, run)) _run = null;
     }
-    if (out.hasSteps && before.isEmpty) {
-      reply.extra['output'] = out.output(done: true);
+    if (showSteps()) {
+      reply.extra['output'] = [...earlier, ...out.output(done: true)];
     }
     reply.extra['done'] = true;
     if (!state.temporary) {

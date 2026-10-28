@@ -231,8 +231,11 @@ Future<String?> runPhoneAction(
   }
 
   /// A number for [who]: as typed, or from your contacts.
-  Future<(String?, String)> numberFor(String who) async {
-    if (_isNumber(who)) return (who, who);
+  Future<(String?, String)> numberFor(String asked) async {
+    if (_isNumber(asked)) return (asked, asked);
+    // "Ana (number ending 34)", as the assistant is told to pick one.
+    final ending = RegExp(r'\s*\(number ending (\d+)\)\s*$').firstMatch(asked);
+    final who = ending == null ? asked : asked.substring(0, ending.start);
     List? people;
     try {
       people = await _channel.invokeMethod<List>('contacts', {'name': who});
@@ -242,7 +245,17 @@ Future<String?> runPhoneAction(
     if (people == null) {
       return (null, 'OpenAide needs to see your contacts to find $who.');
     }
-    final list = people.whereType<Map>().toList();
+    var list = people.whereType<Map>().toList();
+    if (ending != null) {
+      final narrowed = list
+          .where(
+            (p) => '${p['number']}'
+                .replaceAll(RegExp(r'\D'), '')
+                .endsWith(ending[1]!),
+          )
+          .toList();
+      if (narrowed.isNotEmpty) list = narrowed;
+    }
     if (list.isEmpty) return (null, 'No contact called $who.');
     final chosen = list.length == 1 ? list.single : await pick(list);
     if (chosen == null) return (null, '');
