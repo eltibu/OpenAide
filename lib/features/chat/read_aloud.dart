@@ -261,7 +261,8 @@ String? _voiceIn(Object? holder, String key) {
 }
 
 /// The read-aloud toggle for the chat's top bar: on, every reply is spoken
-/// until it is turned off.
+/// until it is turned off. It shows only while on, so the bar stays as quiet
+/// as the Claude app's; Controls (and /read) turn it on.
 class ReadAloudButton extends ConsumerStatefulWidget {
   const ReadAloudButton({super.key});
 
@@ -300,6 +301,7 @@ class _ReadAloudButtonState extends ConsumerState<ReadAloudButton> {
   Widget build(BuildContext context) {
     final on = ref.watch(readAloudOnProvider);
     final speaker = ref.watch(readAloudProvider);
+    if (!on) return const SizedBox.shrink();
     return ValueListenableBuilder<bool>(
       valueListenable: speaker.speaking,
       builder: (context, speaking, _) => IconButton(

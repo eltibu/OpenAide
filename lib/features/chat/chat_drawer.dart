@@ -195,14 +195,16 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                 ref.invalidate(sharedFoldersProvider);
                 ref.invalidate(channelListProvider);
               },
-              // Slim rows, as on the web, so more chats fit.
+              // Rows as in the Claude app: readable titles, easy to tap.
               child: ListTileTheme(
                 data: ListTileTheme.of(context).copyWith(
-                  dense: true,
-                  minTileHeight: 38,
+                  // Not dense: that shrinks titles to 13.
+                  dense: false,
+                  minTileHeight: 44,
                   minVerticalPadding: 0,
                   visualDensity: VisualDensity.compact,
-                  titleTextStyle: Theme.of(context).textTheme.bodyMedium,
+                  titleTextStyle: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(fontSize: 15),
                 ),
                 child: ListView(
                   padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
@@ -632,7 +634,6 @@ class _FolderTileState extends ConsumerState<FolderTile> {
     final f = widget.folder;
     final children = widget.all.where((c) => c.parentId == f.id);
     return ExpansionTile(
-      dense: true,
       shape: const Border(),
       leading: Icon(_open ? Icons.folder_open : Icons.folder_outlined),
       title: Row(

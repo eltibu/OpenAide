@@ -207,7 +207,7 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const AiProvidersScreen()),
           ),
           ListTile(
-            leading: const Icon(Icons.phone_android),
+            leading: const Icon(Icons.download_for_offline_outlined),
             title: const Text('Models on this phone'),
             subtitle: const Text('Download models that run offline'),
             onTap: () => open(const LocalModelsScreen()),
