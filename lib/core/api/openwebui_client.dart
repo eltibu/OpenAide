@@ -483,6 +483,40 @@ class OpenWebUiClient {
     'stream': true,
   });
 
+  /// A request whose answer comes as JSON lines (Ollama's pull progress),
+  /// or as `data:` lines; each object as it arrives.
+  Stream<Map<String, dynamic>> streamJson(
+    String method,
+    String path,
+    Map<String, dynamic> body,
+  ) async* {
+    final res = await _open(
+      () => http.Request(method, _uri(path))
+        ..headers.addAll(_headers)
+        ..body = jsonEncode(body),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(
+        res.statusCode,
+        _errorText(await res.stream.toBytes()),
+      );
+    }
+    final lines = res.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+    await for (var line in lines) {
+      line = line.trim();
+      if (line.startsWith('data:')) line = line.substring(5).trim();
+      if (line.isEmpty || line == '[DONE]') continue;
+      try {
+        final j = jsonDecode(line);
+        if (j is Map) yield j.cast<String, dynamic>();
+      } on FormatException {
+        // Not JSON: skip it.
+      }
+    }
+  }
+
   Stream<String> _streamText(String path, Map<String, dynamic> body) async* {
     final res = await _open(
       () => http.Request('POST', _uri(path))

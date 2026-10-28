@@ -14,6 +14,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
 import '../workspace/models_api.dart';
+import 'manage_ollama.dart';
 import '../workspace/models_screen.dart'
     show ModelEditor, modelsApiProvider, workspaceModelsProvider;
 
@@ -398,6 +399,16 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                 ),
               ]
             : [
+                IconButton(
+                  tooltip: 'Manage Ollama models',
+                  icon: const Icon(Icons.download_for_offline_outlined),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ManageOllamaScreen(),
+                    ),
+                  ),
+                ),
                 IconButton(
                   tooltip: 'Reorder',
                   onPressed: list == null || _busy
