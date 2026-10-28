@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -162,6 +165,9 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   List<Map<String, dynamic>>? _suggestions;
   bool _idEdited = false;
 
+  /// meta.profile_image_url: a data URL once you pick a photo.
+  String? _image;
+
   bool get _isNew => widget.model == null;
   bool get _connection => widget.connectionModel;
 
@@ -190,6 +196,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _skills = m.ids('skillIds').toSet();
       _params = {...m.params}..remove('system');
       _suggestions = readSuggestions(m.meta['suggestion_prompts']);
+      _image = m.meta['profile_image_url'] as String?;
     } else if (widget.copyOf case final c?) {
       _name.text = '${c.name} (copy)';
       _id.text = modelIdFrom(_name.text);
@@ -202,11 +209,45 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _skills = c.ids('skillIds').toSet();
       _params = {...c.params}..remove('system');
       _suggestions = readSuggestions(c.meta['suggestion_prompts']);
+      _image = c.meta['profile_image_url'] as String?;
     } else {
       // A new model starts with the abilities the web turns on by default.
       _caps = {for (final k in defaultModelCapabilities) k: true};
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  ImageProvider? _avatar() {
+    final url = _image ?? '';
+    if (url.startsWith('data:image/')) {
+      try {
+        return MemoryImage(base64Decode(url.substring(url.indexOf(',') + 1)));
+      } on FormatException {
+        return null;
+      }
+    }
+    if (url.isEmpty || url == '/static/favicon.png') return null;
+    final client = ref.read(clientProvider);
+    return NetworkImage(
+      url.startsWith('http') ? url : client.serverUri(url).toString(),
+      headers: client.authHeaders,
+    );
+  }
+
+  /// Small, as the web shrinks model pictures before saving them.
+  Future<void> _pickImage() async {
+    final photo = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 250,
+      maxHeight: 250,
+      imageQuality: 85,
+    );
+    if (photo == null) return;
+    final bytes = await photo.readAsBytes();
+    final type = (photo.mimeType ?? 'image/jpeg').contains('png')
+        ? 'image/png'
+        : 'image/jpeg';
+    setState(() => _image = 'data:$type;base64,${base64Encode(bytes)}');
   }
 
   Future<void> _save() async {
@@ -244,7 +285,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
         }(),
     ];
     meta['suggestion_prompts'] = _suggestions;
-    meta['profile_image_url'] ??= '/static/favicon.png';
+    meta['profile_image_url'] = _image ?? '/static/favicon.png';
     final system = _system.text.trim();
     if (system.isEmpty) {
       params.remove('system');
@@ -394,6 +435,35 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 28,
+                              backgroundImage: _avatar(),
+                              child: _avatar() == null
+                                  ? const Icon(Icons.smart_toy_outlined)
+                                  : null,
+                            ),
+                            const SizedBox(width: 12),
+                            TextButton.icon(
+                              icon: const Icon(Icons.photo_outlined),
+                              label: const Text('Upload profile image'),
+                              onPressed: _pickImage,
+                            ),
+                            if (_image != null &&
+                                _image != '/static/favicon.png')
+                              IconButton(
+                                tooltip: 'Reset image',
+                                icon: const Icon(Icons.close),
+                                onPressed: () => setState(
+                                  () => _image = '/static/favicon.png',
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                       TextField(
                         controller: _name,
                         autofocus: _isNew,
