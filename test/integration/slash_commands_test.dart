@@ -44,6 +44,7 @@ void main() {
     await container.read(modelsProvider.future);
     final controller = container.read(chatControllerProvider.notifier)
       ..selectModel('fake');
+    ChatState now() => container.read(chatControllerProvider);
 
     final config = (await client.send('GET', '/api/v1/chats/config') as Map)
         .cast<String, dynamic>();
@@ -53,6 +54,16 @@ void main() {
       body: {...config, 'ENABLE_CONTEXT_COMPACTION': on},
     );
     addTearDown(() => compaction(config['ENABLE_CONTEXT_COMPACTION'] == true));
+
+    // The 1 to 10 rating is kept with the thumbs.
+    await controller.send('rate me');
+    final reply = now().messages.last;
+    await controller.rate(reply, 1, reason: '', comment: 'ok', score: 8);
+    final saved = await client.chat(now().chat!.id);
+    final annotation = saved.messages[reply.id]!.extra['annotation'] as Map;
+    expect(annotation['rating'], 1);
+    expect(annotation['details'], {'rating': 8});
+    controller.newChat();
 
     await compaction(false);
     await controller.send('hello');

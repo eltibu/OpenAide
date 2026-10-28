@@ -1113,6 +1113,7 @@ class ChatController extends Notifier<ChatState> {
     int rating, {
     String? reason,
     String? comment,
+    int? score,
   }) async {
     final chat = state.chat;
     if (chat == null || chat.id.isEmpty) return;
@@ -1124,8 +1125,11 @@ class ChatController extends Notifier<ChatState> {
     if (before?['rating'] != rating) {
       annotation
         ..['reason'] = null
-        ..['comment'] = null;
+        ..['comment'] = null
+        ..['details'] = null;
     }
+    // The web's 1 to 10, kept beside the thumbs.
+    if (score != null) annotation['details'] = {'rating': score};
     if (reason != null) annotation['reason'] = reason;
     if (comment != null) annotation['comment'] = comment;
     reply.extra['annotation'] = annotation;

@@ -51,6 +51,9 @@ Future<void> rateReply(
   if (undo || !context.mounted) return;
   final reasons = rating > 0 ? likeReasons : dislikeReasons;
   String? reason;
+  int? score =
+      ((reply.extra['annotation'] as Map?)?['details'] as Map?)?['rating']
+          as int?;
   final comment = TextEditingController();
   final sent = await showModalBottomSheet<bool>(
     context: context,
@@ -71,6 +74,50 @@ Future<void> rateReply(
             Text(
               rating > 0 ? 'What was good?' : 'What went wrong?',
               style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 12),
+            // The web's 1 to 10: thumbs down allows 1-5, thumbs up 6-10.
+            Row(
+              children: [
+                for (var n = 1; n <= 10; n++)
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                      child: Semantics(
+                        label: 'Rate $n out of 10',
+                        child: ChoiceChip(
+                          showCheckmark: false,
+                          padding: EdgeInsets.zero,
+                          labelPadding: EdgeInsets.zero,
+                          label: SizedBox(
+                            width: double.infinity,
+                            child: Text('$n', textAlign: TextAlign.center),
+                          ),
+                          selected: score == n,
+                          onSelected: (rating > 0 ? n < 6 : n > 5)
+                              ? null
+                              : (on) => setSheet(() => score = on ? n : null),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(2, 4, 2, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    '1 - Awful',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                  Text(
+                    '10 - Amazing',
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -111,8 +158,14 @@ Future<void> rateReply(
   );
   final text = comment.text.trim();
   comment.dispose();
-  if (sent == true && (reason != null || text.isNotEmpty)) {
-    await controller.rate(reply, rating, reason: reason ?? '', comment: text);
+  if (sent == true && (reason != null || text.isNotEmpty || score != null)) {
+    await controller.rate(
+      reply,
+      rating,
+      reason: reason ?? '',
+      comment: text,
+      score: score,
+    );
   }
 }
 
