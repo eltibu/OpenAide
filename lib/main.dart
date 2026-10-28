@@ -8,6 +8,7 @@ import 'features/auth/login_screen.dart';
 import 'features/auth/sign_in_steps.dart';
 import 'features/chat/chat_controller.dart';
 import 'features/chat/chat_screen.dart';
+import 'features/chat/in_app_toasts.dart';
 import 'features/phone/app_lock.dart';
 
 void main() {
@@ -41,7 +42,7 @@ class NexusApp extends ConsumerWidget {
             signedIn: true,
             onCheck: () => ref.read(sessionProvider.notifier).recheck(),
           ),
-        AsyncData(value: != null) => const ChatScreen(),
+        AsyncData(value: != null) => const InAppToasts(child: ChatScreen()),
         // Spinner only while restoring a saved session; during sign-in the
         // login screen stays up so what was typed isn't lost.
         AsyncLoading() when !ref.read(sessionProvider.notifier).booted =>

@@ -361,6 +361,31 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             : null,
                       ),
                     ),
+                  // Any color, by its hex code.
+                  Tooltip(
+                    message: 'Custom color',
+                    child: GestureDetector(
+                      onTap: () async {
+                        final picked = await pickCustomColor(d, color);
+                        if (picked != null) setD(() => color = picked);
+                      },
+                      child: CircleAvatar(
+                        radius: 14,
+                        backgroundColor: calendarColors.contains(color)
+                            ? Theme.of(d).colorScheme.surfaceContainerHighest
+                            : color,
+                        child: Icon(
+                          calendarColors.contains(color)
+                              ? Icons.palette_outlined
+                              : Icons.check,
+                          size: 16,
+                          color: calendarColors.contains(color)
+                              ? null
+                              : Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -634,6 +659,53 @@ class _ErrorView extends StatelessWidget {
           FilledButton(onPressed: retry, child: const Text('Try again')),
         ],
       ),
+    ),
+  );
+}
+
+/// Asks for a color as a hex code like #3b82f6, with a preview.
+Future<Color?> pickCustomColor(BuildContext context, Color start) {
+  final hex = TextEditingController(text: colorHex(start));
+  return showDialog<Color>(
+    context: context,
+    builder: (d) => StatefulBuilder(
+      builder: (d, setD) {
+        final color = parseColor(hex.text.trim());
+        return AlertDialog(
+          title: const Text('Custom color'),
+          content: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: color ?? Colors.transparent,
+                child: color == null ? const Icon(Icons.block) : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: hex,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Hex code',
+                    hintText: '#3b82f6',
+                  ),
+                  onChanged: (_) => setD(() {}),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: color == null ? null : () => Navigator.pop(d, color),
+              child: const Text('Use'),
+            ),
+          ],
+        );
+      },
     ),
   );
 }

@@ -25,6 +25,7 @@ import 'groups_screen.dart';
 import 'integrations_screen.dart';
 import 'pipelines_screen.dart';
 import 'user_extras.dart';
+import '../workspace/code_editor.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -485,10 +486,56 @@ class _UserEditorState extends ConsumerState<UserEditor> {
               'Joined ${MaterialLocalizations.of(context).formatMediumDate(widget.user!.created)}',
               style: TextStyle(color: context.nexus.muted),
             ),
+            // Not for yourself: it would sign this phone out too.
+            if (!self)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Sign out all devices'),
+                  onPressed: _busy ? null : _signOutEverywhere,
+                ),
+              ),
           ],
         ],
       ),
     );
+  }
+
+  Future<void> _signOutEverywhere() async {
+    final u = widget.user!;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const Text('Sign out all devices?'),
+        content: Text(
+          '${u.name} will need to sign in again on every device. API keys '
+          'remain active.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: const Text('Sign out'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref
+          .read(clientProvider)
+          .send(
+            'POST',
+            '/api/v1/users/${Uri.encodeComponent(u.id)}/sessions/revoke',
+          );
+      if (mounted) _say(context, 'All sessions revoked');
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
   }
 }
 
@@ -630,6 +677,20 @@ class _AdminGeneralState extends ConsumerState<AdminGeneral> {
 
 // ---- Functions ----
 
+/// Opens the function code editor; true when saved.
+Future<bool> editFunction(
+  BuildContext context, {
+  String? id,
+  Map<String, dynamic>? start,
+}) async =>
+    await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CodeItemEditor(kind: 'function', id: id, start: start),
+      ),
+    ) ==
+    true;
+
 class FunctionsScreen extends ConsumerWidget {
   const FunctionsScreen({super.key});
 
@@ -647,7 +708,25 @@ class FunctionsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Functions')),
+      appBar: AppBar(
+        title: const Text('Functions'),
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'New Function',
+            icon: const Icon(Icons.add),
+            onSelected: (v) async {
+              final saved = v == 'url'
+                  ? await importCodeFromUrl(context, ref, 'function')
+                  : await editFunction(context);
+              if (saved) ref.invalidate(functionsProvider);
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'new', child: Text('New Function')),
+              PopupMenuItem(value: 'url', child: Text('Import from URL')),
+            ],
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(functionsProvider.future),
         child: list.when(
@@ -666,8 +745,7 @@ class FunctionsScreen extends ConsumerWidget {
                 Padding(
                   padding: const EdgeInsets.all(24),
                   child: Text(
-                    'No functions yet. Add them from the server\'s Admin '
-                    'Panel on the web.',
+                    'No functions yet. Tap + to write one or import it.',
                     style: TextStyle(color: muted),
                   ),
                 ),
@@ -709,6 +787,38 @@ class FunctionsScreen extends ConsumerWidget {
                               .toggleFunctionGlobal(f.id),
                         ),
                       ),
+                    ListTile(
+                      leading: const Icon(Icons.edit_outlined),
+                      title: const Text('Edit'),
+                      onTap: () async {
+                        if (await editFunction(context, id: f.id)) {
+                          ref.invalidate(functionsProvider);
+                        }
+                      },
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.copy_all_outlined),
+                      title: const Text('Clone'),
+                      onTap: () => run(() async {
+                        final one =
+                            ((await ref
+                                        .read(clientProvider)
+                                        .send(
+                                          'GET',
+                                          '/api/v1/functions/id/${f.id}',
+                                        ))
+                                    as Map)
+                                .cast<String, dynamic>();
+                        if (!context.mounted) return;
+                        await editFunction(
+                          context,
+                          start: {
+                            ...one,
+                            'name': '${one['name'] ?? f.name} (copy)',
+                          },
+                        );
+                      }),
+                    ),
                     ListTile(
                       leading: const Icon(Icons.tune),
                       title: const Text('Settings'),

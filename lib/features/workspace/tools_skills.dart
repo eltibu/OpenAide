@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import 'code_editor.dart';
 import 'skill_files.dart';
 import 'access_editor.dart' show ItemMenu;
 import '../chat/chat_controller.dart' show skillsProvider;
@@ -48,7 +49,33 @@ class ToolsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tools'),
-        actions: const [OwnerFilterButton()],
+        actions: [
+          PopupMenuButton<String>(
+            tooltip: 'New Tool',
+            icon: const Icon(Icons.add),
+            onSelected: (v) async {
+              final saved = v == 'url'
+                  ? await importCodeFromUrl(context, ref, 'tool')
+                  : await Navigator.push<bool>(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const CodeItemEditor(kind: 'tool'),
+                          ),
+                        ) ==
+                        true;
+              if (saved) ref.invalidate(_toolsListProvider);
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: 'new', child: Text('New Tool')),
+              if (ref.read(sessionProvider).value?.user?['role'] == 'admin')
+                const PopupMenuItem(
+                  value: 'url',
+                  child: Text('Import from URL'),
+                ),
+            ],
+          ),
+          const OwnerFilterButton(),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(_toolsListProvider.future),
@@ -169,6 +196,23 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
       appBar: AppBar(
         title: Text('${t?['name'] ?? 'Tool'}'),
         actions: [
+          if (t != null)
+            IconButton(
+              tooltip: 'Edit',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () async {
+                final saved = await Navigator.push<bool>(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => CodeItemEditor(kind: 'tool', id: widget.id),
+                  ),
+                );
+                if (saved == true) {
+                  ref.invalidate(_toolsListProvider);
+                  await _load();
+                }
+              },
+            ),
           if (t != null)
             ItemMenu(
               kind: 'tool',

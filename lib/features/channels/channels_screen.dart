@@ -12,6 +12,7 @@ import '../../core/models/chat.dart' show Attachment;
 import '../chat/attachments.dart' show MessageAttachments, imageLimits;
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
+import '../studio/record_notes.dart' show dictate;
 import 'channel_manage.dart';
 import 'channels_api.dart';
 
@@ -195,6 +196,9 @@ Future<void> _startNew(BuildContext context, WidgetRef ref) async {
   }
 }
 
+/// Channels on screen now, which need no message toasts.
+final openChannels = <String>[];
+
 /// A channel's messages, live, or one thread in it when [parent] is set.
 class ChannelScreen extends ConsumerStatefulWidget {
   const ChannelScreen({super.key, required this.channel, this.parent});
@@ -231,6 +235,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
   @override
   void initState() {
     super.initState();
+    openChannels.add(_id);
     _load();
     try {
       final socket = ref.read(chatSocketProvider);
@@ -242,6 +247,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
 
   @override
   void dispose() {
+    openChannels.remove(_id);
     _live?.cancel();
     _input.dispose();
     super.dispose();
@@ -451,6 +457,17 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
         ];
       });
     } catch (_) {}
+  }
+
+  /// Speak a message: what was said goes into the box, to check first.
+  Future<void> _dictate() async {
+    final said = await dictate(context, ref.read(clientProvider));
+    if (said == null || said.trim().isEmpty || !mounted) return;
+    final now = _input.text;
+    _input.text = now.trim().isEmpty
+        ? said.trim()
+        : '${now.trimRight()} ${said.trim()}';
+    _input.selection = TextSelection.collapsed(offset: _input.text.length);
   }
 
   Future<void> _send() async {
@@ -970,6 +987,11 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                         ),
                       ),
                     ),
+                  ),
+                  IconButton(
+                    tooltip: 'Voice Input',
+                    onPressed: _dictate,
+                    icon: const Icon(Icons.mic_none),
                   ),
                   IconButton(
                     tooltip: 'Send',
