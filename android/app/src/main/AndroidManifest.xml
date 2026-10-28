@@ -5,6 +5,8 @@
     <!-- Voice calls. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Keeps the background check scheduled after a restart. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Calls and recordings keep going with the phone locked. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -77,6 +79,11 @@
             android:name=".MicService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
+        <!-- Settings > Notifications > While the app is closed. -->
+        <service
+            android:name=".BackgroundCheck"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
         <!-- Home-screen widget: Ask Nexus, Dictate, Voice call. -->
         <receiver
             android:name=".NexusWidget"

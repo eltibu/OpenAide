@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../features/auth/sso_login_screen.dart' show clearBrowserCookies;
+import '../../features/chat/reply_notify.dart' show setBackgroundChecks;
 import '../api/chat_socket.dart';
 import '../api/openwebui_client.dart';
 
@@ -220,6 +221,8 @@ class SessionNotifier extends AsyncNotifier<Session?> {
 
   Future<void> signOut() async {
     await clearBrowserCookies();
+    // No more closed-app checks with the old sign-in.
+    await setBackgroundChecks(false);
     await _storage.delete(key: _kToken);
     await _storage.delete(key: _kCookie);
     // Your saved copies go with you.

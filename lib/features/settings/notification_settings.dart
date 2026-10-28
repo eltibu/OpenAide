@@ -103,6 +103,7 @@ class NotificationSettings extends ConsumerWidget {
                   ? (on) => set({'notificationSound': on})
                   : null,
             ),
+            const _ClosedAppChecks(),
             const Divider(),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
@@ -148,6 +149,55 @@ class NotificationSettings extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// This phone's own setting: checks about every 15 minutes while the app
+/// is closed, since the server can't reach a closed app by itself.
+class _ClosedAppChecks extends ConsumerStatefulWidget {
+  const _ClosedAppChecks();
+
+  @override
+  ConsumerState<_ClosedAppChecks> createState() => _ClosedAppChecksState();
+}
+
+class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
+  bool? _on;
+
+  @override
+  void initState() {
+    super.initState();
+    backgroundChecksOn().then((on) {
+      if (mounted) setState(() => _on = on);
+    });
+  }
+
+  Future<void> _set(bool on) async {
+    if (on && !await askForNotifications()) {
+      if (mounted) {
+        _say(context, 'Allow notifications for Nexus in Android settings');
+      }
+      return;
+    }
+    final client = ref.read(clientProvider);
+    await setBackgroundChecks(
+      on,
+      baseUrl: client.baseUrl,
+      token: client.token,
+      cookie: client.cookie,
+    );
+    if (mounted) setState(() => _on = on);
+  }
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+    title: const Text('While the app is closed'),
+    subtitle: const Text(
+      'Checks about every 15 minutes for new replies and channel messages '
+      '(this phone only)',
+    ),
+    value: _on ?? false,
+    onChanged: _on == null ? null : _set,
+  );
 }
 
 class _Webhook extends ConsumerWidget {

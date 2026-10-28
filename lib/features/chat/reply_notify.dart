@@ -72,3 +72,33 @@ Future<void> listenForReplyTaps(void Function(String chatId) open) async {
     // Not on a phone.
   }
 }
+
+/// Whether the phone checks for new replies and channel messages while the
+/// app is closed (Settings > Notifications).
+Future<bool> backgroundChecksOn() async {
+  try {
+    return await _channel.invokeMethod<bool>('backgroundOn') ?? false;
+  } on MissingPluginException {
+    return false;
+  }
+}
+
+/// Turns the closed-app checks on or off; on, it also hands over the
+/// current sign-in, so call it again after signing in anew.
+Future<void> setBackgroundChecks(
+  bool on, {
+  String? baseUrl,
+  String? token,
+  String? cookie,
+}) async {
+  try {
+    await _channel.invokeMethod('background', {
+      'enabled': on,
+      'baseUrl': baseUrl,
+      'token': token,
+      'cookie': cookie,
+    });
+  } on MissingPluginException {
+    // Not on a phone.
+  }
+}

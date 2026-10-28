@@ -91,6 +91,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
     // The phone's assistant button, Share, shortcuts and the tile.
     listenForLaunches(_launched);
+    // Closed-app checks get the current sign-in each start.
+    backgroundChecksOn().then((on) {
+      if (!on || !mounted) return;
+      final client = ref.read(clientProvider);
+      setBackgroundChecks(
+        true,
+        baseUrl: client.baseUrl,
+        token: client.token,
+        cookie: client.cookie,
+      );
+    });
   }
 
   Future<void> _launched(PhoneLaunch launch) async {

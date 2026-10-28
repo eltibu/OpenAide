@@ -135,6 +135,16 @@ class MainActivity : FlutterActivity() {
         (launches ?: PhoneLaunch(this).also { launches = it }).rememberInitial(intent)
     }
 
+    override fun onResume() {
+        super.onResume()
+        BackgroundCheck.appVisible = true
+    }
+
+    override fun onPause() {
+        BackgroundCheck.appVisible = false
+        super.onPause()
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         notifier?.handleIntent(intent)

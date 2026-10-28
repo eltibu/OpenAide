@@ -84,6 +84,18 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
                     )
                 }
             }
+            // While the app is closed: see BackgroundCheck.
+            "background" -> {
+                BackgroundCheck.configure(
+                    activity,
+                    call.argument<Boolean>("enabled") ?: false,
+                    call.argument<String>("baseUrl"),
+                    call.argument<String>("token"),
+                    call.argument<String>("cookie"),
+                )
+                result.success(null)
+            }
+            "backgroundOn" -> result.success(BackgroundCheck.isOn(activity))
             "initialChat" -> {
                 result.success(initialChat)
                 initialChat = null
