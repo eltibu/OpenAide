@@ -8,6 +8,10 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
+import '../net/local_network.dart';
+
+export '../net/local_network.dart' show isLocalAddress;
+
 /// A browser's User-Agent; many sites turn plain clients away.
 const browserAgent =
     'Mozilla/5.0 (Linux; Android 15; Pixel) AppleWebKit/537.36 '
@@ -282,26 +286,6 @@ String htmlText(String html) =>
   return (title: title, text: text);
 }
 
-/// Whether [a] is on this phone or the home network: loopback, private
-/// ranges (10/8, 172.16/12, 192.168/16, fc00::/7), link-local and CGNAT.
-bool isLocalAddress(InternetAddress a) {
-  if (a.isLoopback || a.isLinkLocal) return true;
-  final b = a.rawAddress;
-  if (a.type == InternetAddressType.IPv4) {
-    return b[0] == 0 ||
-        b[0] == 10 ||
-        (b[0] == 172 && b[1] >= 16 && b[1] < 32) ||
-        (b[0] == 192 && b[1] == 168) ||
-        (b[0] == 100 && b[1] >= 64 && b[1] < 128);
-  }
-  // ::, fc00::/7, and IPv4 written as ::ffff:a.b.c.d.
-  if (b.every((x) => x == 0) || (b[0] & 0xfe) == 0xfc) return true;
-  final mapped =
-      b.sublist(0, 10).every((x) => x == 0) && b[10] == 0xff && b[11] == 0xff;
-  return mapped &&
-      isLocalAddress(InternetAddress.fromRawAddress(b.sublist(12)));
-}
-
 /// Turns away addresses on the phone or the home network. A page the model
 /// reads can tell it what to open next, so without this a web page could
 /// make it read a router or a home server and pass the text on.
@@ -360,9 +344,8 @@ Future<String> fetchPage(
               'text/html,application/xhtml+xml,application/json,'
               'text/plain;q=0.9,*/*;q=0.5',
         });
-      r = await http.Response.fromStream(
-        await client.send(req),
-      ).timeout(const Duration(seconds: 30));
+      r = await http.Response.fromStream(await client.send(req))
+          .timeout(const Duration(seconds: 30));
       final location = r.headers['location'];
       if (r.statusCode < 300 || r.statusCode >= 400 || location == null) {
         break;
