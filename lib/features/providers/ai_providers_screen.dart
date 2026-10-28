@@ -15,13 +15,14 @@ import '../../core/theme.dart';
 import 'ai_keys.dart';
 import 'local_models.dart';
 import 'local_models_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 class AiProvidersScreen extends StatelessWidget {
   const AiProvidersScreen({super.key});
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('AI providers')),
+    appBar: AppBar(title: const T('AI providers')),
     body: const AiProviderList(),
   );
 }
@@ -41,7 +42,7 @@ class AiProviderList extends ConsumerWidget {
         padding: const EdgeInsets.all(16),
         children: [
           intro ??
-              Text(
+              T(
                 'Chat with these from the phone itself, with or without an '
                 'Open WebUI server. Keys stay on this phone, and each '
                 'provider bills you directly.',
@@ -76,7 +77,7 @@ class _OnThisPhoneCard extends ConsumerWidget {
       child: ListTile(
         contentPadding: const EdgeInsets.fromLTRB(16, 8, 12, 8),
         leading: const Icon(Icons.phone_android),
-        title: const Text('On this phone'),
+        title: const T('On this phone'),
         subtitle: Text(
           ready.isEmpty
               ? 'Download a model and chat offline: free, private, no '
@@ -269,9 +270,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
             Text(_blurb, style: TextStyle(color: context.nexus.muted)),
             const SizedBox(height: 12),
             if (_signIn != null) ...[
-              const Text(
-                'Approve OpenAide in the browser, then come back here.',
-              ),
+              const T('Approve OpenAide in the browser, then come back here.'),
               const SizedBox(height: 8),
               Row(
                 children: [
@@ -282,7 +281,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                   const Spacer(),
                   TextButton(
                     onPressed: () => _signIn?.cancel(),
-                    child: const Text('Cancel'),
+                    child: const T('Cancel'),
                   ),
                 ],
               ),
@@ -297,7 +296,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                 enabled: !_busy,
                 onSubmitted: (v) => v.trim().isEmpty ? null : _check(v),
                 decoration: InputDecoration(
-                  labelText: 'API key',
+                  labelText: tr('API key'),
                   hintText: _hint,
                   border: const OutlineInputBorder(),
                   isDense: true,
@@ -320,7 +319,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                             dimension: 18,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Save'),
+                        : const T('Save'),
                   ),
                   TextButton.icon(
                     onPressed: () => launchUrl(
@@ -328,12 +327,12 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                       mode: LaunchMode.externalApplication,
                     ),
                     icon: const Icon(Icons.open_in_new, size: 18),
-                    label: const Text('Get a key'),
+                    label: const T('Get a key'),
                   ),
                   if (_typing)
                     TextButton(
                       onPressed: () => setState(() => _typing = false),
-                      child: const Text('Cancel'),
+                      child: const T('Cancel'),
                     ),
                 ],
               ),
@@ -346,7 +345,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                     FilledButton.icon(
                       onPressed: _busy ? null : _signInWithOpenRouter,
                       icon: const Icon(Icons.login),
-                      label: const Text('Sign in with OpenRouter'),
+                      label: const T('Sign in with OpenRouter'),
                     ),
                   if (!saved && _p == AiProvider.copilot)
                     FilledButton.icon(
@@ -354,7 +353,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                           ? null
                           : _signInWithGitHub,
                       icon: const Icon(Icons.login),
-                      label: const Text('Sign in with GitHub'),
+                      label: const T('Sign in with GitHub'),
                     ),
                   if (_p != AiProvider.copilot)
                     OutlinedButton(
@@ -366,7 +365,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                   if (saved)
                     TextButton(
                       onPressed: _busy ? null : _remove,
-                      child: const Text('Remove'),
+                      child: const T('Remove'),
                     ),
                 ],
               ),
@@ -389,11 +388,11 @@ class _DeviceCodeDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Sign in with GitHub'),
+    title: const T('Sign in with GitHub'),
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Open GitHub and enter this code:'),
+        const T('Open GitHub and enter this code:'),
         const SizedBox(height: 16),
         SelectableText(
           code.userCode,
@@ -405,7 +404,7 @@ class _DeviceCodeDialog extends StatelessWidget {
           onPressed: () =>
               Clipboard.setData(ClipboardData(text: code.userCode)),
           icon: const Icon(Icons.copy, size: 18),
-          label: const Text('Copy code'),
+          label: const T('Copy code'),
         ),
         const SizedBox(height: 8),
         Row(
@@ -416,7 +415,7 @@ class _DeviceCodeDialog extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
+              child: T(
                 'Waiting for GitHub…',
                 style: TextStyle(color: context.nexus.muted),
               ),
@@ -426,7 +425,7 @@ class _DeviceCodeDialog extends StatelessWidget {
       ],
     ),
     actions: [
-      TextButton(onPressed: onCancel, child: const Text('Cancel')),
+      TextButton(onPressed: onCancel, child: const T('Cancel')),
       FilledButton(
         onPressed: () {
           Clipboard.setData(ClipboardData(text: code.userCode));
@@ -435,7 +434,7 @@ class _DeviceCodeDialog extends StatelessWidget {
             mode: LaunchMode.externalApplication,
           );
         },
-        child: const Text('Open GitHub'),
+        child: const T('Open GitHub'),
       ),
     ],
   );

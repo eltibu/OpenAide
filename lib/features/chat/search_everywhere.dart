@@ -13,6 +13,7 @@ import '../channels/channels_screen.dart';
 import '../notes/notes_api.dart';
 import '../notes/notes_screen.dart';
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Where a result opens: ('chat', id), ('channel', id), ('note', id), or
 /// null for what the app can't open (shared snapshots).
@@ -192,7 +193,7 @@ class _SearchEverywhereScreenState
       default:
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("This one opens on the web only")),
+            const SnackBar(content: T("This one opens on the web only")),
           );
         }
     }
@@ -213,8 +214,8 @@ class _SearchEverywhereScreenState
           textInputAction: TextInputAction.search,
           onChanged: (_) => _changed(),
           onSubmitted: (_) => _search(),
-          decoration: const InputDecoration(
-            hintText: 'Search chats, messages and notes',
+          decoration: InputDecoration(
+            hintText: tr('Search chats, messages and notes'),
             border: InputBorder.none,
           ),
         ),
@@ -241,7 +242,7 @@ class _SearchEverywhereScreenState
                     ),
                 const SizedBox(width: 6),
                 PopupMenuButton<String>(
-                  tooltip: 'Whose',
+                  tooltip: tr('Whose'),
                   initialValue: _sharing,
                   onSelected: (v) {
                     _sharing = v;
@@ -258,7 +259,7 @@ class _SearchEverywhereScreenState
                 ),
                 const SizedBox(width: 6),
                 ActionChip(
-                  tooltip: 'Location',
+                  tooltip: tr('Location'),
                   avatar: const Icon(Icons.place_outlined, size: 18),
                   label: Text('$scopeName'),
                   onPressed: _pickScope,
@@ -277,7 +278,7 @@ class _SearchEverywhereScreenState
                   )
                 : _items.isEmpty && !_loading
                 ? Center(
-                    child: Text('No results', style: TextStyle(color: muted)),
+                    child: T('No results', style: TextStyle(color: muted)),
                   )
                 : ListView.builder(
                     itemCount: _items.length + (_more ? 1 : 0),
@@ -290,7 +291,7 @@ class _SearchEverywhereScreenState
                               onPressed: _loading
                                   ? null
                                   : () => _search(more: true),
-                              child: const Text('Load more'),
+                              child: const T('Load more'),
                             ),
                           ),
                         );

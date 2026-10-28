@@ -5,6 +5,7 @@
 library;
 
 import '../../core/widgets/empty_state.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -17,6 +18,7 @@ import '../../core/theme.dart';
 import '../admin/connections_screen.dart';
 import '../chat/chat_controller.dart';
 import 'settings_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 const directConnectionsKey = 'directConnections';
 
@@ -256,7 +258,7 @@ class _DirectConnectionsScreenState
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Connections'),
+        title: const T('Connections'),
         actions: [
           if (_saving)
             const Padding(
@@ -268,7 +270,7 @@ class _DirectConnectionsScreenState
             ),
           if (allowed && list != null)
             IconButton(
-              tooltip: 'Add Connection',
+              tooltip: tr('Add Connection'),
               onPressed: () => _edit(null),
               icon: const Icon(Icons.add),
             ),

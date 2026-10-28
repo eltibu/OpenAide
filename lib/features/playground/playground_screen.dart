@@ -14,6 +14,7 @@ import '../chat/advanced_params.dart' show AdvancedParamsEditor;
 import '../chat/attachments.dart' show MarkdownImage;
 import '../chat/chat_controller.dart';
 import '../chat/chat_screen.dart' show readingInset;
+import '../../core/i18n/app_strings.dart';
 
 /// One message in the playground, any role, editable.
 class _Turn {
@@ -60,7 +61,7 @@ class PlaygroundScreen extends StatelessWidget {
     length: 3,
     child: Scaffold(
       appBar: AppBar(
-        title: const Text('Playground'),
+        title: const T('Playground'),
         bottom: const TabBar(
           tabs: [
             Tab(text: 'Chat'),
@@ -169,7 +170,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
       final json = playgroundJson(_model, _system.text, _plain);
       if (how == 'copy') {
         await Clipboard.setData(ClipboardData(text: json));
-        messenger.showSnackBar(const SnackBar(content: Text('Copied')));
+        messenger.showSnackBar(const SnackBar(content: T('Copied')));
         return;
       }
       final text = how == 'txt';
@@ -212,7 +213,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
           DropdownButtonFormField<String>(
             initialValue: _model,
             isExpanded: true,
-            decoration: const InputDecoration(labelText: 'Model'),
+            decoration: InputDecoration(labelText: tr('Model')),
             items: [
               for (final m in models)
                 DropdownMenuItem(
@@ -224,7 +225,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
           ),
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('Controls'),
+            title: const T('Controls'),
             subtitle: Text(
               _params.isEmpty ? 'Model defaults' : '${_params.length} changed',
             ),
@@ -246,8 +247,8 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
             controller: _system,
             minLines: 2,
             maxLines: null,
-            decoration: const InputDecoration(
-              labelText: 'System',
+            decoration: InputDecoration(
+              labelText: tr('System'),
               alignLabelWithHint: true,
               border: OutlineInputBorder(),
             ),
@@ -283,7 +284,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
                         ),
                         const Spacer(),
                         IconButton(
-                          tooltip: 'Remove',
+                          tooltip: tr('Remove'),
                           visualDensity: VisualDensity.compact,
                           onPressed: _running
                               ? null
@@ -320,7 +321,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
                       ),
                     ),
               icon: const Icon(Icons.add),
-              label: const Text('Add message'),
+              label: const T('Add message'),
             ),
           ),
           Wrap(
@@ -329,17 +330,14 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
               TextButton.icon(
                 onPressed: () => _export('copy'),
                 icon: const Icon(Icons.copy),
-                label: const Text('Copy JSON'),
+                label: const T('Copy JSON'),
               ),
               PopupMenuButton<String>(
-                tooltip: 'Export',
+                tooltip: tr('Export'),
                 onSelected: _export,
                 itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: 'json',
-                    child: Text('Export chat (.json)'),
-                  ),
-                  PopupMenuItem(value: 'txt', child: Text('Plain text (.txt)')),
+                  PopupMenuItem(value: 'json', child: T('Export chat (.json)')),
+                  PopupMenuItem(value: 'txt', child: T('Plain text (.txt)')),
                 ],
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -348,7 +346,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
                     children: [
                       Icon(Icons.download_outlined, size: 18),
                       SizedBox(width: 8),
-                      Text('Export'),
+                      T('Export'),
                     ],
                   ),
                 ),
@@ -363,7 +361,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
                         _error = null;
                       }),
                 icon: const Icon(Icons.delete_sweep_outlined),
-                label: const Text('Clear'),
+                label: const T('Clear'),
               ),
             ],
           ),
@@ -486,9 +484,9 @@ class _CompletionPlaygroundState extends ConsumerState<CompletionPlayground> {
           TextField(
             controller: _system,
             maxLines: null,
-            decoration: const InputDecoration(
-              labelText: 'System',
-              hintText: 'You\'re a helpful assistant.',
+            decoration: InputDecoration(
+              labelText: tr('System'),
+              hintText: tr('You\'re a helpful assistant.'),
             ),
           ),
           const SizedBox(height: 12),
@@ -497,8 +495,8 @@ class _CompletionPlaygroundState extends ConsumerState<CompletionPlayground> {
             minLines: 12,
             maxLines: null,
             readOnly: running,
-            decoration: const InputDecoration(
-              hintText: 'Write the start; the model carries on from there',
+            decoration: InputDecoration(
+              hintText: tr('Write the start; the model carries on from there'),
               border: OutlineInputBorder(),
             ),
           ),
@@ -630,7 +628,7 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
         mimeType: 'image/png',
       );
       if (saved != null) {
-        messenger.showSnackBar(const SnackBar(content: Text('Image saved')));
+        messenger.showSnackBar(const SnackBar(content: T('Image saved')));
       }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text("Couldn't save: $e")));
@@ -645,7 +643,7 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Text(
+          child: T(
             'Image making isn\'t turned on for you on this server.',
             textAlign: TextAlign.center,
             style: TextStyle(color: muted),
@@ -685,9 +683,9 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
               Expanded(
                 child: TextField(
                   controller: _size,
-                  decoration: const InputDecoration(
-                    labelText: 'Size',
-                    hintText: 'Default, or e.g. 1024x1024',
+                  decoration: InputDecoration(
+                    labelText: tr('Size'),
+                    hintText: tr('Default, or e.g. 1024x1024'),
                   ),
                 ),
               ),
@@ -741,12 +739,12 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
                       top: 0,
                       child: GestureDetector(
                         onTap: () => setState(() => _inputs.removeAt(i)),
-                        child: const CircleAvatar(
+                        child: CircleAvatar(
                           radius: 11,
                           child: Icon(
                             Icons.close,
                             size: 14,
-                            semanticLabel: 'Remove image',
+                            semanticLabel: tr('Remove image'),
                           ),
                         ),
                       ),
@@ -779,7 +777,7 @@ class _ImagePlaygroundState extends ConsumerState<ImagePlayground> {
                   right: 8,
                   top: 14,
                   child: IconButton.filledTonal(
-                    tooltip: 'Save to phone',
+                    tooltip: tr('Save to phone'),
                     onPressed: () => _save(url),
                     icon: const Icon(Icons.download_outlined),
                   ),

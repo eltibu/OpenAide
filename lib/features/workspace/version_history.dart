@@ -13,6 +13,7 @@ import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/compare_text.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Where one kind's history lives on the server.
 class HistoryPaths {
@@ -89,7 +90,8 @@ class _VersionHistoryState extends ConsumerState<VersionHistoryScreen> {
   }
 
   void _say(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr(text))));
 
   Future<void> _load({bool next = false}) async {
     try {
@@ -128,7 +130,7 @@ class _VersionHistoryState extends ConsumerState<VersionHistoryScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
@@ -242,7 +244,7 @@ class _VersionHistoryState extends ConsumerState<VersionHistoryScreen> {
                     if (list.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text(
+                        child: T(
                           'No saved versions yet.',
                           style: TextStyle(color: muted),
                         ),
@@ -283,17 +285,17 @@ class _VersionHistoryState extends ConsumerState<VersionHistoryScreen> {
                             if (e['id'] != _current) ...[
                               const PopupMenuItem(
                                 value: 'prod',
-                                child: Text('Set as Production'),
+                                child: T('Set as Production'),
                               ),
                               const PopupMenuItem(
                                 value: 'delete',
-                                child: Text('Delete version'),
+                                child: T('Delete version'),
                               ),
                             ] else
                               const PopupMenuItem(
                                 enabled: false,
                                 value: '',
-                                child: Text('In use now'),
+                                child: T('In use now'),
                               ),
                           ],
                         ),
@@ -304,7 +306,7 @@ class _VersionHistoryState extends ConsumerState<VersionHistoryScreen> {
                           _page++;
                           _load(next: true);
                         },
-                        child: const Text('Load more'),
+                        child: const T('Load more'),
                       ),
                   ],
                 ),
@@ -366,13 +368,13 @@ class _VersionViewState extends State<_VersionView> {
       actions: [
         if (_text != null) ...[
           IconButton(
-            tooltip: 'Copy',
+            tooltip: tr('Copy'),
             icon: const Icon(Icons.copy),
             onPressed: () => Clipboard.setData(ClipboardData(text: _text!)),
           ),
           if (widget.loadCurrent != null)
             IconButton(
-              tooltip: 'Compare to current',
+              tooltip: tr('Compare to current'),
               icon: const Icon(Icons.difference_outlined),
               onPressed: _compare,
             ),
@@ -385,7 +387,7 @@ class _VersionViewState extends State<_VersionView> {
                 await widget.onProduction!();
                 if (context.mounted) Navigator.pop(context);
               },
-              child: const Text('Set as Production'),
+              child: const T('Set as Production'),
             ),
           ),
       ],

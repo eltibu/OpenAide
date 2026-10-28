@@ -15,6 +15,7 @@ import '../terminal/terminal_screen.dart'
 import 'chat_controller.dart';
 import 'chat_controls.dart';
 import 'side_panel.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// What the chat's drawer should show: a tab, and for Files which terminal,
 /// whether the shell or the files, and a file to open. [nonce] changes on
@@ -146,7 +147,7 @@ class _ChatPanelState extends ConsumerState<ChatPanel>
         ),
         actions: [
           IconButton(
-            tooltip: 'Close',
+            tooltip: tr('Close'),
             icon: const Icon(Icons.close),
             onPressed: _close,
           ),

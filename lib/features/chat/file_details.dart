@@ -17,6 +17,7 @@ import '../../core/theme.dart';
 import '../studio/office_preview.dart';
 import 'chat_controller.dart' show userSettingsProvider;
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 String fileSize(num? bytes) {
   if (bytes == null) return '';
@@ -111,7 +112,7 @@ class _FileDetailsScreenState extends ConsumerState<FileDetailsScreen> {
         title: Text(widget.name, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            tooltip: 'Download',
+            tooltip: tr('Download'),
             icon: const Icon(Icons.download_outlined),
             onPressed: _save,
           ),
@@ -158,7 +159,7 @@ class _FileDetailsScreenState extends ConsumerState<FileDetailsScreen> {
                     padding: const EdgeInsets.only(top: 8),
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.picture_as_pdf_outlined),
-                      label: const Text('Preview'),
+                      label: const T('Preview'),
                       onPressed: () async {
                         final bytes = await _bytes();
                         if (!context.mounted) return;
@@ -177,7 +178,7 @@ class _FileDetailsScreenState extends ConsumerState<FileDetailsScreen> {
                     padding: const EdgeInsets.only(top: 8),
                     child: OutlinedButton.icon(
                       icon: const Icon(Icons.description_outlined),
-                      label: const Text('Preview'),
+                      label: const T('Preview'),
                       onPressed: () async {
                         final bytes = await _bytes();
                         if (!context.mounted) return;
@@ -197,14 +198,14 @@ class _FileDetailsScreenState extends ConsumerState<FileDetailsScreen> {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(
+                      child: T(
                         'Content',
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ),
                     if (content.isNotEmpty)
                       IconButton(
-                        tooltip: 'Copy content',
+                        tooltip: tr('Copy content'),
                         icon: const Icon(Icons.copy, size: 18),
                         onPressed: () =>
                             Clipboard.setData(ClipboardData(text: content)),
@@ -310,7 +311,7 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
       title: Text(widget.name, overflow: TextOverflow.ellipsis),
       actions: [
         IconButton(
-          tooltip: 'Zoom out',
+          tooltip: tr('Zoom out'),
           icon: const Icon(Icons.zoom_out),
           onPressed: () => _set(_zoom / 1.25),
         ),
@@ -322,7 +323,7 @@ class _PdfViewScreenState extends State<PdfViewScreen> {
           ),
         ),
         IconButton(
-          tooltip: 'Zoom in',
+          tooltip: tr('Zoom in'),
           icon: const Icon(Icons.zoom_in),
           onPressed: () => _set(_zoom * 1.25),
         ),

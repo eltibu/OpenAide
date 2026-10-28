@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 final usageProvider = FutureProvider.autoDispose<Map<String, dynamic>>((
   ref,
@@ -60,7 +61,7 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
         models.where((m) => m.id == id).firstOrNull?.name ?? id;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Usage')),
+      appBar: AppBar(title: const T('Usage')),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(usageProvider.future),
         child: usage.when(
@@ -129,7 +130,7 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
                   child: Row(
                     children: [
-                      Expanded(child: Text('Weekly activity', style: heading)),
+                      Expanded(child: T('Weekly activity', style: heading)),
                       SegmentedButton<String>(
                         showSelectedIcon: false,
                         style: const ButtonStyle(
@@ -138,9 +139,9 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
                         segments: const [
                           ButtonSegment(
                             value: 'messages',
-                            label: Text('Messages'),
+                            label: T('Messages'),
                           ),
-                          ButtonSegment(value: 'tokens', label: Text('Tokens')),
+                          ButtonSegment(value: 'tokens', label: T('Tokens')),
                         ],
                         selected: {_measure},
                         onSelectionChanged: (s) =>
@@ -172,7 +173,7 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
                           style: TextStyle(color: muted, fontSize: 11),
                         ),
                         const Spacer(),
-                        Text(
+                        T(
                           'This week',
                           style: TextStyle(color: muted, fontSize: 11),
                         ),
@@ -183,7 +184,7 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
                 const Divider(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Text('Activity', style: heading),
+                  child: T('Activity', style: heading),
                 ),
                 row('Models used', '${totals['models_used'] ?? 0}'),
                 row(
@@ -210,11 +211,11 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
                 const Divider(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Text('Top models', style: heading),
+                  child: T('Top models', style: heading),
                 ),
                 if (topModels.isEmpty)
                   ListTile(
-                    title: Text(
+                    title: T(
                       'No model usage yet',
                       style: TextStyle(color: muted),
                     ),
@@ -229,14 +230,14 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
                   const Divider(),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                    child: Text('Most used tools', style: heading),
+                    child: T('Most used tools', style: heading),
                   ),
                   for (final t in topTools)
                     row('${t['name']}', '${t['count'] ?? 0} runs'),
                 ],
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                  child: Text(
+                  child: T(
                     'Token counts are estimates and may not match what a '
                     'provider bills.',
                     style: TextStyle(color: muted, fontSize: 12),

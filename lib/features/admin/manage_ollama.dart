@@ -14,6 +14,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
 import '../chat/file_details.dart' show fileSize;
 import 'ollama_pulls.dart';
+import '../../core/i18n/app_strings.dart';
 
 export 'ollama_pulls.dart' show pullPercent;
 
@@ -52,7 +53,8 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
   }
 
   void _say(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr(text))));
 
   Future<void> _load() async {
     final client = ref.read(clientProvider);
@@ -117,15 +119,15 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete $name?'),
-        content: const Text('It is removed from the Ollama server.'),
+        content: const T('It is removed from the Ollama server.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -160,41 +162,41 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Create Model'),
+        title: const T('Create Model'),
         scrollable: true,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: name,
-              decoration: const InputDecoration(
-                labelText: 'Model tag name',
-                hintText: 'my-modelfile',
+              decoration: InputDecoration(
+                labelText: tr('Model tag name'),
+                hintText: tr('my-modelfile'),
               ),
             ),
             TextField(
               controller: from,
-              decoration: const InputDecoration(
-                labelText: 'From',
-                hintText: 'llama3.2',
+              decoration: InputDecoration(
+                labelText: tr('From'),
+                hintText: tr('llama3.2'),
               ),
             ),
             TextField(
               controller: system,
               minLines: 2,
               maxLines: 6,
-              decoration: const InputDecoration(labelText: 'System prompt'),
+              decoration: InputDecoration(labelText: tr('System prompt')),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Create'),
+            child: const T('Create'),
           ),
         ],
       ),
@@ -264,10 +266,10 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
     );
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Manage Ollama'),
+        title: const T('Manage Ollama'),
         actions: [
           IconButton(
-            tooltip: 'Refresh',
+            tooltip: tr('Refresh'),
             icon: const Icon(Icons.refresh),
             onPressed: _load,
           ),
@@ -287,7 +289,7 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
               children: [
                 if (_urls.length > 1)
                   ListTile(
-                    title: const Text('Ollama server'),
+                    title: const T('Ollama server'),
                     subtitle: DropdownButton<int>(
                       value: _idx,
                       isExpanded: true,
@@ -312,9 +314,9 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
                   child: TextField(
                     controller: _tag,
                     decoration: InputDecoration(
-                      hintText: 'Enter model tag (e.g. mistral:7b)',
+                      hintText: tr('Enter model tag (e.g. mistral:7b)'),
                       suffixIcon: IconButton(
-                        tooltip: 'Pull Model',
+                        tooltip: tr('Pull Model'),
                         icon: const Icon(Icons.download),
                         onPressed: () {
                           _pull(_tag.text);
@@ -375,14 +377,14 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
                         _ => _delete('${m['name']}'),
                       },
                       itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'update', child: Text('Update')),
+                        PopupMenuItem(value: 'update', child: T('Update')),
                         PopupMenuItem(
                           value: 'unload',
-                          child: Text('Unload Model'),
+                          child: T('Unload Model'),
                         ),
                         PopupMenuItem(
                           value: 'delete',
-                          child: Text('Delete Model'),
+                          child: T('Delete Model'),
                         ),
                       ],
                     ),
@@ -395,12 +397,12 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
                     children: [
                       OutlinedButton.icon(
                         icon: const Icon(Icons.update),
-                        label: const Text('Update All Models'),
+                        label: const T('Update All Models'),
                         onPressed: _models.isEmpty ? null : _updateAll,
                       ),
                       OutlinedButton.icon(
                         icon: const Icon(Icons.add),
-                        label: const Text('Create Model'),
+                        label: const T('Create Model'),
                         onPressed: _create,
                       ),
                     ],
@@ -419,15 +421,15 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
                     children: [
                       OutlinedButton.icon(
                         icon: const Icon(Icons.upload_file),
-                        label: const Text('Upload Model'),
+                        label: const T('Upload Model'),
                         onPressed: _uploading == null ? _upload : null,
                       ),
                       TextField(
                         controller: _link,
                         decoration: InputDecoration(
-                          hintText: 'Or a link to a .gguf file',
+                          hintText: tr('Or a link to a .gguf file'),
                           suffixIcon: IconButton(
-                            tooltip: 'Download Model',
+                            tooltip: tr('Download Model'),
                             icon: const Icon(Icons.cloud_download_outlined),
                             onPressed: _uploading == null
                                 ? () => _upload(link: true)

@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Periods offered, in days; null is all time.
 const analyticsPeriods = <String, int?>{
@@ -156,7 +157,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Activity', style: Theme.of(context).textTheme.titleMedium),
+          T('Activity', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           SizedBox(
             height: 120,
@@ -211,7 +212,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     final s = _summary;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Analytics'),
+        title: const T('Analytics'),
         bottom: _loading
             ? const PreferredSize(
                 preferredSize: Size.fromHeight(2),
@@ -278,7 +279,7 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
               if (_models.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
+                  child: T(
                     'Nothing in this period.',
                     style: TextStyle(color: muted),
                   ),

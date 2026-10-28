@@ -16,6 +16,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/api/openwebui_client.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 const avatarStates = ['idle', 'listening', 'speaking'];
 
@@ -450,23 +451,23 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('New gesture'),
+        title: const T('New gesture'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: name,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                hintText: 'wave',
+              decoration: InputDecoration(
+                labelText: tr('Name'),
+                hintText: tr('wave'),
               ),
             ),
             TextField(
               controller: description,
-              decoration: const InputDecoration(
-                labelText: 'When to use it',
-                hintText: 'Greeting someone',
+              decoration: InputDecoration(
+                labelText: tr('When to use it'),
+                hintText: tr('Greeting someone'),
               ),
             ),
           ],
@@ -474,11 +475,11 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Pick animation'),
+            child: const T('Pick animation'),
           ),
         ],
       ),
@@ -507,11 +508,11 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          tooltip: 'Close avatar setup',
+          tooltip: tr('Close avatar setup'),
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text('Voice avatar'),
+        title: const T('Voice avatar'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -519,7 +520,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
               onPressed: _busy != null
                   ? null
                   : () => Navigator.pop(context, (c,)),
-              child: const Text('Apply'),
+              child: const T('Apply'),
             ),
           ),
         ],
@@ -527,7 +528,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
+          T(
             'A 3D character (a .vrm file) that shows in voice calls with '
             'this model. It breathes, blinks, and moves its mouth as it '
             'speaks.',
@@ -553,8 +554,8 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
           ),
           if (c != null) ...[
             const Divider(),
-            Text('Animations', style: Theme.of(context).textTheme.titleSmall),
-            Text(
+            T('Animations', style: Theme.of(context).textTheme.titleSmall),
+            T(
               'Optional .vrma files; without them the avatar uses its own '
               'motion.',
               style: TextStyle(color: muted, fontSize: 12),
@@ -576,7 +577,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
                         children: [
                           if (c.states[s] != null)
                             IconButton(
-                              tooltip: 'Remove',
+                              tooltip: tr('Remove'),
                               icon: const Icon(Icons.close),
                               onPressed: () => setState(
                                 () => _config = c.copyWith(
@@ -588,7 +589,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
                             onPressed: _busy == null
                                 ? () => _pickState(s)
                                 : null,
-                            child: const Text('Upload'),
+                            child: const T('Upload'),
                           ),
                         ],
                       ),
@@ -597,7 +598,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
             Row(
               children: [
                 Expanded(
-                  child: Text(
+                  child: T(
                     'Gestures',
                     style: Theme.of(context).textTheme.titleSmall,
                   ),
@@ -605,11 +606,11 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
                 TextButton.icon(
                   onPressed: _busy == null ? _addGesture : null,
                   icon: const Icon(Icons.add),
-                  label: const Text('Add'),
+                  label: const T('Add'),
                 ),
               ],
             ),
-            Text(
+            T(
               'The voice model can play these during a call.',
               style: TextStyle(color: muted, fontSize: 12),
             ),
@@ -619,7 +620,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
                 title: Text(g.name),
                 subtitle: g.description.isEmpty ? null : Text(g.description),
                 trailing: IconButton(
-                  tooltip: 'Remove',
+                  tooltip: tr('Remove'),
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () => setState(
                     () => _config = c.copyWith(
@@ -640,7 +641,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
                   ? () => setState(() => _config = null)
                   : null,
               icon: const Icon(Icons.delete_outline),
-              label: const Text('Remove avatar'),
+              label: const T('Remove avatar'),
             ),
           ],
           if (_busy != null &&

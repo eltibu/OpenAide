@@ -11,6 +11,7 @@ import '../chat/chat_panel.dart' show showChatPanel;
 import 'file_links.dart';
 import 'terminal_api.dart';
 import 'terminal_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Opens the file [file] names in the Files browser of a terminal server:
 /// [terminalId] when given (the chat's), else the first one. A full path
@@ -28,7 +29,7 @@ Future<void> openFileRef(
       ..hideCurrentSnackBar()
       ..showSnackBar(
         SnackBar(
-          content: Text(text),
+          content: Text(tr(text)),
           action: SnackBarAction(
             label: 'Copy',
             onPressed: () =>

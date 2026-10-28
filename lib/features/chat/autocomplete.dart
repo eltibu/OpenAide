@@ -12,6 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The text from the server's answer, which may wrap it as {"text": ...}.
 String autoCompletionText(String response) {
@@ -158,7 +159,7 @@ class _AutocompleteBarState extends ConsumerState<AutocompleteBar> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Dismiss',
+                  tooltip: tr('Dismiss'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.close, size: 16),
                   onPressed: () => setState(() => _suggestion = null),

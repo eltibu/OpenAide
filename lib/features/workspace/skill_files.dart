@@ -12,9 +12,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 String _seg(String id) => Uri.encodeComponent(id);
 
@@ -147,14 +149,14 @@ class _SkillFilesState extends ConsumerState<SkillFilesScreen> {
             controller: text,
             autofocus: true,
             decoration: InputDecoration(
-              hintText: 'references/notes.md',
+              hintText: tr('references/notes.md'),
               errorText: problem,
             ),
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () {
@@ -163,7 +165,7 @@ class _SkillFilesState extends ConsumerState<SkillFilesScreen> {
                 if (why != null) return set(() => problem = why);
                 Navigator.pop(d, p);
               },
-              child: const Text('OK'),
+              child: const T('OK'),
             ),
           ],
         ),
@@ -237,11 +239,11 @@ class _SkillFilesState extends ConsumerState<SkillFilesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -267,12 +269,12 @@ class _SkillFilesState extends ConsumerState<SkillFilesScreen> {
           title: Text('${widget.name} files'),
           actions: [
             IconButton(
-              tooltip: 'Upload files',
+              tooltip: tr('Upload files'),
               icon: const Icon(Icons.upload_file),
               onPressed: _busy || files == null ? null : _upload,
             ),
             IconButton(
-              tooltip: 'New File',
+              tooltip: tr('New File'),
               icon: const Icon(Icons.note_add_outlined),
               onPressed: _busy || files == null ? null : _newFile,
             ),
@@ -309,11 +311,11 @@ class _SkillFilesState extends ConsumerState<SkillFilesScreen> {
                               itemBuilder: (_) => const [
                                 PopupMenuItem(
                                   value: 'rename',
-                                  child: Text('Rename'),
+                                  child: T('Rename'),
                                 ),
                                 PopupMenuItem(
                                   value: 'delete',
-                                  child: Text('Delete'),
+                                  child: T('Delete'),
                                 ),
                               ],
                             ),
@@ -350,7 +352,7 @@ class _FileEditorState extends State<_FileEditor> {
       title: Text(widget.path),
       actions: [
         IconButton(
-          tooltip: 'Copy content',
+          tooltip: tr('Copy content'),
           icon: const Icon(Icons.copy),
           onPressed: () {
             Clipboard.setData(ClipboardData(text: _text.text));
@@ -361,7 +363,7 @@ class _FileEditorState extends State<_FileEditor> {
           padding: const EdgeInsets.only(right: 8),
           child: FilledButton(
             onPressed: () => Navigator.pop(context, _text.text),
-            child: const Text('Save'),
+            child: const T('Save'),
           ),
         ),
       ],
@@ -481,7 +483,7 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Import skills'),
+        title: const T('Import skills'),
         actions: [
           if (choices != null && choices.isNotEmpty)
             Padding(
@@ -490,7 +492,7 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
                 onPressed: _busy || choices.every((c) => c.action == 'skip')
                     ? null
                     : _import,
-                child: const Text('Import selected'),
+                child: const T('Import selected'),
               ),
             ),
         ],
@@ -501,7 +503,7 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
                   ? const CircularProgressIndicator()
                   : TextButton(
                       onPressed: _pick,
-                      child: const Text('Choose files'),
+                      child: const T('Choose files'),
                     ),
             )
           : ListView(
@@ -509,7 +511,7 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
               children: [
                 if (_busy) const LinearProgressIndicator(minHeight: 2),
                 if (choices.isEmpty)
-                  Text(
+                  T(
                     'No skills found in those files.',
                     style: TextStyle(color: muted),
                   ),
@@ -559,8 +561,8 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
                           if (c.action == 'copy' || c.action == 'create')
                             TextField(
                               controller: c.id,
-                              decoration: const InputDecoration(
-                                labelText: 'Skill ID',
+                              decoration: InputDecoration(
+                                labelText: tr('Skill ID'),
                               ),
                             ),
                         ],

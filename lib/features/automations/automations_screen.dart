@@ -11,6 +11,7 @@ import '../chat/chat_controller.dart';
 import '../chat/chat_drawer.dart' show channelsProvider;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'automations_api.dart';
+import '../../core/i18n/app_strings.dart';
 
 String _time(BuildContext context, int h, int m) =>
     MaterialLocalizations.of(context)
@@ -28,22 +29,23 @@ String _when(BuildContext context, DateTime? t) {
 }
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 Future<bool> _confirmDelete(BuildContext context, String name) async =>
     await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete "$name"?'),
-        content: const Text('Its schedule stops. This can\'t be undone.'),
+        content: const T('Its schedule stops. This can\'t be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -94,7 +96,7 @@ class _AutomationsScreenState extends ConsumerState<AutomationsScreen> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Automations'),
+        title: const T('Automations'),
         bottom: _loading
             ? const PreferredSize(
                 preferredSize: Size.fromHeight(2),
@@ -103,7 +105,7 @@ class _AutomationsScreenState extends ConsumerState<AutomationsScreen> {
             : null,
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'New automation',
+        tooltip: tr('New automation'),
         onPressed: () => _push(AutomationEditor(api: _api)),
         child: const Icon(Icons.add),
       ),
@@ -216,7 +218,7 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
         actions: [
           if (a != null) ...[
             IconButton(
-              tooltip: 'Run now',
+              tooltip: tr('Run now'),
               onPressed: _busy
                   ? null
                   : () => _do(() async {
@@ -227,7 +229,7 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
               icon: const Icon(Icons.play_arrow),
             ),
             IconButton(
-              tooltip: 'Edit',
+              tooltip: tr('Edit'),
               onPressed: () async {
                 await Navigator.push(
                   context,
@@ -241,7 +243,7 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
               icon: const Icon(Icons.edit_outlined),
             ),
             IconButton(
-              tooltip: 'Duplicate',
+              tooltip: tr('Duplicate'),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -251,7 +253,7 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
               icon: const Icon(Icons.copy_all_outlined),
             ),
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               onPressed: () async {
                 if (!await _confirmDelete(context, a.name)) return;
                 try {
@@ -313,7 +315,7 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
                     ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                    child: Text('Instructions', style: TextStyle(color: muted)),
+                    child: T('Instructions', style: TextStyle(color: muted)),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -321,15 +323,12 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 24, 20, 4),
-                    child: Text('Runs', style: TextStyle(color: muted)),
+                    child: T('Runs', style: TextStyle(color: muted)),
                   ),
                   if (_runs.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Text(
-                        'No runs yet',
-                        style: TextStyle(color: muted),
-                      ),
+                      child: T('No runs yet', style: TextStyle(color: muted)),
                     ),
                   for (final r in _runs)
                     ListTile(
@@ -518,18 +517,18 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
     final terminals = ref.watch(terminalServersProvider).value ?? const [];
     if (_model.isEmpty && models.isNotEmpty) _model = models.first.id;
     final s = _schedule;
-    Widget dropdown<T>(
+    Widget dropdown<V>(
       IconData icon,
-      T value,
-      List<(T, String)> items,
-      ValueChanged<T> onChanged,
+      V value,
+      List<(V, String)> items,
+      ValueChanged<V> onChanged,
     ) => ListTile(
       leading: Icon(icon),
       title: DropdownButtonHideUnderline(
-        child: DropdownButton<T>(
+        child: DropdownButton<V>(
           value: items.any((i) => i.$1 == value) ? value : null,
           isExpanded: true,
-          onChanged: (v) => setState(() => onChanged(v as T)),
+          onChanged: (v) => setState(() => onChanged(v as V)),
           items: [
             for (final (v, label) in items)
               DropdownMenuItem(
@@ -563,8 +562,8 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
               autofocus: _a == null,
               style: const TextStyle(fontSize: 20),
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Automation title',
+              decoration: InputDecoration(
+                hintText: tr('Automation title'),
                 border: InputBorder.none,
               ),
             ),
@@ -576,9 +575,9 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
               minLines: 5,
               maxLines: null,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Instructions',
-                hintText: 'What the model should do each time',
+              decoration: InputDecoration(
+                labelText: tr('Instructions'),
+                hintText: tr('What the model should do each time'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -688,7 +687,7 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
           if (['DAILY', 'WEEKLY', 'MONTHLY'].contains(s.frequency))
             ListTile(
               leading: const Icon(Icons.schedule),
-              title: const Text('At'),
+              title: const T('At'),
               trailing: TextButton(
                 onPressed: () async {
                   final t = await showTimePicker(
@@ -712,8 +711,8 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
                 controller: _custom,
                 maxLines: null,
                 style: const TextStyle(fontFamily: 'monospace'),
-                decoration: const InputDecoration(
-                  labelText: 'RRULE',
+                decoration: InputDecoration(
+                  labelText: tr('RRULE'),
                   border: OutlineInputBorder(),
                 ),
               ),
@@ -741,9 +740,9 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
               padding: const EdgeInsets.fromLTRB(72, 0, 20, 8),
               child: TextField(
                 controller: _cwd,
-                decoration: const InputDecoration(
-                  labelText: 'Working folder (optional)',
-                  hintText: 'Where its commands run',
+                decoration: InputDecoration(
+                  labelText: tr('Working folder (optional)'),
+                  hintText: tr('Where its commands run'),
                   border: OutlineInputBorder(),
                 ),
               ),

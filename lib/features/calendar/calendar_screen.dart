@@ -7,6 +7,7 @@ import '../chat/chat_controller.dart';
 import '../server/server_page.dart';
 import 'calendar_api.dart';
 import 'event_editor.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The server's calendar, native: a month at a glance and the chosen day's
 /// events, with the same calendars, events and scheduled tasks as the web.
@@ -172,22 +173,22 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         title: Text(l10n.formatMonthYear(_month)),
         actions: [
           IconButton(
-            tooltip: 'Previous month',
+            tooltip: tr('Previous month'),
             icon: const Icon(Icons.chevron_left),
             onPressed: () => _goMonth(-1),
           ),
           IconButton(
-            tooltip: 'Next month',
+            tooltip: tr('Next month'),
             icon: const Icon(Icons.chevron_right),
             onPressed: () => _goMonth(1),
           ),
           IconButton(
-            tooltip: 'Today',
+            tooltip: tr('Today'),
             icon: const Icon(Icons.today),
             onPressed: _goToday,
           ),
           IconButton(
-            tooltip: 'Calendars',
+            tooltip: tr('Calendars'),
             icon: const Icon(Icons.layers_outlined),
             onPressed: _calendarsSheet,
           ),
@@ -200,7 +201,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             : null,
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'New event',
+        tooltip: tr('New event'),
         onPressed: _calendars.isEmpty ? null : () => _edit(),
         child: const Icon(Icons.add),
       ),
@@ -251,7 +252,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                   controlAffinity: ListTileControlAffinity.leading,
                   activeColor: c.color,
                   title: Text(c.name),
-                  subtitle: c.isDefault ? const Text('Default') : null,
+                  subtitle: c.isDefault ? const T('Default') : null,
                   secondary: c.isSystem || (me != null && c.userId != me)
                       ? null
                       : PopupMenuButton<String>(
@@ -265,19 +266,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                             if (!c.isDefault)
                               const PopupMenuItem(
                                 value: 'default',
-                                child: Text('Make default'),
+                                child: T('Make default'),
                               ),
                             if (!c.isDefault)
                               const PopupMenuItem(
                                 value: 'delete',
-                                child: Text('Delete'),
+                                child: T('Delete'),
                               ),
                           ],
                         ),
                 ),
               ListTile(
                 leading: const Icon(Icons.add),
-                title: const Text('New calendar'),
+                title: const T('New calendar'),
                 onTap: () {
                   Navigator.pop(sheet);
                   _newCalendar();
@@ -307,17 +308,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete ${c.name}?'),
-        content: const Text(
-          'Its events are deleted too. This can\'t be undone.',
-        ),
+        content: const T('Its events are deleted too. This can\'t be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -332,14 +331,14 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       context: context,
       builder: (d) => StatefulBuilder(
         builder: (d, setD) => AlertDialog(
-          title: const Text('New calendar'),
+          title: const T('New calendar'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: name,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'Name'),
+                decoration: InputDecoration(labelText: tr('Name')),
               ),
               const SizedBox(height: 16),
               Wrap(
@@ -393,11 +392,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const Text('Create'),
+              child: const T('Create'),
             ),
           ],
         ),
@@ -593,7 +592,7 @@ class _Agenda extends StatelessWidget {
         if (events.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: Text('Nothing scheduled', style: TextStyle(color: muted)),
+            child: T('Nothing scheduled', style: TextStyle(color: muted)),
           ),
         for (final e in events)
           ListTile(
@@ -656,7 +655,7 @@ class _ErrorView extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 12),
-          FilledButton(onPressed: retry, child: const Text('Try again')),
+          FilledButton(onPressed: retry, child: const T('Try again')),
         ],
       ),
     ),
@@ -672,7 +671,7 @@ Future<Color?> pickCustomColor(BuildContext context, Color start) {
       builder: (d, setD) {
         final color = parseColor(hex.text.trim());
         return AlertDialog(
-          title: const Text('Custom color'),
+          title: const T('Custom color'),
           content: Row(
             children: [
               CircleAvatar(
@@ -685,9 +684,9 @@ Future<Color?> pickCustomColor(BuildContext context, Color start) {
                 child: TextField(
                   controller: hex,
                   autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Hex code',
-                    hintText: '#3b82f6',
+                  decoration: InputDecoration(
+                    labelText: tr('Hex code'),
+                    hintText: tr('#3b82f6'),
                   ),
                   onChanged: (_) => setD(() {}),
                 ),
@@ -697,11 +696,11 @@ Future<Color?> pickCustomColor(BuildContext context, Color start) {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: color == null ? null : () => Navigator.pop(d, color),
-              child: const Text('Use'),
+              child: const T('Use'),
             ),
           ],
         );

@@ -22,6 +22,7 @@ import '../workspace/access_editor.dart' show editAccess;
 import '../settings/settings_screen.dart' show meProvider;
 import 'channels_api.dart';
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 final channelsApiProvider = Provider<ChannelsApi>(
   (ref) => ChannelsApi(ref.watch(clientProvider)),
@@ -60,9 +61,9 @@ class ChannelsScreen extends ConsumerWidget {
     final channels = ref.watch(channelListProvider);
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Channels')),
+      appBar: AppBar(title: const T('Channels')),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'New',
+        tooltip: tr('New'),
         onPressed: () => _startNew(context, ref),
         child: const Icon(Icons.add_comment_outlined),
       ),
@@ -139,20 +140,20 @@ Future<void> _startNew(BuildContext context, WidgetRef ref) async {
         children: [
           ListTile(
             leading: const Icon(Icons.person_outline),
-            title: const Text('Direct message'),
+            title: const T('Direct message'),
             onTap: () => Navigator.pop(sheet, 'dm'),
           ),
           ListTile(
             leading: const Icon(Icons.group_outlined),
-            title: const Text('Group'),
-            subtitle: const Text('Private, for the people you add'),
+            title: const T('Group'),
+            subtitle: const T('Private, for the people you add'),
             onTap: () => Navigator.pop(sheet, 'group'),
           ),
           if (admin)
             ListTile(
               leading: const Icon(Icons.tag),
-              title: const Text('Channel'),
-              subtitle: const Text('Everyone with access joins'),
+              title: const T('Channel'),
+              subtitle: const T('Everyone with access joins'),
               onTap: () => Navigator.pop(sheet, ''),
             ),
         ],
@@ -357,17 +358,17 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Photos'),
+              title: const T('Photos'),
               onTap: () => Navigator.pop(sheet, 'gallery'),
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take a photo'),
+              title: const T('Take a photo'),
               onTap: () => Navigator.pop(sheet, 'camera'),
             ),
             ListTile(
               leading: const Icon(Icons.insert_drive_file_outlined),
-              title: const Text('Files'),
+              title: const T('Files'),
               onTap: () => Navigator.pop(sheet, 'files'),
             ),
           ],
@@ -533,7 +534,8 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
 
   void _say(String text) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr(text))));
     }
   }
 
@@ -548,7 +550,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('Ask a model'),
+              child: T('Ask a model'),
             ),
             for (final m in models)
               ListTile(
@@ -591,7 +593,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
             if (!_isThread)
               ListTile(
                 leading: const Icon(Icons.forum_outlined),
-                title: const Text('Reply in thread'),
+                title: const T('Reply in thread'),
                 onTap: () => Navigator.pop(sheet, 'thread'),
               ),
             if (_channel.raw['write_access'] != false)
@@ -604,20 +606,20 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
               ),
             ListTile(
               leading: const Icon(Icons.copy),
-              title: const Text('Copy text'),
+              title: const T('Copy text'),
               onTap: () => Navigator.pop(sheet, 'copy'),
             ),
             if (mine)
               ListTile(
                 leading: const Icon(Icons.edit_outlined),
-                title: const Text('Edit'),
+                title: const T('Edit'),
                 onTap: () => Navigator.pop(sheet, 'edit'),
               ),
             if (mine ||
                 ref.read(sessionProvider).value?.user?['role'] == 'admin')
               ListTile(
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete'),
+                title: const T('Delete'),
                 onTap: () => Navigator.pop(sheet, 'delete'),
               ),
           ],
@@ -647,7 +649,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
         final ok = await showDialog<bool>(
           context: context,
           builder: (d) => AlertDialog(
-            title: const Text('Edit message'),
+            title: const T('Edit message'),
             content: TextField(
               controller: text,
               maxLines: null,
@@ -656,11 +658,11 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(d, false),
-                child: const Text('Cancel'),
+                child: const T('Cancel'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(d, true),
-                child: const Text('Save'),
+                child: const T('Save'),
               ),
             ],
           ),
@@ -796,17 +798,17 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
             context: context,
             builder: (d) => AlertDialog(
               title: Text('Delete #${_channel.name}?'),
-              content: const Text(
+              content: const T(
                 'Its messages are deleted for everyone. This can\'t be undone.',
               ),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(d, false),
-                  child: const Text('Cancel'),
+                  child: const T('Cancel'),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(d, true),
-                  child: const Text('Delete'),
+                  child: const T('Delete'),
                 ),
               ],
             ),
@@ -910,7 +912,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
             ? null
             : [
                 IconButton(
-                  tooltip: 'Pinned messages',
+                  tooltip: tr('Pinned messages'),
                   icon: const Icon(Icons.push_pin_outlined),
                   onPressed: _openPinned,
                 ),
@@ -925,7 +927,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                               ? Icons.notifications_off_outlined
                               : Icons.notifications_outlined,
                         ),
-                        title: const Text('Notifications'),
+                        title: const T('Notifications'),
                         subtitle: Text(
                           _channel.muted ? 'Mentions only' : 'All messages',
                         ),
@@ -936,7 +938,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                         value: 'encrypted',
                         child: ListTile(
                           leading: Icon(Icons.lock_outline),
-                          title: Text('Encrypted Chat'),
+                          title: T('Encrypted Chat'),
                         ),
                       ),
                     if (!_channel.isDm)
@@ -944,7 +946,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                         value: 'members',
                         child: ListTile(
                           leading: Icon(Icons.group_outlined),
-                          title: Text('Members'),
+                          title: T('Members'),
                         ),
                       ),
                     if (!_channel.isDm && canManage(ref, _channel)) ...[
@@ -952,14 +954,14 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                         value: 'webhooks',
                         child: ListTile(
                           leading: Icon(Icons.webhook_outlined),
-                          title: Text('Webhooks'),
+                          title: T('Webhooks'),
                         ),
                       ),
                       const PopupMenuItem(
                         value: 'edit',
                         child: ListTile(
                           leading: Icon(Icons.edit_outlined),
-                          title: Text('Edit channel'),
+                          title: T('Edit channel'),
                         ),
                       ),
                       // A channel: who may read and write, by group
@@ -969,7 +971,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                           value: 'access',
                           child: ListTile(
                             leading: Icon(Icons.lock_person_outlined),
-                            title: Text('Access'),
+                            title: T('Access'),
                           ),
                         ),
                       // A group: open to anyone to join, or members only.
@@ -982,7 +984,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                                   ? Icons.lock_outline
                                   : Icons.public,
                             ),
-                            title: const Text('Visibility'),
+                            title: const T('Visibility'),
                             subtitle: Text(
                               _channel.isPrivate
                                   ? 'Private: members only'
@@ -994,7 +996,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                         value: 'delete',
                         child: ListTile(
                           leading: Icon(Icons.delete_outline),
-                          title: Text('Delete channel'),
+                          title: T('Delete channel'),
                         ),
                       ),
                     ],
@@ -1003,7 +1005,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                         value: 'hide',
                         child: ListTile(
                           leading: Icon(Icons.visibility_off_outlined),
-                          title: Text('Hide conversation'),
+                          title: T('Hide conversation'),
                         ),
                       ),
                   ],
@@ -1091,7 +1093,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         ),
-                        label: Text('Uploading…'),
+                        label: T('Uploading…'),
                       ),
                   ],
                 ),
@@ -1106,12 +1108,12 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   IconButton(
-                    tooltip: 'Upload Files',
+                    tooltip: tr('Upload Files'),
                     onPressed: _attach,
                     icon: const Icon(Icons.add),
                   ),
                   IconButton(
-                    tooltip: 'Ask a model',
+                    tooltip: tr('Ask a model'),
                     onPressed: _mention,
                     icon: const Icon(Icons.alternate_email),
                   ),
@@ -1133,12 +1135,12 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                     ),
                   ),
                   IconButton(
-                    tooltip: 'Voice Input',
+                    tooltip: tr('Voice Input'),
                     onPressed: _dictate,
                     icon: const Icon(Icons.mic_none),
                   ),
                   IconButton(
-                    tooltip: 'Send',
+                    tooltip: tr('Send'),
                     onPressed: _sending ? null : _send,
                     icon: const Icon(Icons.arrow_upward),
                     color: NexusColors.accent,
@@ -1242,7 +1244,7 @@ class _MessageTile extends StatelessWidget {
                   if (m.content.isEmpty && !m.done)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
-                      child: Text('Thinking…', style: TextStyle(color: muted)),
+                      child: T('Thinking…', style: TextStyle(color: muted)),
                     )
                   else
                     MarkdownBlock(

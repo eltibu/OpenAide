@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/theme.dart';
 import '../notes/notes_api.dart' show fromServerTime;
+import '../../core/i18n/app_strings.dart';
 
 class PersonInfo {
   const PersonInfo({
@@ -182,7 +183,7 @@ Future<void> showPersonCard(
               if (snap.hasError)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
-                  child: Text(
+                  child: T(
                     "Couldn't load their details.",
                     style: TextStyle(color: muted),
                   ),
@@ -193,7 +194,7 @@ Future<void> showPersonCard(
                   width: double.infinity,
                   child: FilledButton.icon(
                     icon: const Icon(Icons.chat_bubble_outline),
-                    label: const Text('Message'),
+                    label: const T('Message'),
                     onPressed: () {
                       Navigator.pop(sheet);
                       onMessage();

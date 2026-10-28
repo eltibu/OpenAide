@@ -36,6 +36,7 @@ import 'chat_panel.dart' show showChatPanel;
 import 'folder_settings.dart';
 import 'shared_folders.dart';
 import '../workspace/access_editor.dart' show editAccess;
+import '../../core/i18n/app_strings.dart';
 
 /// The web UI's sidebar: a short list of places at the top (new chat,
 /// search, notes, workspace), then Channels, Folders and Chats as sections
@@ -113,7 +114,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                   const NexusLogo(size: 28),
                   const SizedBox(width: 10),
                   Expanded(
-                    child: Text(
+                    child: T(
                       'OpenAide',
                       style: Theme.of(context).textTheme.titleLarge
                           ?.copyWith(fontFamily: 'serif'),
@@ -139,10 +140,10 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                 onChanged: _onSearch,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: 'Search chats',
+                  hintText: tr('Search chats'),
                   prefixIcon: const Icon(Icons.search, size: 20),
                   suffixIcon: IconButton(
-                    tooltip: 'Close search',
+                    tooltip: tr('Close search'),
                     icon: const Icon(Icons.close, size: 20),
                     onPressed: _stopSearch,
                   ),
@@ -256,7 +257,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
 
   List<Widget> _results(AsyncValue<List<ChatSummary>> found) => found.when(
     data: (list) => list.isEmpty
-        ? [const ListTile(title: Text('No chats match'))]
+        ? [const ListTile(title: T('No chats match'))]
         : [for (final c in list) ChatTile(chat: c)],
     loading: () => [const _Loading()],
     error: (e, _) => [_LoadError(error: e)],
@@ -407,7 +408,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                   TextButton(
                     onPressed: () =>
                         ref.read(chatPagesProvider.notifier).more(),
-                    child: const Text('Load more'),
+                    child: const T('Load more'),
                   ),
               ],
               loading: () => [const _Loading()],
@@ -606,7 +607,7 @@ class _LoadError extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => ListTile(
-    title: const Text('Could not load chats'),
+    title: const T('Could not load chats'),
     subtitle: Text('$error'),
     trailing: const Icon(Icons.refresh),
     onTap: () => refreshChatLists(ref.invalidate),
@@ -648,19 +649,19 @@ class _FolderTileState extends ConsumerState<FolderTile> {
       ),
       onExpansionChanged: (open) => setState(() => _open = open),
       trailing: PopupMenuButton<String>(
-        tooltip: 'Folder options',
+        tooltip: tr('Folder options'),
         icon: const Icon(Icons.more_vert, size: 20),
         onSelected: (action) => _folderAction(context, action),
         itemBuilder: (_) => [
-          const PopupMenuItem(value: 'new', child: Text('New Chat')),
+          const PopupMenuItem(value: 'new', child: T('New Chat')),
           if (f.unread > 0)
-            const PopupMenuItem(value: 'read', child: Text('Mark all as read')),
-          const PopupMenuItem(value: 'edit', child: Text('Folder settings')),
-          const PopupMenuItem(value: 'share', child: Text('Share')),
-          const PopupMenuItem(value: 'rename', child: Text('Rename')),
-          const PopupMenuItem(value: 'sub', child: Text('New folder inside')),
-          const PopupMenuItem(value: 'export', child: Text('Export')),
-          const PopupMenuItem(value: 'delete', child: Text('Delete folder')),
+            const PopupMenuItem(value: 'read', child: T('Mark all as read')),
+          const PopupMenuItem(value: 'edit', child: T('Folder settings')),
+          const PopupMenuItem(value: 'share', child: T('Share')),
+          const PopupMenuItem(value: 'rename', child: T('Rename')),
+          const PopupMenuItem(value: 'sub', child: T('New folder inside')),
+          const PopupMenuItem(value: 'export', child: T('Export')),
+          const PopupMenuItem(value: 'delete', child: T('Delete folder')),
         ],
       ),
       childrenPadding: const EdgeInsets.only(left: 12),
@@ -675,10 +676,10 @@ class _FolderTileState extends ConsumerState<FolderTile> {
                   if (list.length >= _pages * folderPageSize)
                     TextButton(
                       onPressed: () => setState(() => _pages++),
-                      child: const Text('Show more'),
+                      child: const T('Show more'),
                     ),
                   if (list.isEmpty && children.isEmpty)
-                    const ListTile(dense: true, title: Text('Empty')),
+                    const ListTile(dense: true, title: T('Empty')),
                 ],
                 loading: () => [const _Loading()],
                 error: (e, _) => [_LoadError(error: e)],
@@ -983,7 +984,7 @@ class _SelectionBar extends ConsumerWidget {
       child: Row(
         children: [
           IconButton(
-            tooltip: 'Done',
+            tooltip: tr('Done'),
             icon: const Icon(Icons.close),
             onPressed: selection.clear,
           ),
@@ -994,7 +995,7 @@ class _SelectionBar extends ConsumerWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Move to folder',
+            tooltip: tr('Move to folder'),
             icon: const Icon(Icons.drive_file_move_outline),
             onPressed: () async {
               final folders = await ref.read(foldersProvider.future);
@@ -1007,12 +1008,12 @@ class _SelectionBar extends ConsumerWidget {
             },
           ),
           IconButton(
-            tooltip: 'Archive',
+            tooltip: tr('Archive'),
             icon: const Icon(Icons.archive_outlined),
             onPressed: () => each(controller.archiveChat),
           ),
           IconButton(
-            tooltip: 'Delete',
+            tooltip: tr('Delete'),
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
               final ok = await _confirm(
@@ -1055,11 +1056,11 @@ Future<String?> _pickFolder(BuildContext context, List<Folder> folders) {
   return showDialog<String>(
     context: context,
     builder: (context) => SimpleDialog(
-      title: const Text('Move to folder'),
+      title: const T('Move to folder'),
       children: [
         SimpleDialogOption(
           onPressed: () => Navigator.pop(context, ''),
-          child: const Text('No folder'),
+          child: const T('No folder'),
         ),
         for (final (f, depth) in ordered)
           SimpleDialogOption(
@@ -1078,7 +1079,7 @@ Future<String?> _pickFolder(BuildContext context, List<Folder> folders) {
         if (ordered.isEmpty)
           const Padding(
             padding: EdgeInsets.fromLTRB(24, 8, 24, 8),
-            child: Text('No folders yet. Make one with the folder button.'),
+            child: T('No folders yet. Make one with the folder button.'),
           ),
       ],
     ),
@@ -1114,7 +1115,7 @@ Future<String?> _askText(
                     ),
                   )
                 : IconButton(
-                    tooltip: 'Generate',
+                    tooltip: tr('Generate'),
                     icon: const Icon(Icons.auto_awesome_outlined),
                     onPressed: () async {
                       setState(() => busy = true);
@@ -1137,11 +1138,11 @@ Future<String?> _askText(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, text.text),
-          child: const Text('Save'),
+          child: const T('Save'),
         ),
       ],
     ),
@@ -1160,11 +1161,11 @@ Future<bool> _confirm(BuildContext context, String title, String body) async =>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -1381,18 +1382,18 @@ class _Account extends ConsumerWidget {
                 await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('Sign out?'),
-                    content: const Text(
+                    title: const T('Sign out?'),
+                    content: const T(
                       "You'll need to sign in again to use OpenAide.",
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
+                        child: const T('Cancel'),
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Sign out'),
+                        child: const T('Sign out'),
                       ),
                     ],
                   ),
@@ -1400,7 +1401,7 @@ class _Account extends ConsumerWidget {
                 false;
             if (ok) await ref.read(sessionProvider.notifier).signOut();
           },
-          child: const Text('Sign out'),
+          child: const T('Sign out'),
         ),
       ],
       builder: (context, menu, _) => ListTile(

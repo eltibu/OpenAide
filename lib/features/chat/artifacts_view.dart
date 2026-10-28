@@ -11,6 +11,7 @@ import '../../core/models/chat.dart';
 import '../../core/theme.dart';
 import 'chat_controller.dart' show userSettingsProvider;
 import 'side_panel.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Something a reply built that can be shown live, as in the web UI's
 /// Artifacts panel: a web page (its HTML, CSS and JS blocks together) or a
@@ -344,12 +345,12 @@ class _ArtifactScreenState extends ConsumerState<ArtifactScreen> {
         title: Text(total > 1 ? 'Version ${_index + 1} of $total' : 'Artifact'),
         actions: [
           IconButton(
-            tooltip: 'Previous version',
+            tooltip: tr('Previous version'),
             onPressed: _index > 0 ? () => _go(_index - 1) : null,
             icon: const Icon(Icons.chevron_left),
           ),
           IconButton(
-            tooltip: 'Next version',
+            tooltip: tr('Next version'),
             onPressed: _index < total - 1 ? () => _go(_index + 1) : null,
             icon: const Icon(Icons.chevron_right),
           ),
@@ -360,18 +361,18 @@ class _ArtifactScreenState extends ConsumerState<ArtifactScreen> {
             icon: const Icon(Icons.code),
           ),
           IconButton(
-            tooltip: 'Copy the code',
+            tooltip: tr('Copy the code'),
             onPressed: () async {
               await Clipboard.setData(ClipboardData(text: _artifact.content));
               if (context.mounted) {
                 ScaffoldMessenger.of(context)
-                    .showSnackBar(const SnackBar(content: Text('Copied')));
+                    .showSnackBar(const SnackBar(content: T('Copied')));
               }
             },
             icon: const Icon(Icons.copy),
           ),
           IconButton(
-            tooltip: 'Reload',
+            tooltip: tr('Reload'),
             onPressed: _load,
             icon: const Icon(Icons.refresh),
           ),

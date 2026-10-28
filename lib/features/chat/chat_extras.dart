@@ -16,6 +16,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The chat's own messages as text, oldest first, as the web's .txt export.
 String chatAsText(Chat chat) =>
@@ -281,7 +282,7 @@ class _TagsSheetState extends ConsumerState<_TagsSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Tags', style: Theme.of(context).textTheme.titleLarge),
+            T('Tags', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 12),
             if (_error != null)
               Text(
@@ -295,7 +296,7 @@ class _TagsSheetState extends ConsumerState<_TagsSheet> {
                 spacing: 6,
                 runSpacing: 6,
                 children: [
-                  if (tags.isEmpty) const Text('No tags yet.'),
+                  if (tags.isEmpty) const T('No tags yet.'),
                   for (final t in tags)
                     InputChip(
                       label: Text(t),
@@ -307,11 +308,11 @@ class _TagsSheetState extends ConsumerState<_TagsSheet> {
             TextField(
               controller: _text,
               decoration: InputDecoration(
-                hintText: 'Add a tag',
+                hintText: tr('Add a tag'),
                 border: const OutlineInputBorder(),
                 isDense: true,
                 suffixIcon: IconButton(
-                  tooltip: 'Add',
+                  tooltip: tr('Add'),
                   icon: const Icon(Icons.add),
                   onPressed: () => _change('POST', _text.text),
                 ),
@@ -488,7 +489,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Share chat', style: theme.textTheme.titleLarge),
+            T('Share chat', style: theme.textTheme.titleLarge),
             const SizedBox(height: 8),
             if (_loading)
               const LinearProgressIndicator()
@@ -509,27 +510,27 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                   children: [
                     FilledButton.icon(
                       icon: const Icon(Icons.copy, size: 18),
-                      label: const Text('Copy link'),
+                      label: const T('Copy link'),
                       onPressed: () {
                         Clipboard.setData(ClipboardData(text: _link));
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Link copied')),
+                          const SnackBar(content: T('Link copied')),
                         );
                       },
                     ),
                     OutlinedButton(
                       onPressed: _busy ? null : _create,
-                      child: const Text('Update link'),
+                      child: const T('Update link'),
                     ),
                     TextButton(
                       onPressed: _busy ? null : _delete,
-                      child: const Text('Delete link'),
+                      child: const T('Delete link'),
                     ),
                   ],
                 ),
               ],
               const SizedBox(height: 12),
-              Text('Who can open it', style: theme.textTheme.titleSmall),
+              T('Who can open it', style: theme.textTheme.titleSmall),
               RadioGroup<ShareAudience>(
                 groupValue: _audience,
                 onChanged: (a) {
@@ -540,17 +541,17 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                     RadioListTile(
                       contentPadding: EdgeInsets.zero,
                       value: ShareAudience.onlyMe,
-                      title: Text('Only me'),
+                      title: T('Only me'),
                     ),
                     RadioListTile(
                       contentPadding: EdgeInsets.zero,
                       value: ShareAudience.everyone,
-                      title: Text('Everyone signed in to the server'),
+                      title: T('Everyone signed in to the server'),
                     ),
                     RadioListTile(
                       contentPadding: EdgeInsets.zero,
                       value: ShareAudience.anyone,
-                      title: Text('Anyone with the link'),
+                      title: T('Anyone with the link'),
                     ),
                   ],
                 ),
@@ -558,8 +559,8 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
               if (_audience != ShareAudience.onlyMe)
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Allow replies'),
-                  subtitle: const Text(
+                  title: const T('Allow replies'),
+                  subtitle: const T(
                     'People can carry on the chat, not just copy it',
                   ),
                   value: _replies,
@@ -570,7 +571,7 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                   alignment: Alignment.centerRight,
                   child: FilledButton(
                     onPressed: _busy ? null : _create,
-                    child: const Text('Create link'),
+                    child: const T('Create link'),
                   ),
                 ),
               if (_busy) const LinearProgressIndicator(),

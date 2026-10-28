@@ -20,6 +20,7 @@ import '../terminal/terminal_api.dart' show TerminalServer;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../voice/voice_avatar.dart' show activeAvatar;
 import 'chat_controller.dart' show serverConfigProvider, userSettingsProvider;
+import '../../core/i18n/app_strings.dart';
 
 /// What the app answers for events it can't do (running JavaScript, or a
 /// tool that lives in a browser), so the server isn't left waiting.
@@ -319,7 +320,7 @@ class _AskDialogState extends State<AskDialog> {
   void _done(Object? v) => Navigator.pop(context, v);
 
   Widget _close() => IconButton(
-    tooltip: 'Close',
+    tooltip: tr('Close'),
     icon: const Icon(Icons.close),
     onPressed: () => _done(null),
   );
@@ -375,14 +376,8 @@ class _AskDialogState extends State<AskDialog> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => _done(false),
-              child: const Text('Deny'),
-            ),
-            FilledButton(
-              onPressed: () => _done(true),
-              child: const Text('Allow'),
-            ),
+            TextButton(onPressed: () => _done(false), child: const T('Deny')),
+            FilledButton(onPressed: () => _done(true), child: const T('Allow')),
           ],
         );
       case 'confirmation':
@@ -392,13 +387,10 @@ class _AskDialogState extends State<AskDialog> {
             child: SelectableText('${_body['message'] ?? ''}'),
           ),
           actions: [
-            TextButton(
-              onPressed: () => _done(false),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => _done(false), child: const T('Cancel')),
             FilledButton(
               onPressed: () => _done(true),
-              child: const Text('Confirm'),
+              child: const T('Confirm'),
             ),
           ],
         );
@@ -453,14 +445,11 @@ class _AskDialogState extends State<AskDialog> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => _done(false),
-              child: const Text('Cancel'),
-            ),
+            TextButton(onPressed: () => _done(false), child: const T('Cancel')),
             FilledButton(
               onPressed: () =>
                   _done(select ? (_picked ?? _text.text) : _text.text),
-              child: const Text('Confirm'),
+              child: const T('Confirm'),
             ),
           ],
         );
@@ -482,7 +471,7 @@ class _AskDialogState extends State<AskDialog> {
           children: [
             if (message.isNotEmpty) SelectableText(message),
             const SizedBox(height: 8),
-            Text('Open this link to continue:', style: TextStyle(color: muted)),
+            T('Open this link to continue:', style: TextStyle(color: muted)),
             Text(
               url,
               style: const TextStyle(decoration: TextDecoration.underline),
@@ -492,7 +481,7 @@ class _AskDialogState extends State<AskDialog> {
         actions: [
           TextButton(
             onPressed: () => _done({'action': 'decline'}),
-            child: const Text('Decline'),
+            child: const T('Decline'),
           ),
           FilledButton(
             onPressed: () {
@@ -502,7 +491,7 @@ class _AskDialogState extends State<AskDialog> {
               }
               _done({'action': 'accept'});
             },
-            child: const Text('Open'),
+            child: const T('Open'),
           ),
         ],
       );
@@ -519,7 +508,7 @@ class _AskDialogState extends State<AskDialog> {
             if (!supported)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: Text(
+                child: T(
                   "This request uses a form the app can't show yet.",
                   style: TextStyle(color: muted),
                 ),
@@ -540,7 +529,7 @@ class _AskDialogState extends State<AskDialog> {
       actions: [
         TextButton(
           onPressed: () => _done({'action': 'decline'}),
-          child: const Text('Decline'),
+          child: const T('Decline'),
         ),
         if (supported)
           FilledButton(
@@ -552,7 +541,7 @@ class _AskDialogState extends State<AskDialog> {
               }
               _done({'action': 'accept', 'content': content});
             },
-            child: const Text('Submit'),
+            child: const T('Submit'),
           ),
       ],
     );
@@ -597,7 +586,7 @@ class _AskDialogState extends State<AskDialog> {
             ? '${_values[f.name]}'
             : null,
         isExpanded: true,
-        hint: const Text('Select an option'),
+        hint: const T('Select an option'),
         items: [
           for (final o in options)
             DropdownMenuItem(value: o.value, child: Text(o.title)),

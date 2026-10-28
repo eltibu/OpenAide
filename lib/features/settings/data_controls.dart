@@ -16,6 +16,7 @@ import '../chat/chat_controller.dart';
 import '../chat/file_details.dart' show FileDetailsScreen;
 import 'settings_screen.dart';
 import '../../core/widgets/search_field.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Chats from an export file: a JSON list (the web's export), one chat, or
 /// one chat per line.
@@ -60,7 +61,8 @@ Map<String, dynamic> importEntry(Map<String, dynamic> c) => c['chat'] is Map
       };
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 class DataControls extends ConsumerWidget {
   const DataControls({super.key});
@@ -134,7 +136,7 @@ class DataControls extends ConsumerWidget {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
@@ -154,35 +156,35 @@ class DataControls extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Data controls')),
+      appBar: AppBar(title: const T('Data controls')),
       body: ListView(
         children: [
           ListTile(
             leading: const Icon(Icons.file_upload_outlined),
-            title: const Text('Import chats'),
-            subtitle: const Text('From a chat export file (JSON)'),
+            title: const T('Import chats'),
+            subtitle: const T('From a chat export file (JSON)'),
             onTap: import,
           ),
           ListTile(
             leading: const Icon(Icons.file_download_outlined),
-            title: const Text('Export all chats'),
-            subtitle: const Text('Every chat, as one JSON file'),
+            title: const T('Export all chats'),
+            subtitle: const T('Every chat, as one JSON file'),
             onTap: export,
           ),
           ListTile(
             leading: const Icon(Icons.link),
-            title: const Text('Shared chats'),
-            subtitle: const Text('Links you\'ve made, copy or remove them'),
+            title: const T('Shared chats'),
+            subtitle: const T('Links you\'ve made, copy or remove them'),
             onTap: () => open(const SharedChatsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.archive_outlined),
-            title: const Text('Archived chats'),
+            title: const T('Archived chats'),
             onTap: () => open(const ArchivedChatsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.inventory_2_outlined),
-            title: const Text('Archive all chats'),
+            title: const T('Archive all chats'),
             onTap: () => act(
               'Archive all chats?',
               'They move to Archived chats, where you can bring them back.',
@@ -193,8 +195,8 @@ class DataControls extends ConsumerWidget {
           ),
           ListTile(
             leading: Icon(Icons.delete_forever_outlined, color: error),
-            title: Text('Delete all chats', style: TextStyle(color: error)),
-            subtitle: Text(
+            title: T('Delete all chats', style: TextStyle(color: error)),
+            subtitle: T(
               'Removes every chat from the server',
               style: TextStyle(color: muted),
             ),
@@ -209,8 +211,8 @@ class DataControls extends ConsumerWidget {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.folder_open_outlined),
-            title: const Text('Your files'),
-            subtitle: const Text('Everything you\'ve uploaded to the server'),
+            title: const T('Your files'),
+            subtitle: const T('Everything you\'ve uploaded to the server'),
             onTap: () => open(const YourFilesScreen()),
           ),
         ],
@@ -250,7 +252,7 @@ class SharedChatsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Shared chats'),
+        title: const T('Shared chats'),
         actions: [
           if (list.value?.isNotEmpty ?? false)
             TextButton(
@@ -258,18 +260,18 @@ class SharedChatsScreen extends ConsumerWidget {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
-                    title: const Text('Stop sharing all chats?'),
-                    content: const Text(
+                    title: const T('Stop sharing all chats?'),
+                    content: const T(
                       'Every shared link stops working. The chats stay.',
                     ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
+                        child: const T('Cancel'),
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Stop all'),
+                        child: const T('Stop all'),
                       ),
                     ],
                   ),
@@ -285,7 +287,7 @@ class SharedChatsScreen extends ConsumerWidget {
                 }
                 ref.invalidate(sharedChatsProvider);
               },
-              child: const Text('Stop all'),
+              child: const T('Stop all'),
             ),
         ],
       ),
@@ -306,7 +308,7 @@ class SharedChatsScreen extends ConsumerWidget {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(32),
-                      child: Text(
+                      child: T(
                         'You haven\'t shared any chats. Share one from its '
                         'menu in the chat list.',
                         textAlign: TextAlign.center,
@@ -340,7 +342,7 @@ class SharedChatsScreen extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              tooltip: 'Copy link',
+                              tooltip: tr('Copy link'),
                               icon: const Icon(Icons.copy, size: 20),
                               onPressed: () async {
                                 await Clipboard.setData(
@@ -355,7 +357,7 @@ class SharedChatsScreen extends ConsumerWidget {
                               },
                             ),
                             IconButton(
-                              tooltip: 'Stop sharing',
+                              tooltip: tr('Stop sharing'),
                               icon: const Icon(Icons.link_off, size: 20),
                               onPressed: () =>
                                   unshare('${c['chat_id'] ?? c['id']}'),
@@ -442,18 +444,18 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
         title: Text(
           'Delete ${picked.length} file${picked.length == 1 ? '' : 's'}?',
         ),
-        content: const Text(
+        content: const T(
           'They are removed from the server, and from any knowledge they '
           'were in.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -528,7 +530,7 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete this file?'),
+        title: const T('Delete this file?'),
         content: Text(
           '${f['filename']} is removed from the server, and from any '
           'knowledge it was in.',
@@ -536,11 +538,11 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -564,14 +566,14 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
       appBar: _picked.isNotEmpty
           ? AppBar(
               leading: IconButton(
-                tooltip: 'Clear selection',
+                tooltip: tr('Clear selection'),
                 icon: const Icon(Icons.close),
                 onPressed: () => setState(_picked.clear),
               ),
               title: Text('${_picked.length} selected'),
               actions: [
                 IconButton(
-                  tooltip: 'Select all',
+                  tooltip: tr('Select all'),
                   icon: const Icon(Icons.select_all),
                   onPressed: () => setState(
                     () =>
@@ -579,12 +581,12 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Download',
+                  tooltip: tr('Download'),
                   icon: const Icon(Icons.download_outlined),
                   onPressed: _busy ? null : _downloadPicked,
                 ),
                 IconButton(
-                  tooltip: 'Delete',
+                  tooltip: tr('Delete'),
                   icon: const Icon(Icons.delete_outline),
                   onPressed: _busy ? null : _deletePicked,
                 ),
@@ -627,7 +629,7 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
                     if (_files.isEmpty && !_loading && _error == null)
                       Padding(
                         padding: const EdgeInsets.all(32),
-                        child: Text(
+                        child: T(
                           'No files.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: muted),
@@ -678,7 +680,7 @@ class _YourFilesScreenState extends ConsumerState<YourFilesScreen> {
                         trailing: _picked.isNotEmpty
                             ? null
                             : IconButton(
-                                tooltip: 'Delete',
+                                tooltip: tr('Delete'),
                                 icon: const Icon(Icons.delete_outline),
                                 onPressed: () => _delete(f),
                               ),

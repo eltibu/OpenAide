@@ -15,6 +15,7 @@ import '../../core/theme.dart';
 import '../settings/settings_screen.dart'
     show settingsApiProvider, uiSettingsProvider;
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// One choice of a control: its name and the parameters it sets.
 typedef ControlOption = ({
@@ -169,7 +170,7 @@ class ModelControlsButton extends ConsumerWidget {
         .where((e) => ids.contains(e.key))
         .any((e) => e.value.isNotEmpty);
     return IconButton(
-      tooltip: 'Model controls',
+      tooltip: tr('Model controls'),
       visualDensity: VisualDensity.compact,
       color: picked ? NexusColors.accent : context.nexus.muted,
       icon: const Icon(Icons.tune_rounded),
@@ -233,7 +234,7 @@ class _ControlsSheetState extends ConsumerState<_ControlsSheet> {
           children: [
             Row(
               children: [
-                Text(
+                T(
                   'Model controls',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
@@ -330,7 +331,7 @@ class _ControlRow extends StatelessWidget {
           if (current != null)
             TextButton(
               onPressed: onPick == null ? null : () => onPick!(null),
-              child: const Text('Default'),
+              child: const T('Default'),
             ),
         ],
       ),
@@ -379,7 +380,7 @@ class ModelControlsEditor extends StatelessWidget {
     final muted = context.nexus.muted;
     return ExpansionTile(
       tilePadding: EdgeInsets.zero,
-      title: const Text('Model controls'),
+      title: const T('Model controls'),
       subtitle: Text(
         value.isEmpty
             ? 'Choices people can pick in a chat'
@@ -399,7 +400,7 @@ class ModelControlsEditor extends StatelessWidget {
             trailing: i == 0
                 ? null
                 : IconButton(
-                    tooltip: 'Move up',
+                    tooltip: tr('Move up'),
                     icon: const Icon(Icons.arrow_upward),
                     onPressed: () {
                       final list = [...value];
@@ -414,7 +415,7 @@ class ModelControlsEditor extends StatelessWidget {
           child: TextButton.icon(
             onPressed: () => _edit(context),
             icon: const Icon(Icons.add),
-            label: const Text('Add control'),
+            label: const T('Add control'),
           ),
         ),
       ],
@@ -532,7 +533,7 @@ class _ControlEditorState extends State<_ControlEditor> {
         actions: [
           if (widget.control != null)
             IconButton(
-              tooltip: 'Remove',
+              tooltip: tr('Remove'),
               icon: const Icon(Icons.delete_outline),
               onPressed: () => Navigator.pop(
                 context,
@@ -541,7 +542,7 @@ class _ControlEditorState extends State<_ControlEditor> {
             ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: FilledButton(onPressed: _done, child: const Text('Done')),
+            child: FilledButton(onPressed: _done, child: const T('Done')),
           ),
         ],
       ),
@@ -551,38 +552,38 @@ class _ControlEditorState extends State<_ControlEditor> {
           TextField(
             controller: _label,
             autofocus: widget.control == null,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              hintText: 'Thinking',
+            decoration: InputDecoration(
+              labelText: tr('Name'),
+              hintText: tr('Thinking'),
             ),
           ),
           TextField(
             controller: _description,
-            decoration: const InputDecoration(
-              labelText: 'Description (optional)',
+            decoration: InputDecoration(
+              labelText: tr('Description (optional)'),
             ),
           ),
           const SizedBox(height: 8),
           Row(
             children: [
-              const Text('Show as'),
+              const T('Show as'),
               const SizedBox(width: 12),
               ChoiceChip(
-                label: const Text('Menu'),
+                label: const T('Menu'),
                 selected: !_slider,
                 onSelected: (_) => setState(() => _slider = false),
               ),
               const SizedBox(width: 6),
               ChoiceChip(
-                label: const Text('Slider'),
+                label: const T('Slider'),
                 selected: _slider,
                 onSelected: (_) => setState(() => _slider = true),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Text('Options', style: Theme.of(context).textTheme.titleSmall),
-          Text(
+          T('Options', style: Theme.of(context).textTheme.titleSmall),
+          T(
             'Each sets parameters, like reasoning_effort: high. The one '
             'starred is used until someone picks another.',
             style: TextStyle(color: muted, fontSize: 12),
@@ -600,13 +601,13 @@ class _ControlEditorState extends State<_ControlEditor> {
                         Expanded(
                           child: TextField(
                             controller: _options[i].label,
-                            decoration: const InputDecoration(
-                              labelText: 'Option name',
+                            decoration: InputDecoration(
+                              labelText: tr('Option name'),
                             ),
                           ),
                         ),
                         IconButton(
-                          tooltip: 'Default',
+                          tooltip: tr('Default'),
                           icon: Icon(
                             _default == _options[i].id
                                 ? Icons.star
@@ -623,7 +624,7 @@ class _ControlEditorState extends State<_ControlEditor> {
                         ),
                         if (i > 0)
                           IconButton(
-                            tooltip: 'Move up',
+                            tooltip: tr('Move up'),
                             icon: const Icon(Icons.arrow_upward),
                             onPressed: () => setState(
                               () =>
@@ -631,7 +632,7 @@ class _ControlEditorState extends State<_ControlEditor> {
                             ),
                           ),
                         IconButton(
-                          tooltip: 'Remove option',
+                          tooltip: tr('Remove option'),
                           icon: const Icon(Icons.close),
                           onPressed: () =>
                               setState(() => _options.removeAt(i).dispose()),
@@ -644,8 +645,8 @@ class _ControlEditorState extends State<_ControlEditor> {
                           Expanded(
                             child: TextField(
                               controller: _options[i].params[j].$1,
-                              decoration: const InputDecoration(
-                                hintText: 'Parameter',
+                              decoration: InputDecoration(
+                                hintText: tr('Parameter'),
                                 isDense: true,
                               ),
                             ),
@@ -654,14 +655,14 @@ class _ControlEditorState extends State<_ControlEditor> {
                           Expanded(
                             child: TextField(
                               controller: _options[i].params[j].$2,
-                              decoration: const InputDecoration(
-                                hintText: 'Value',
+                              decoration: InputDecoration(
+                                hintText: tr('Value'),
                                 isDense: true,
                               ),
                             ),
                           ),
                           IconButton(
-                            tooltip: 'Remove parameter',
+                            tooltip: tr('Remove parameter'),
                             icon: const Icon(Icons.remove_circle_outline),
                             onPressed: () => setState(() {
                               final (a, b) = _options[i].params.removeAt(j);
@@ -681,7 +682,7 @@ class _ControlEditorState extends State<_ControlEditor> {
                           )),
                         ),
                         icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Parameter'),
+                        label: const T('Parameter'),
                       ),
                     ),
                   ],
@@ -695,7 +696,7 @@ class _ControlEditorState extends State<_ControlEditor> {
                 () => _options.add(_OptionDraft(null, '', {'': ''})),
               ),
               icon: const Icon(Icons.add),
-              label: const Text('Add option'),
+              label: const T('Add option'),
             ),
           ),
         ],

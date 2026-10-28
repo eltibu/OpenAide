@@ -6,6 +6,7 @@
 library;
 
 import '../../core/widgets/empty_state.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +15,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../terminal/terminal_api.dart';
 import 'settings_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// [list] with only the one at [index] switched on, as on the web.
 List<Map<String, dynamic>> onlyEnabled(
@@ -79,7 +81,7 @@ class _TerminalConnectionsScreenState
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Terminal connections'),
+        title: const T('Terminal connections'),
         actions: [
           if (_saving)
             const Padding(
@@ -90,7 +92,7 @@ class _TerminalConnectionsScreenState
               ),
             ),
           IconButton(
-            tooltip: 'Add connection',
+            tooltip: tr('Add connection'),
             icon: const Icon(Icons.add),
             onPressed: ui.hasValue
                 ? () async {
@@ -111,7 +113,7 @@ class _TerminalConnectionsScreenState
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text(
+              child: T(
                 'Your own Open Terminal servers, reached straight from this '
                 'phone with their key. The one switched on shows in the menu '
                 "next to the server's terminals, for its shell and Files.",
@@ -165,7 +167,7 @@ class _TerminalConnectionsScreenState
             if (list.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                child: Text(
+                child: T(
                   'Tap a connection to edit or remove it.',
                   style: TextStyle(color: muted, fontSize: 12),
                 ),
@@ -224,9 +226,9 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           TextField(
             controller: _url,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'URL',
-              hintText: 'http://192.168.1.10:8000',
+            decoration: InputDecoration(
+              labelText: tr('URL'),
+              hintText: tr('http://192.168.1.10:8000'),
             ),
             onChanged: (_) => setState(() => _result = null),
           ),
@@ -234,7 +236,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
             controller: _key,
             obscureText: _hide,
             decoration: InputDecoration(
-              labelText: 'Key',
+              labelText: tr('Key'),
               suffixIcon: IconButton(
                 tooltip: _hide ? 'Show' : 'Hide',
                 icon: Icon(_hide ? Icons.visibility : Icons.visibility_off),
@@ -244,7 +246,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
           ),
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Name (optional)'),
+            decoration: InputDecoration(labelText: tr('Name (optional)')),
           ),
           const SizedBox(height: 12),
           Row(
@@ -271,7 +273,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.wifi_tethering),
-                label: const Text('Test'),
+                label: const T('Test'),
               ),
               if (_result != null)
                 Expanded(
@@ -289,11 +291,11 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
       if (widget.old != null)
         TextButton(
           onPressed: () => Navigator.pop(context, <String, dynamic>{}),
-          child: const Text('Remove'),
+          child: const T('Remove'),
         ),
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: const T('Cancel'),
       ),
       FilledButton(
         onPressed: () {
@@ -309,7 +311,7 @@ class _ConnectionDialogState extends State<_ConnectionDialog> {
             'config': widget.old?['config'] ?? const {},
           });
         },
-        child: const Text('Save'),
+        child: const T('Save'),
       ),
     ],
   );

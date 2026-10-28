@@ -13,6 +13,7 @@ import '../chat/chat_controller.dart';
 import '../chat/read_aloud.dart';
 import '../chat/speech_prefs.dart';
 import 'settings_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The server's text-to-speech voices, id to name.
 final ttsVoicesProvider = FutureProvider.autoDispose<List<(String, String)>>((
@@ -83,7 +84,7 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
     final serverVoice =
         '${((config?['audio'] as Map?)?['tts'] as Map?)?['voice'] ?? ''}';
     return Scaffold(
-      appBar: AppBar(title: const Text('Audio')),
+      appBar: AppBar(title: const T('Audio')),
       body: ui.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Padding(
@@ -106,7 +107,7 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                child: Text('Speech to text', style: heading),
+                child: T('Speech to text', style: heading),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(
@@ -115,9 +116,9 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
                 ),
                 child: TextField(
                   controller: _language,
-                  decoration: const InputDecoration(
-                    labelText: 'Language you speak',
-                    hintText: 'e.g. en, es (empty: detect it)',
+                  decoration: InputDecoration(
+                    labelText: tr('Language you speak'),
+                    hintText: tr('e.g. en, es (empty: detect it)'),
                     border: OutlineInputBorder(),
                   ),
                   onChanged: (v) {
@@ -132,8 +133,8 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
                 ),
               ),
               SwitchListTile(
-                title: const Text('Send right after dictation'),
-                subtitle: const Text(
+                title: const T('Send right after dictation'),
+                subtitle: const T(
                   'Words from the voice note mic are sent, not put in the box',
                 ),
                 value: ui['speechAutoSend'] == true,
@@ -142,16 +143,16 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
               const Divider(),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Text('Text to speech', style: heading),
+                child: T('Text to speech', style: heading),
               ),
               SwitchListTile(
-                title: const Text('Read replies aloud'),
-                subtitle: const Text('Every reply is spoken as it is written'),
+                title: const T('Read replies aloud'),
+                subtitle: const T('Every reply is spoken as it is written'),
                 value: ui[readAloudKey] == true,
                 onChanged: (on) => _save({readAloudKey: on}),
               ),
               ListTile(
-                title: const Text('Voice'),
+                title: const T('Voice'),
                 subtitle: Text(
                   voice.isEmpty
                       ? 'The server\'s voice${serverVoice.isEmpty ? '' : ' ($serverVoice)'}'
@@ -173,7 +174,7 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
                 },
               ),
               ListTile(
-                title: const Text('Speed'),
+                title: const T('Speed'),
                 subtitle: Slider(
                   value: rate.clamp(0.5, 2.0),
                   min: 0.5,

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../chat/chat_controller.dart' show userSettingsProvider;
 import 'phone_actions.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Runs [text] as a phone action when it is one (and they're switched on);
 /// returns what was done, or null to send it to Nexus as a message.
@@ -23,7 +24,8 @@ Future<String?> tryPhoneAction(
     pick: (people) => pickContactSheet(context, people),
   );
   if (said != null && said.isNotEmpty && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(said)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(said))));
   }
   return said;
 }

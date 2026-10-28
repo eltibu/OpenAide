@@ -20,6 +20,7 @@ import '../workspace/access_editor.dart' show editAccess;
 import 'notes_api.dart';
 import '../../core/widgets/markdown_style.dart';
 import '../../core/widgets/search_field.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The server's notes, native: search, pin, write in Markdown.
 class NotesScreen extends ConsumerStatefulWidget {
@@ -85,15 +86,15 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
           context: context,
           builder: (d) => AlertDialog(
             title: Text('Delete "${n.title}"?'),
-            content: const Text('This can\'t be undone.'),
+            content: const T('This can\'t be undone.'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(d, false),
-                child: const Text('Cancel'),
+                child: const T('Cancel'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(d, true),
-                child: const Text('Delete'),
+                child: const T('Delete'),
               ),
             ],
           ),
@@ -109,7 +110,8 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
 
   void _say(String text) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr(text))));
     }
   }
 
@@ -127,7 +129,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     final rest = shown.where((n) => !n.pinned).toList();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Notes'),
+        title: const T('Notes'),
         bottom: _loading
             ? const PreferredSize(
                 preferredSize: Size.fromHeight(2),
@@ -136,7 +138,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
             : null,
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'New note',
+        tooltip: tr('New note'),
         onPressed: () => _open(null),
         child: const Icon(Icons.edit_outlined),
       ),
@@ -203,7 +205,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
         onSelected: (a) => _act(n, a),
         itemBuilder: (_) => [
           PopupMenuItem(value: 'pin', child: Text(n.pinned ? 'Unpin' : 'Pin')),
-          const PopupMenuItem(value: 'delete', child: Text('Delete')),
+          const PopupMenuItem(value: 'delete', child: T('Delete')),
         ],
       ),
     );
@@ -306,7 +308,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   }
 
   void _say(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr(text))));
 
   String get _name =>
       _title.text.trim().isEmpty ? 'Untitled' : _title.text.trim();
@@ -556,7 +559,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             ValueListenableBuilder(
               valueListenable: _history,
               builder: (context, v, _) => IconButton(
-                tooltip: 'Undo',
+                tooltip: tr('Undo'),
                 icon: const Icon(Icons.undo),
                 onPressed: v.canUndo ? _history.undo : null,
               ),
@@ -564,7 +567,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             ValueListenableBuilder(
               valueListenable: _history,
               builder: (context, v, _) => IconButton(
-                tooltip: 'Redo',
+                tooltip: tr('Redo'),
                 icon: const Icon(Icons.redo),
                 onPressed: v.canRedo ? _history.redo : null,
               ),
@@ -588,21 +591,21 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   value: 'enhance',
                   child: ListTile(
                     leading: Icon(Icons.auto_awesome),
-                    title: Text('Enhance with AI'),
+                    title: T('Enhance with AI'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'chat',
                   child: ListTile(
                     leading: Icon(Icons.chat_bubble_outline),
-                    title: Text('Chat about this note'),
+                    title: T('Chat about this note'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'upload',
                   child: ListTile(
                     leading: Icon(Icons.cloud_upload_outlined),
-                    title: Text('Upload files'),
+                    title: T('Upload files'),
                   ),
                 ),
                 PopupMenuDivider(),
@@ -610,35 +613,35 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   value: 'copy',
                   child: ListTile(
                     leading: Icon(Icons.copy),
-                    title: Text('Copy text'),
+                    title: T('Copy text'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'link',
                   child: ListTile(
                     leading: Icon(Icons.link),
-                    title: Text('Copy link'),
+                    title: T('Copy link'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'md',
                   child: ListTile(
                     leading: Icon(Icons.download_outlined),
-                    title: Text('Download Markdown (.md)'),
+                    title: T('Download Markdown (.md)'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'txt',
                   child: ListTile(
                     leading: Icon(Icons.download_outlined),
-                    title: Text('Download text (.txt)'),
+                    title: T('Download text (.txt)'),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'pdf',
                   child: ListTile(
                     leading: Icon(Icons.picture_as_pdf_outlined),
-                    title: Text('Download PDF'),
+                    title: T('Download PDF'),
                   ),
                 ),
                 PopupMenuDivider(),
@@ -646,7 +649,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   value: 'access',
                   child: ListTile(
                     leading: Icon(Icons.lock_outline),
-                    title: Text('Access'),
+                    title: T('Access'),
                   ),
                 ),
               ],
@@ -674,7 +677,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                   ),
                   textCapitalization: TextCapitalization.sentences,
                   decoration: InputDecoration(
-                    hintText: 'Title',
+                    hintText: tr('Title'),
                     border: InputBorder.none,
                     suffixIcon: _titling
                         ? const Padding(
@@ -685,7 +688,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                             ),
                           )
                         : IconButton(
-                            tooltip: 'Generate',
+                            tooltip: tr('Generate'),
                             icon: const Icon(Icons.auto_awesome_outlined),
                             onPressed: _generateTitle,
                           ),
@@ -746,8 +749,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     maxLines: null,
                     minLines: 12,
                     textCapitalization: TextCapitalization.sentences,
-                    decoration: const InputDecoration(
-                      hintText: 'Write in Markdown…',
+                    decoration: InputDecoration(
+                      hintText: tr('Write in Markdown…'),
                       border: InputBorder.none,
                     ),
                   ),

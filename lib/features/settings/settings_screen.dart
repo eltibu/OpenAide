@@ -27,6 +27,8 @@ import 'about_screen.dart';
 import 'terminal_connections.dart';
 import 'two_step_settings.dart';
 import 'usage_screen.dart';
+import '../../core/i18n/app_strings.dart';
+import 'language_settings.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
   (ref) => SettingsApi(ref.watch(clientProvider)),
@@ -47,7 +49,8 @@ final memoriesProvider = FutureProvider<List<Memory>>(
 );
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 Future<bool> _confirm(
   BuildContext context,
@@ -63,7 +66,7 @@ Future<bool> _confirm(
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
@@ -128,7 +131,7 @@ class SettingsScreen extends ConsumerWidget {
     void open(Widget page) =>
         Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const T('Settings')),
       body: ListView(
         children: [
           ListTile(
@@ -145,13 +148,13 @@ class SettingsScreen extends ConsumerWidget {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.tune),
-            title: const Text('General'),
-            subtitle: const Text('Your system prompt and model settings'),
+            title: const T('General'),
+            subtitle: const T('Your system prompt and model settings'),
             onTap: () => open(const GeneralSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.brightness_6_outlined),
-            title: const Text('Theme'),
+            title: const T('Theme'),
             subtitle: Text(switch ((ref.watch(userSettingsProvider).value?['ui']
                 as Map?)?['nexusTheme']) {
               'light' => 'Light',
@@ -162,60 +165,56 @@ class SettingsScreen extends ConsumerWidget {
           ),
           ListTile(
             leading: const Icon(Icons.chat_bubble_outline),
-            title: const Text('Chats'),
-            subtitle: const Text('Titles, tags, suggestions, temporary chats'),
+            title: const T('Chats'),
+            subtitle: const T('Titles, tags, suggestions, temporary chats'),
             onTap: () => open(const ChatSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.view_quilt_outlined),
-            title: const Text('Interface'),
-            subtitle: const Text('Message box, images, embeds and more'),
+            title: const T('Interface'),
+            subtitle: const T('Message box, images, embeds and more'),
             onTap: () => open(const InterfaceSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.graphic_eq),
-            title: const Text('Audio'),
-            subtitle: const Text('Voice, speed, dictation and read aloud'),
+            title: const T('Audio'),
+            subtitle: const T('Voice, speed, dictation and read aloud'),
             onTap: () => open(const AudioSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.notifications_outlined),
-            title: const Text('Notifications'),
-            subtitle: const Text('When a reply is ready, and webhooks'),
+            title: const T('Notifications'),
+            subtitle: const T('When a reply is ready, and webhooks'),
             onTap: () => open(const NotificationSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.manage_accounts_outlined),
-            title: const Text('Accounts'),
-            subtitle: const Text(
-              'Email and other services the app signs in to',
-            ),
+            title: const T('Accounts'),
+            subtitle: const T('Email and other services the app signs in to'),
             onTap: () => open(const AccountsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.phone_android),
-            title: const Text('Phone and assistant'),
-            subtitle: const Text(
-              'Default assistant, shortcuts, Share, app lock',
-            ),
+            title: const T('Phone and assistant'),
+            subtitle: const T('Default assistant, shortcuts, Share, app lock'),
             onTap: () => open(const PhoneSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.hub_outlined),
-            title: const Text('AI providers'),
-            subtitle: const Text('OpenRouter, Claude and OpenAI'),
+            title: const T('AI providers'),
+            subtitle: const T('OpenRouter, Claude and OpenAI'),
             onTap: () => open(const AiProvidersScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.phone_android),
-            title: const Text('Models on this phone'),
-            subtitle: const Text('Download models that run offline'),
+            title: const T('Models on this phone'),
+            subtitle: const T('Download models that run offline'),
             onTap: () => open(const LocalModelsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.handyman_outlined),
-            title: const Text('Tools and skills on this phone'),
-            subtitle: const Text(
+            title: const T('Tools and skills on this phone'),
+            subtitle: const T(
               'Web, phone, skills and MCP for models without a server',
             ),
             onTap: () => open(const AgentSettingsScreen()),
@@ -225,56 +224,56 @@ class SettingsScreen extends ConsumerWidget {
               true)
             ListTile(
               leading: const Icon(Icons.cable),
-              title: const Text('Connections'),
-              subtitle: const Text('Your own OpenAI-compatible servers'),
+              title: const T('Connections'),
+              subtitle: const T('Your own OpenAI-compatible servers'),
               onTap: () => open(const DirectConnectionsScreen()),
             ),
           if (directIntegrationsOn(ref.watch(serverConfigProvider).value))
             ListTile(
               leading: const Icon(Icons.extension_outlined),
-              title: const Text('Integrations'),
-              subtitle: const Text('Your own OpenAPI tool servers'),
+              title: const T('Integrations'),
+              subtitle: const T('Your own OpenAPI tool servers'),
               onTap: () => open(const ToolServersScreen()),
             ),
           ListTile(
             leading: const Icon(Icons.terminal),
-            title: const Text('Terminal connections'),
-            subtitle: const Text('Your own Open Terminal servers'),
+            title: const T('Terminal connections'),
+            subtitle: const T('Your own Open Terminal servers'),
             onTap: () => open(const TerminalConnectionsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.storage_outlined),
-            title: const Text('Data controls'),
-            subtitle: const Text('Import, export, shared chats, your files'),
+            title: const T('Data controls'),
+            subtitle: const T('Import, export, shared chats, your files'),
             onTap: () => open(const DataControls()),
           ),
           ListTile(
             leading: const Icon(Icons.insights_outlined),
-            title: const Text('Usage'),
-            subtitle: const Text('Tokens, streaks and your top models'),
+            title: const T('Usage'),
+            subtitle: const T('Tokens, streaks and your top models'),
             onTap: () => open(const UsageScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.psychology_alt_outlined),
-            title: const Text('Memory'),
-            subtitle: const Text('What models remember about you'),
+            title: const T('Memory'),
+            subtitle: const T('What models remember about you'),
             onTap: () => open(const MemoriesScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.info_outline),
-            title: const Text('About'),
-            subtitle: const Text("Server version and what's new"),
+            title: const T('About'),
+            subtitle: const T("Server version and what's new"),
             onTap: () => open(const AboutScreen()),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.system_update_outlined),
-            title: const Text('App updates'),
+            title: const T('App updates'),
             onTap: () => open(const UpdateScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.logout),
-            title: const Text('Sign out'),
+            title: const T('Sign out'),
             onTap: () async {
               if (!await _confirm(
                 context,
@@ -421,13 +420,13 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
     final me = ref.watch(meProvider).value;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Account'),
+        title: const T('Account'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _busy || !_loaded ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -448,7 +447,7 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                         right: -4,
                         bottom: -4,
                         child: IconButton.filledTonal(
-                          tooltip: 'Change picture',
+                          tooltip: tr('Change picture'),
                           onPressed: _pickImage,
                           icon: const Icon(Icons.photo_camera_outlined),
                         ),
@@ -460,49 +459,46 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                   Center(
                     child: TextButton(
                       onPressed: () => setState(() => _image = '/user.png'),
-                      child: const Text('Remove picture'),
+                      child: const T('Remove picture'),
                     ),
                   ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _name,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(labelText: 'Name'),
+                  decoration: InputDecoration(labelText: tr('Name')),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _bio,
                   maxLines: null,
-                  decoration: const InputDecoration(labelText: 'About you'),
+                  decoration: InputDecoration(labelText: tr('About you')),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: _genderChoice,
-                  decoration: const InputDecoration(labelText: 'Gender'),
+                  decoration: InputDecoration(labelText: tr('Gender')),
                   items: const [
-                    DropdownMenuItem(
-                      value: '',
-                      child: Text('Prefer not to say'),
-                    ),
-                    DropdownMenuItem(value: 'male', child: Text('Male')),
-                    DropdownMenuItem(value: 'female', child: Text('Female')),
-                    DropdownMenuItem(value: 'custom', child: Text('Custom')),
+                    DropdownMenuItem(value: '', child: T('Prefer not to say')),
+                    DropdownMenuItem(value: 'male', child: T('Male')),
+                    DropdownMenuItem(value: 'female', child: T('Female')),
+                    DropdownMenuItem(value: 'custom', child: T('Custom')),
                   ],
                   onChanged: (v) => setState(() => _genderChoice = v ?? ''),
                 ),
                 if (_genderChoice == 'custom')
                   TextField(
                     controller: _gender,
-                    decoration: const InputDecoration(labelText: 'Your gender'),
+                    decoration: InputDecoration(labelText: tr('Your gender')),
                   ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Birth date'),
+                  title: const T('Birth date'),
                   subtitle: Text(_birth.isEmpty ? 'Not set' : _birth),
                   trailing: _birth.isEmpty
                       ? const Icon(Icons.calendar_today_outlined)
                       : IconButton(
-                          tooltip: 'Clear',
+                          tooltip: tr('Clear'),
                           onPressed: () => setState(() => _birth = ''),
                           icon: const Icon(Icons.close),
                         ),
@@ -523,12 +519,12 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Email'),
+                  title: const T('Email'),
                   subtitle: Text('${me?['email'] ?? ''}'),
                 ),
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Role'),
+                  title: const T('Role'),
                   subtitle: Text('${me?['role'] ?? ''}'),
                 ),
                 const Divider(),
@@ -597,13 +593,13 @@ class _GeneralSettingsState extends ConsumerState<GeneralSettings> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('General'),
+        title: const T('General'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _busy || !_loaded ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -613,20 +609,40 @@ class _GeneralSettingsState extends ConsumerState<GeneralSettings> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
               children: [
+                // Settings > General > Language, kept on this phone as on
+                // the web.
+                ListenableBuilder(
+                  listenable: AppStrings.instance,
+                  builder: (context, _) => FutureBuilder<String>(
+                    future: languageName(AppStrings.instance.choice),
+                    builder: (context, name) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.translate),
+                      title: const T('Language'),
+                      subtitle: Text(name.data ?? ''),
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const LanguageSettings(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _system,
                   minLines: 4,
                   maxLines: null,
-                  decoration: const InputDecoration(
-                    labelText: 'System prompt',
-                    helperText: 'Instructions every chat starts with',
+                  decoration: InputDecoration(
+                    labelText: tr('System prompt'),
+                    helperText: tr('Instructions every chat starts with'),
                     alignLabelWithHint: true,
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 24),
-                Text('Model settings', style: TextStyle(color: muted)),
-                Text(
+                T('Model settings', style: TextStyle(color: muted)),
+                T(
                   'Left on Default, the model\'s own setting is used. A chat\'s '
                   'Controls can change them for that chat.',
                   style: Theme.of(context).textTheme.bodySmall
@@ -681,7 +697,7 @@ class ChatSettings extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Chats')),
+      appBar: AppBar(title: const T('Chats')),
       body: ui.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Padding(
@@ -693,105 +709,103 @@ class ChatSettings extends ConsumerWidget {
           return ListView(
             children: [
               SwitchListTile(
-                title: const Text('Name new chats'),
-                subtitle: const Text('Give each chat a title from its start'),
+                title: const T('Name new chats'),
+                subtitle: const T('Give each chat a title from its start'),
                 value: title['auto'] != false,
                 onChanged: (on) => set({
                   'title': {...title, 'auto': on},
                 }),
               ),
               SwitchListTile(
-                title: const Text('Tag chats'),
-                subtitle: const Text('Add topic tags to chats'),
+                title: const T('Tag chats'),
+                subtitle: const T('Add topic tags to chats'),
                 value: ui['autoTags'] != false,
                 onChanged: (on) => set({'autoTags': on}),
               ),
               SwitchListTile(
-                title: const Text('Always search the web'),
-                subtitle: const Text(
+                title: const T('Always search the web'),
+                subtitle: const T(
                   'Start every chat with web search on, where it\'s allowed',
                 ),
                 value: ui['webSearch'] == 'always',
                 onChanged: (on) => set({'webSearch': on ? 'always' : null}),
               ),
               SwitchListTile(
-                title: const Text('Use memory'),
-                subtitle: const Text('Let models use what they remember'),
+                title: const T('Use memory'),
+                subtitle: const T('Let models use what they remember'),
                 value: ui['memory'] != false,
                 onChanged: (on) => set({'memory': on}),
               ),
               SwitchListTile(
-                title: const Text('Suggest follow-ups'),
-                subtitle: const Text('Offer follow-up questions after replies'),
+                title: const T('Suggest follow-ups'),
+                subtitle: const T('Offer follow-up questions after replies'),
                 value: ui['autoFollowUps'] != false,
                 onChanged: (on) => set({'autoFollowUps': on}),
               ),
               SwitchListTile(
-                title: const Text('Temporary chat by default'),
-                subtitle: const Text(
+                title: const T('Temporary chat by default'),
+                subtitle: const T(
                   'New chats aren\'t saved unless you keep them',
                 ),
                 value: ui['temporaryChatByDefault'] == true,
                 onChanged: (on) => set({'temporaryChatByDefault': on}),
               ),
               SwitchListTile(
-                title: const Text('Edit suggestions first'),
-                subtitle: const Text(
+                title: const T('Edit suggestions first'),
+                subtitle: const T(
                   'Tapping a suggested prompt puts it in the chat box',
                 ),
                 value: ui['insertSuggestionPrompt'] == true,
                 onChanged: (on) => set({'insertSuggestionPrompt': on}),
               ),
               SwitchListTile(
-                title: const Text('Keep follow-up suggestions'),
-                subtitle: const Text('Under every reply, not just the last'),
+                title: const T('Keep follow-up suggestions'),
+                subtitle: const T('Under every reply, not just the last'),
                 value: ui['keepFollowUpPrompts'] == true,
                 onChanged: (on) => set({'keepFollowUpPrompts': on}),
               ),
               SwitchListTile(
-                title: const Text('Edit follow-ups first'),
-                subtitle: const Text(
+                title: const T('Edit follow-ups first'),
+                subtitle: const T(
                   'Tapping a follow-up puts it in the chat box',
                 ),
                 value: ui['insertFollowUpPrompt'] == true,
                 onChanged: (on) => set({'insertFollowUpPrompt': on}),
               ),
               SwitchListTile(
-                title: const Text('Format your messages'),
-                subtitle: const Text('Show Markdown in what you send'),
+                title: const T('Format your messages'),
+                subtitle: const T('Show Markdown in what you send'),
                 value: ui['renderMarkdownInUserMessages'] != false,
                 onChanged: (on) => set({'renderMarkdownInUserMessages': on}),
               ),
               SwitchListTile(
-                title: const Text('Fold code blocks'),
-                subtitle: const Text('Code in replies starts folded'),
+                title: const T('Fold code blocks'),
+                subtitle: const T('Code in replies starts folded'),
                 value: ui['collapseCodeBlocks'] == true,
                 onChanged: (on) => set({'collapseCodeBlocks': on}),
               ),
               SwitchListTile(
-                title: const Text('Open steps'),
-                subtitle: const Text('Thinking and tool steps start unfolded'),
+                title: const T('Open steps'),
+                subtitle: const T('Thinking and tool steps start unfolded'),
                 value: ui['expandDetails'] == true,
                 onChanged: (on) => set({'expandDetails': on}),
               ),
               SwitchListTile(
-                title: const Text('Copy replies'),
-                subtitle: const Text(
-                  'Copy each finished reply to the clipboard',
-                ),
+                title: const T('Copy replies'),
+                subtitle: const T('Copy each finished reply to the clipboard'),
                 value: ui['responseAutoCopy'] == true,
                 onChanged: (on) => set({'responseAutoCopy': on}),
               ),
               SwitchListTile(
-                title: const Text('Vibrate when done'),
-                subtitle: const Text('A light tap when a reply finishes'),
+                title: const T('Vibrate when done'),
+                subtitle: const T('A light tap when a reply finishes'),
                 value: ui['hapticFeedback'] == true,
                 onChanged: (on) => set({'hapticFeedback': on}),
               ),
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.archive_outlined),
-                title: const Text('Archived chats'),
+                title: const T('Archived chats'),
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute<void>(
@@ -801,7 +815,7 @@ class ChatSettings extends ConsumerWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.inventory_2_outlined),
-                title: const Text('Archive all chats'),
+                title: const T('Archive all chats'),
                 onTap: () => act(
                   'Archive all chats?',
                   'They move to Archived chats, where you can bring them back.',
@@ -815,11 +829,11 @@ class ChatSettings extends ConsumerWidget {
                   Icons.delete_forever_outlined,
                   color: Theme.of(context).colorScheme.error,
                 ),
-                title: Text(
+                title: T(
                   'Delete all chats',
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
-                subtitle: Text(
+                subtitle: T(
                   'Removes every chat from the server',
                   style: TextStyle(color: muted),
                 ),
@@ -863,7 +877,7 @@ class ArchivedChatsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Archived chats'),
+        title: const T('Archived chats'),
         actions: [
           TextButton(
             onPressed: () async {
@@ -875,7 +889,7 @@ class ArchivedChatsScreen extends ConsumerWidget {
               ref.invalidate(archivedChatsProvider);
               refreshChatLists(ref.invalidate);
             },
-            child: const Text('Restore all'),
+            child: const T('Restore all'),
           ),
         ],
       ),
@@ -896,7 +910,7 @@ class ArchivedChatsScreen extends ConsumerWidget {
               if (chats.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text(
+                  child: T(
                     'No archived chats.',
                     style: TextStyle(color: muted),
                   ),
@@ -914,7 +928,7 @@ class ArchivedChatsScreen extends ConsumerWidget {
                     Navigator.of(context).popUntil((r) => r.isFirst);
                   },
                   trailing: IconButton(
-                    tooltip: 'Restore',
+                    tooltip: tr('Restore'),
                     onPressed: () => restore(c.id),
                     icon: const Icon(Icons.unarchive_outlined),
                   ),
@@ -943,18 +957,18 @@ class MemoriesScreen extends ConsumerWidget {
           autofocus: true,
           minLines: 2,
           maxLines: 8,
-          decoration: const InputDecoration(
-            hintText: 'Something models should remember about you',
+          decoration: InputDecoration(
+            hintText: tr('Something models should remember about you'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Save'),
+            child: const T('Save'),
           ),
         ],
       ),
@@ -980,7 +994,7 @@ class MemoriesScreen extends ConsumerWidget {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Memory'),
+        title: const T('Memory'),
         actions: [
           PopupMenuButton<String>(
             onSelected: (_) async {
@@ -1000,13 +1014,13 @@ class MemoriesScreen extends ConsumerWidget {
               ref.invalidate(memoriesProvider);
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'clear', child: Text('Clear all')),
+              PopupMenuItem(value: 'clear', child: T('Clear all')),
             ],
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'Add memory',
+        tooltip: tr('Add memory'),
         onPressed: () => _edit(context, ref),
         child: const Icon(Icons.add),
       ),
@@ -1028,7 +1042,7 @@ class MemoriesScreen extends ConsumerWidget {
               if (items.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text(
+                  child: T(
                     'Nothing remembered yet. Models add memories as you '
                     'chat, or tap + to add one.',
                     style: TextStyle(color: muted),
@@ -1047,7 +1061,7 @@ class MemoriesScreen extends ConsumerWidget {
                   ),
                   onTap: () => _edit(context, ref, m),
                   trailing: IconButton(
-                    tooltip: 'Delete',
+                    tooltip: tr('Delete'),
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () async {
                       try {

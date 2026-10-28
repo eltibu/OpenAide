@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import 'sheet.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// A spreadsheet: sheet tabs, a formula bar and the grid. Every change is
 /// handed up as the whole workbook in Markdown.
@@ -104,18 +105,18 @@ class SheetEditorState extends State<SheetEditor> {
           children: [
             ListTile(
               leading: const Icon(Icons.drive_file_rename_outline),
-              title: const Text('Rename'),
+              title: const T('Rename'),
               onTap: () => Navigator.pop(context, 'rename'),
             ),
             ListTile(
               leading: const Icon(Icons.copy_all_outlined),
-              title: const Text('Duplicate'),
+              title: const T('Duplicate'),
               onTap: () => Navigator.pop(context, 'copy'),
             ),
             if (_sheets.length > 1)
               ListTile(
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete this sheet'),
+                title: const T('Delete this sheet'),
                 onTap: () => Navigator.pop(context, 'delete'),
               ),
           ],
@@ -129,16 +130,16 @@ class SheetEditorState extends State<SheetEditor> {
         final ok = await showDialog<bool>(
           context: context,
           builder: (d) => AlertDialog(
-            title: const Text('Sheet name'),
+            title: const T('Sheet name'),
             content: TextField(controller: name, autofocus: true),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(d, false),
-                child: const Text('Cancel'),
+                child: const T('Cancel'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(d, true),
-                child: const Text('Save'),
+                child: const T('Save'),
               ),
             ],
           ),
@@ -296,7 +297,7 @@ class SheetEditorState extends State<SheetEditor> {
                   ),
                 ),
               IconButton(
-                tooltip: 'Add a sheet',
+                tooltip: tr('Add a sheet'),
                 onPressed: widget.enabled
                     ? () {
                         _sheets.add(Sheet(name: 'Sheet${_sheets.length + 1}'));
@@ -341,7 +342,7 @@ class SheetEditorState extends State<SheetEditor> {
                   },
                   decoration: InputDecoration(
                     isDense: true,
-                    hintText: 'Type a value or =SUM(B2:B9)',
+                    hintText: tr('Type a value or =SUM(B2:B9)'),
                     prefixIcon: Icon(Icons.functions, size: 20, color: muted),
                     prefixIconConstraints: const BoxConstraints(minWidth: 36),
                     border: const OutlineInputBorder(),
@@ -349,35 +350,32 @@ class SheetEditorState extends State<SheetEditor> {
                 ),
               ),
               PopupMenuButton<String>(
-                tooltip: 'Rows and columns',
+                tooltip: tr('Rows and columns'),
                 enabled: widget.enabled,
                 icon: const Icon(Icons.table_rows_outlined),
                 onSelected: _rowsAndColumns,
                 itemBuilder: (_) => const [
                   PopupMenuItem(
                     value: 'rowAbove',
-                    child: Text('Insert row above'),
+                    child: T('Insert row above'),
                   ),
                   PopupMenuItem(
                     value: 'rowBelow',
-                    child: Text('Insert row below'),
+                    child: T('Insert row below'),
                   ),
-                  PopupMenuItem(value: 'rowDelete', child: Text('Delete row')),
+                  PopupMenuItem(value: 'rowDelete', child: T('Delete row')),
                   PopupMenuDivider(),
                   PopupMenuItem(
                     value: 'colLeft',
-                    child: Text('Insert column left'),
+                    child: T('Insert column left'),
                   ),
                   PopupMenuItem(
                     value: 'colRight',
-                    child: Text('Insert column right'),
+                    child: T('Insert column right'),
                   ),
-                  PopupMenuItem(
-                    value: 'colDelete',
-                    child: Text('Delete column'),
-                  ),
+                  PopupMenuItem(value: 'colDelete', child: T('Delete column')),
                   PopupMenuDivider(),
-                  PopupMenuItem(value: 'clear', child: Text('Clear cell')),
+                  PopupMenuItem(value: 'clear', child: T('Clear cell')),
                 ],
               ),
             ],

@@ -12,6 +12,7 @@ import '../../core/theme.dart';
 import 'office.dart';
 import 'slides.dart';
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The Office files this preview opens.
 bool isOfficeFile(String name) {
@@ -80,7 +81,7 @@ class _OfficePreviewScreenState extends State<OfficePreviewScreen> {
         title: Text(widget.name, overflow: TextOverflow.ellipsis),
         actions: [
           IconButton(
-            tooltip: 'Zoom out',
+            tooltip: tr('Zoom out'),
             icon: const Icon(Icons.zoom_out),
             onPressed: () => _set(_zoom / 1.25),
           ),
@@ -92,7 +93,7 @@ class _OfficePreviewScreenState extends State<OfficePreviewScreen> {
             ),
           ),
           IconButton(
-            tooltip: 'Zoom in',
+            tooltip: tr('Zoom in'),
             icon: const Icon(Icons.zoom_in),
             onPressed: () => _set(_zoom * 1.25),
           ),

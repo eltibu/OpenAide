@@ -10,6 +10,7 @@ import '../../core/theme.dart';
 import '../../core/widgets/nexus_logo.dart';
 import '../standalone/local_chats.dart';
 import 'login_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 class WelcomeScreen extends ConsumerStatefulWidget {
   const WelcomeScreen({super.key});
@@ -83,13 +84,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
               children: [
                 const Center(child: NexusLogo(size: 96)),
                 const SizedBox(height: 12),
-                Text(
+                T(
                   'OpenAide',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 4),
-                Text(
+                T(
                   'How do you want to use OpenAide?',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.nexus.muted),
@@ -115,7 +116,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                   onTap: () => setState(() => _server = true),
                 ),
                 const SizedBox(height: 16),
-                Text(
+                T(
                   'You can add the other one later.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.nexus.muted),

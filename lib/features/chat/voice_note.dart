@@ -17,6 +17,7 @@ import '../../core/auth/session.dart';
 import '../studio/listen.dart';
 import 'chat_controller.dart';
 import 'speech_prefs.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The whole recording, kept in memory until it is sent.
 class VoiceNoteRecorder {
@@ -200,7 +201,7 @@ class _VoiceNoteBarState extends ConsumerState<VoiceNoteBar> {
               child: Text(_problem!, style: TextStyle(color: scheme.error)),
             ),
             IconButton(
-              tooltip: 'Close',
+              tooltip: tr('Close'),
               icon: const Icon(Icons.close),
               onPressed: widget.onDone,
             ),
@@ -214,7 +215,7 @@ class _VoiceNoteBarState extends ConsumerState<VoiceNoteBar> {
       child: Row(
         children: [
           IconButton(
-            tooltip: 'Delete the recording',
+            tooltip: tr('Delete the recording'),
             icon: const Icon(Icons.delete_outline),
             onPressed: busy ? null : _cancel,
           ),
@@ -238,12 +239,12 @@ class _VoiceNoteBarState extends ConsumerState<VoiceNoteBar> {
             ),
           ),
           IconButton(
-            tooltip: 'Put the words in the text box instead',
+            tooltip: tr('Put the words in the text box instead'),
             icon: const Icon(Icons.short_text),
             onPressed: busy ? null : _toText,
           ),
           IconButton.filled(
-            tooltip: 'Send voice note',
+            tooltip: tr('Send voice note'),
             icon: const Icon(Icons.arrow_upward),
             onPressed: busy ? null : _send,
           ),

@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Words written in capitals in a setting's name.
 const _acronyms = {
@@ -534,7 +535,8 @@ final adminConfigSections = <ConfigSection>[
 Object? _deepCopy(Object? v) => v == null ? null : jsonDecode(jsonEncode(v));
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// A settings page for one [ConfigSection].
 class ConfigEditorScreen extends ConsumerStatefulWidget {
@@ -616,7 +618,7 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
@@ -677,15 +679,15 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
     final leave = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Leave without saving?'),
+        title: const T('Leave without saving?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Stay'),
+            child: const T('Stay'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Leave'),
+            child: const T('Leave'),
           ),
         ],
       ),
@@ -747,8 +749,8 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                     child: TextField(
-                      decoration: const InputDecoration(
-                        hintText: 'Find a setting',
+                      decoration: InputDecoration(
+                        hintText: tr('Find a setting'),
                         prefixIcon: Icon(Icons.search),
                         isDense: true,
                         border: OutlineInputBorder(),
@@ -936,13 +938,13 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
                 onPressed: () {
                   c.clear();
                 },
-                child: const Text('Default'),
+                child: const T('Default'),
               ),
               Padding(
                 padding: const EdgeInsets.only(right: 8),
                 child: FilledButton(
                   onPressed: () => Navigator.pop(page, true),
-                  child: const Text('Done'),
+                  child: const T('Done'),
                 ),
               ),
             ],
@@ -955,8 +957,8 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
               expands: true,
               textAlignVertical: TextAlignVertical.top,
               style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              decoration: const InputDecoration(
-                hintText: 'Empty uses the server\'s default',
+              decoration: InputDecoration(
+                hintText: tr('Empty uses the server\'s default'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -994,7 +996,7 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () {
@@ -1004,7 +1006,7 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
                   set(() => problem = 'Not valid JSON: ${e.message}');
                 }
               },
-              child: const Text('Done'),
+              child: const T('Done'),
             ),
           ],
         ),

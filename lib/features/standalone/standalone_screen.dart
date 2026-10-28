@@ -32,6 +32,7 @@ import '../providers/ai_providers_screen.dart';
 import '../providers/provider_chat.dart';
 import 'local_chats.dart';
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 const _uuid = Uuid();
 
@@ -120,16 +121,16 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete chat?'),
+        title: const T('Delete chat?'),
         content: Text('"${c.title}" will be deleted from this phone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -318,7 +319,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
     return Scaffold(
       appBar: AppBar(
         title: !canChat
-            ? const Text('OpenAide')
+            ? const T('OpenAide')
             : TextButton(
                 onPressed: models.isEmpty ? null : () => _pickModel(models),
                 child: Row(
@@ -340,7 +341,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
         actions: [
           if (canChat)
             IconButton(
-              tooltip: 'New chat',
+              tooltip: tr('New chat'),
               icon: const Icon(Icons.edit_square),
               onPressed: _newChat,
             ),
@@ -365,17 +366,14 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                             ),
                           ),
                         ),
-                        TextButton(
-                          onPressed: _retry,
-                          child: const Text('Retry'),
-                        ),
+                        TextButton(onPressed: _retry, child: const T('Retry')),
                       ],
                     ),
                   ),
                 if (modelsAsync.hasValue && models.isEmpty)
                   const Padding(
                     padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                    child: Text(
+                    child: T(
                       "Your providers didn't list any models. Check your "
                       'keys in AI providers.',
                     ),
@@ -391,13 +389,13 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
       const SizedBox(height: 8),
       const NexusLogo(size: 72),
       const SizedBox(height: 12),
-      Text(
+      T(
         'Sign in to an AI provider',
         style: Theme.of(context).textTheme.titleLarge,
         textAlign: TextAlign.center,
       ),
       const SizedBox(height: 6),
-      Text(
+      T(
         'Pick at least one to start chatting. OpenRouter is the quickest: '
         'one sign-in gives you models from every big AI company. Keys stay '
         'on this phone. Or download a model to run on the phone itself, '
@@ -416,12 +414,12 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
           children: [
             ListTile(
               leading: const NexusLogo(size: 32),
-              title: const Text('OpenAide'),
-              subtitle: const Text('Chats saved on this phone'),
+              title: const T('OpenAide'),
+              subtitle: const T('Chats saved on this phone'),
             ),
             ListTile(
               leading: const Icon(Icons.edit_square),
-              title: const Text('New chat'),
+              title: const T('New chat'),
               onTap: () {
                 Navigator.pop(context);
                 _newChat();
@@ -431,7 +429,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             Expanded(
               child: chats.isEmpty
                   ? Center(
-                      child: Text(
+                      child: T(
                         'No chats yet',
                         style: TextStyle(color: context.nexus.muted),
                       ),
@@ -458,7 +456,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.handyman_outlined),
-              title: const Text('Tools and skills'),
+              title: const T('Tools and skills'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -471,7 +469,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.hub_outlined),
-              title: const Text('AI providers'),
+              title: const T('AI providers'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -482,7 +480,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.phone_android),
-              title: const Text('Models on this phone'),
+              title: const T('Models on this phone'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.push(
@@ -493,8 +491,8 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.dns_outlined),
-              title: const Text('Connect an Open WebUI server'),
-              subtitle: const Text('For memory, tools, files and sync'),
+              title: const T('Connect an Open WebUI server'),
+              subtitle: const T('For memory, tools, files and sync'),
               onTap: _connectServer,
             ),
           ],
@@ -514,7 +512,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             children: [
               const NexusLogo(size: 64),
               const SizedBox(height: 12),
-              Text(
+              T(
                 'How can I help?',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
@@ -603,7 +601,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
             Row(
               children: [
                 IconButton(
-                  tooltip: 'Copy',
+                  tooltip: tr('Copy'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.copy, size: 18),
                   onPressed: () =>
@@ -611,7 +609,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                 ),
                 if (last)
                   IconButton(
-                    tooltip: 'Regenerate',
+                    tooltip: tr('Regenerate'),
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(Icons.refresh, size: 18),
                     onPressed: _retry,
@@ -692,7 +690,7 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 IconButton(
-                  tooltip: 'Add a photo',
+                  tooltip: tr('Add a photo'),
                   icon: const Icon(Icons.add_photo_alternate_outlined),
                   onPressed: enabled && !_streaming ? _pickImage : null,
                 ),
@@ -713,13 +711,13 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                 ),
                 if (_streaming)
                   IconButton.filled(
-                    tooltip: 'Stop',
+                    tooltip: tr('Stop'),
                     icon: const Icon(Icons.stop),
                     onPressed: () => setState(_stop),
                   )
                 else
                   IconButton.filled(
-                    tooltip: 'Send',
+                    tooltip: tr('Send'),
                     icon: const Icon(Icons.arrow_upward),
                     onPressed: enabled ? _send : null,
                   ),

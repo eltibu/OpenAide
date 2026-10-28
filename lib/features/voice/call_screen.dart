@@ -12,13 +12,14 @@ import 'classic_call_view.dart';
 import '../../core/models/model_info.dart';
 import 'voice_avatar.dart';
 import 'realtime_call.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The chat as the call sees it, and the chat actions it takes.
 class ChatCallHost implements CallHost {
   ChatCallHost(this.read, this.onError);
 
   /// `ref.read` of a widget, or of a ProviderContainer in tests.
-  final T Function<T>(ProviderListenable<T> provider) read;
+  final V Function<V>(ProviderListenable<V> provider) read;
   final void Function(String message) onError;
 
   ChatController get _chat => read(chatControllerProvider.notifier);
@@ -285,7 +286,7 @@ class _CallScreenState extends ConsumerState<CallScreen> {
         if (call != null && call.working && call.connected)
           TextButton(
             onPressed: call.stopBackend,
-            child: const Text('Stop the request'),
+            child: const T('Stop the request'),
           ),
         Padding(
           padding: const EdgeInsets.fromLTRB(32, 16, 32, 32),
@@ -302,13 +303,13 @@ class _CallScreenState extends ConsumerState<CallScreen> {
               else if (_realtimeOn)
                 IconButton.filledTonal(
                   iconSize: 32,
-                  tooltip: 'Call again',
+                  tooltip: tr('Call again'),
                   onPressed: _start,
                   icon: const Icon(Icons.call),
                 ),
               IconButton.filled(
                 iconSize: 32,
-                tooltip: 'Hang up',
+                tooltip: tr('Hang up'),
                 style: IconButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: () {
                   call?.end();

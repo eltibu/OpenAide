@@ -13,9 +13,11 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
 import '../workspace/models_api.dart' show modelIdFrom;
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 const _path = '/api/v1/evaluations/config';
 
@@ -130,11 +132,11 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -155,12 +157,12 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
     };
     final on = config?['ENABLE_EVALUATION_ARENA_MODELS'] == true;
     return Scaffold(
-      appBar: AppBar(title: const Text('Evaluations')),
+      appBar: AppBar(title: const T('Evaluations')),
       floatingActionButton: on
           ? FloatingActionButton.extended(
               onPressed: _busy ? null : _edit,
               icon: const Icon(Icons.add),
-              label: const Text('Add Arena Model'),
+              label: const T('Add Arena Model'),
             )
           : null,
       body: config == null
@@ -174,8 +176,8 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
               children: [
                 if (_busy) const LinearProgressIndicator(minHeight: 2),
                 SwitchListTile(
-                  title: const Text('Arena Models'),
-                  subtitle: Text(
+                  title: const T('Arena Models'),
+                  subtitle: T(
                     'Models that answer as one picked at random, so replies '
                     'are rated blind.',
                     style: TextStyle(color: muted),
@@ -191,7 +193,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                 if (on && _models.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
+                    child: T(
                       'No arena models yet. The server adds a default one.',
                       style: TextStyle(color: muted),
                     ),
@@ -209,7 +211,7 @@ class _ArenaScreenState extends ConsumerState<ArenaScreen> {
                       ),
                       onTap: () => _edit(i),
                       trailing: IconButton(
-                        tooltip: 'Delete',
+                        tooltip: tr('Delete'),
                         icon: const Icon(Icons.delete_outline),
                         onPressed: _busy ? null : () => _delete(i),
                       ),
@@ -305,7 +307,7 @@ class _ArenaEditorState extends ConsumerState<_ArenaEditor> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: FilledButton(onPressed: _done, child: const Text('Done')),
+            child: FilledButton(onPressed: _done, child: const T('Done')),
           ),
         ],
       ),
@@ -328,7 +330,7 @@ class _ArenaEditorState extends ConsumerState<_ArenaEditor> {
               const SizedBox(width: 12),
               TextButton.icon(
                 icon: const Icon(Icons.photo_outlined),
-                label: const Text('Profile'),
+                label: const T('Profile'),
                 onPressed: _pickImage,
               ),
             ],
@@ -336,7 +338,7 @@ class _ArenaEditorState extends ConsumerState<_ArenaEditor> {
           TextField(
             controller: _name,
             autofocus: _isNew,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(labelText: tr('Name')),
             onChanged: (v) {
               if (_isNew && !_idEdited) _id.text = modelIdFrom(v);
             },
@@ -344,22 +346,22 @@ class _ArenaEditorState extends ConsumerState<_ArenaEditor> {
           TextField(
             controller: _id,
             enabled: _isNew,
-            decoration: const InputDecoration(labelText: 'ID'),
+            decoration: InputDecoration(labelText: tr('ID')),
             onChanged: (_) => _idEdited = true,
           ),
           TextField(
             controller: _description,
             maxLines: null,
-            decoration: const InputDecoration(labelText: 'Description'),
+            decoration: InputDecoration(labelText: tr('Description')),
           ),
           const SizedBox(height: 16),
-          Text('Models', style: Theme.of(context).textTheme.titleSmall),
+          T('Models', style: Theme.of(context).textTheme.titleSmall),
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: SegmentedButton<String>(
               segments: const [
-                ButtonSegment(value: 'include', label: Text('Include')),
-                ButtonSegment(value: 'exclude', label: Text('Exclude')),
+                ButtonSegment(value: 'include', label: T('Include')),
+                ButtonSegment(value: 'exclude', label: T('Exclude')),
               ],
               selected: {_filter},
               onSelectionChanged: (v) => setState(() => _filter = v.first),

@@ -12,9 +12,11 @@ import 'skill_files.dart';
 import 'access_editor.dart' show ItemMenu;
 import '../chat/chat_controller.dart' show skillsProvider;
 import 'owner_filter.dart';
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 String _seg(String id) => Uri.encodeComponent(id);
 
@@ -51,10 +53,10 @@ class ToolsScreen extends ConsumerWidget {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tools'),
+        title: const T('Tools'),
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'New Tool',
+            tooltip: tr('New Tool'),
             icon: const Icon(Icons.add),
             onSelected: (v) async {
               final saved = v == 'url'
@@ -69,12 +71,9 @@ class ToolsScreen extends ConsumerWidget {
               if (saved) ref.invalidate(_toolsListProvider);
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'new', child: Text('New Tool')),
+              const PopupMenuItem(value: 'new', child: T('New Tool')),
               if (ref.read(sessionProvider).value?.user?['role'] == 'admin')
-                const PopupMenuItem(
-                  value: 'url',
-                  child: Text('Import from URL'),
-                ),
+                const PopupMenuItem(value: 'url', child: T('Import from URL')),
             ],
           ),
           const OwnerFilterButton(),
@@ -201,7 +200,7 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
         actions: [
           if (t != null)
             IconButton(
-              tooltip: 'Edit',
+              tooltip: tr('Edit'),
               icon: const Icon(Icons.edit_outlined),
               onPressed: () async {
                 final saved = await Navigator.push<bool>(
@@ -240,8 +239,8 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
                   ),
                 ListTile(
                   leading: const Icon(Icons.tune),
-                  title: const Text('My settings'),
-                  subtitle: const Text('Values this tool uses for you'),
+                  title: const T('My settings'),
+                  subtitle: const T('Values this tool uses for you'),
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute<void>(
@@ -257,7 +256,7 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
                 if (admin)
                   ListTile(
                     leading: const Icon(Icons.admin_panel_settings_outlined),
-                    title: const Text('Settings for everyone'),
+                    title: const T('Settings for everyone'),
                     onTap: () => Navigator.push(
                       context,
                       MaterialPageRoute<void>(
@@ -272,7 +271,7 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
                   ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                  child: Text('What it can do', style: TextStyle(color: muted)),
+                  child: T('What it can do', style: TextStyle(color: muted)),
                 ),
                 for (final s in specs)
                   ListTile(
@@ -286,7 +285,7 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
                 if ('${t['content'] ?? ''}'.isNotEmpty) ...[
                   Padding(
                     padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-                    child: Text('Code', style: TextStyle(color: muted)),
+                    child: T('Code', style: TextStyle(color: muted)),
                   ),
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 12),
@@ -420,7 +419,7 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton(
                 onPressed: _busy ? null : _save,
-                child: const Text('Save'),
+                child: const T('Save'),
               ),
             ),
         ],
@@ -431,10 +430,7 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
           ? Center(child: Text('Couldn\'t load settings.\n$_error'))
           : _props.isEmpty
           ? Center(
-              child: Text(
-                'Nothing to set here',
-                style: TextStyle(color: muted),
-              ),
+              child: T('Nothing to set here', style: TextStyle(color: muted)),
             )
           : ListView(
               padding: const EdgeInsets.all(20),
@@ -455,7 +451,7 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
                           ),
                           trailing: TextButton(
                             onPressed: () => setState(() => _custom.add(e.key)),
-                            child: const Text('Custom'),
+                            child: const T('Custom'),
                           ),
                         );
                       }
@@ -544,10 +540,10 @@ class SkillsScreen extends ConsumerWidget {
     final client = ref.read(clientProvider);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Skills'),
+        title: const T('Skills'),
         actions: [
           IconButton(
-            tooltip: 'Import',
+            tooltip: tr('Import'),
             icon: const Icon(Icons.file_download_outlined),
             onPressed: () async {
               final done = await Navigator.push<bool>(
@@ -725,15 +721,15 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete ${_name.text}?'),
-        content: const Text('This can\'t be undone.'),
+        content: const T('This can\'t be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -750,11 +746,11 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Skill'),
+      title: const T('Skill'),
       actions: [
         if (_s != null) ...[
           IconButton(
-            tooltip: 'Delete',
+            tooltip: tr('Delete'),
             onPressed: _busy ? null : _delete,
             icon: const Icon(Icons.delete_outline),
           ),
@@ -787,7 +783,7 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _busy ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -802,12 +798,12 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
             children: [
               TextField(
                 controller: _name,
-                decoration: const InputDecoration(labelText: 'Name'),
+                decoration: InputDecoration(labelText: tr('Name')),
               ),
               TextField(
                 controller: _description,
                 maxLines: null,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: InputDecoration(labelText: tr('Description')),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -815,8 +811,8 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
                 minLines: 10,
                 maxLines: null,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-                decoration: const InputDecoration(
-                  labelText: 'Instructions',
+                decoration: InputDecoration(
+                  labelText: tr('Instructions'),
                   alignLabelWithHint: true,
                   border: OutlineInputBorder(),
                 ),
@@ -835,7 +831,7 @@ class WorkspaceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Workspace')),
+    appBar: AppBar(title: const T('Workspace')),
     body: ListView(
       children: [
         for (final (icon, title, subtitle, page) in sections)

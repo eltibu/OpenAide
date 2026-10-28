@@ -8,9 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// Whether [value] is an event in [events], a pattern like user.* that
 /// matches some, or * for all.
@@ -116,11 +118,11 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -142,13 +144,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
     final hooks = _hooks;
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Events')),
+      appBar: AppBar(title: const T('Events')),
       floatingActionButton: hooks == null
           ? null
           : FloatingActionButton.extended(
               onPressed: _edit,
               icon: const Icon(Icons.add),
-              label: const Text('Add webhook'),
+              label: const T('Add webhook'),
             ),
       body: hooks == null
           ? Center(
@@ -175,7 +177,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> {
                   if (hooks.isEmpty)
                     Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
+                      child: T(
                         'No webhooks yet.',
                         style: TextStyle(color: muted),
                       ),
@@ -383,7 +385,7 @@ class _WebhookEditorState extends ConsumerState<_WebhookEditor> {
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _busy ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -393,24 +395,24 @@ class _WebhookEditorState extends ConsumerState<_WebhookEditor> {
         children: [
           TextField(
             controller: _name,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              hintText: 'Identity audit',
+            decoration: InputDecoration(
+              labelText: tr('Name'),
+              hintText: tr('Identity audit'),
             ),
           ),
           TextField(
             controller: _url,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(labelText: 'URL'),
+            decoration: InputDecoration(labelText: tr('URL')),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Enabled'),
+            title: const T('Enabled'),
             value: _enabled,
             onChanged: (v) => setState(() => _enabled = v),
           ),
           const SizedBox(height: 8),
-          Text('Events', style: Theme.of(context).textTheme.titleSmall),
+          T('Events', style: Theme.of(context).textTheme.titleSmall),
           Wrap(
             spacing: 6,
             children: [
@@ -431,29 +433,26 @@ class _WebhookEditorState extends ConsumerState<_WebhookEditor> {
               Expanded(
                 child: TextField(
                   controller: _pattern,
-                  decoration: const InputDecoration(
-                    hintText: 'An event or a pattern like user.*',
+                  decoration: InputDecoration(
+                    hintText: tr('An event or a pattern like user.*'),
                   ),
                   onSubmitted: _addPattern,
                 ),
               ),
               IconButton(
-                tooltip: 'Add',
+                tooltip: tr('Add'),
                 icon: const Icon(Icons.add),
                 onPressed: () => _addPattern(_pattern.text),
               ),
               IconButton(
-                tooltip: 'Choose an event',
+                tooltip: tr('Choose an event'),
                 icon: const Icon(Icons.list),
                 onPressed: _pickEvent,
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Text(
-            'Send events for',
-            style: Theme.of(context).textTheme.titleSmall,
-          ),
+          T('Send events for', style: Theme.of(context).textTheme.titleSmall),
           for (final (id, label) in const [
             ('all', 'All users and system events'),
             ('system', 'System events only'),
@@ -468,7 +467,7 @@ class _WebhookEditorState extends ConsumerState<_WebhookEditor> {
               onTap: () => setState(() => _audience = id),
             ),
           if (_audience == 'system')
-            Text(
+            T(
               'Receives matching events that are not associated with a user.',
               style: TextStyle(color: muted),
             ),
@@ -490,8 +489,8 @@ class _WebhookEditorState extends ConsumerState<_WebhookEditor> {
               ],
             ),
             TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search users',
+              decoration: InputDecoration(
+                hintText: tr('Search users'),
                 prefixIcon: Icon(Icons.search),
               ),
               onChanged: _search,
@@ -509,7 +508,7 @@ class _WebhookEditorState extends ConsumerState<_WebhookEditor> {
               ),
             if (_groups.isNotEmpty) ...[
               const SizedBox(height: 8),
-              Text('Groups', style: TextStyle(color: muted)),
+              T('Groups', style: TextStyle(color: muted)),
               for (final g in _groups)
                 CheckboxListTile(
                   contentPadding: EdgeInsets.zero,
@@ -556,8 +555,8 @@ class _EventPickerState extends State<_EventPicker> {
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TextField(
               autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Search events',
+              decoration: InputDecoration(
+                hintText: tr('Search events'),
                 prefixIcon: Icon(Icons.search),
               ),
               onChanged: (v) => setState(() => _q = v.trim().toLowerCase()),

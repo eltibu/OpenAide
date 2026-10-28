@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/chat.dart';
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// One question from `ask_user`.
 class AskQuestion {
@@ -195,7 +196,7 @@ class _ApprovalCard extends StatelessWidget {
               child: ExpansionTile(
                 tilePadding: EdgeInsets.zero,
                 dense: true,
-                title: Text('Details', style: theme.textTheme.labelMedium),
+                title: T('Details', style: theme.textTheme.labelMedium),
                 children: [
                   Container(
                     width: double.infinity,
@@ -220,9 +221,9 @@ class _ApprovalCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              TextButton(onPressed: onDeny, child: const Text('Deny')),
+              TextButton(onPressed: onDeny, child: const T('Deny')),
               const SizedBox(width: 8),
-              FilledButton(onPressed: onAllow, child: const Text('Allow')),
+              FilledButton(onPressed: onAllow, child: const T('Allow')),
             ],
           ),
         ],
@@ -352,11 +353,11 @@ class _AskUserCardState extends State<AskUserCard> {
                 maxLines: 4,
                 textInputAction: TextInputAction.send,
                 decoration: InputDecoration(
-                  hintText: 'Something else…',
+                  hintText: tr('Something else…'),
                   isDense: true,
                   border: const OutlineInputBorder(),
                   suffixIcon: IconButton(
-                    tooltip: 'Answer',
+                    tooltip: tr('Answer'),
                     icon: const Icon(Icons.arrow_upward),
                     onPressed: _sendOther,
                   ),
@@ -369,10 +370,10 @@ class _AskUserCardState extends State<AskUserCard> {
               if (_at > 0)
                 TextButton(
                   onPressed: () => setState(() => _at--),
-                  child: const Text('Back'),
+                  child: const T('Back'),
                 ),
               const Spacer(),
-              TextButton(onPressed: widget.onSkip, child: const Text('Skip')),
+              TextButton(onPressed: widget.onSkip, child: const T('Skip')),
             ],
           ),
         ],

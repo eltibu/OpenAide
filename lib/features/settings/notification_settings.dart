@@ -13,6 +13,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../chat/reply_notify.dart';
 import 'settings_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The person's webhooks, or null when the server doesn't offer them.
 final webhooksProvider = FutureProvider.autoDispose<List<Map>?>((ref) async {
@@ -45,7 +46,8 @@ final webhookEventsProvider =
     });
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 class NotificationSettings extends ConsumerWidget {
   const NotificationSettings({super.key});
@@ -69,7 +71,7 @@ class NotificationSettings extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Notifications')),
+      appBar: AppBar(title: const T('Notifications')),
       body: ui.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Padding(
@@ -80,8 +82,8 @@ class NotificationSettings extends ConsumerWidget {
           children: [
             const _PhoneAllows(),
             SwitchListTile(
-              title: const Text('Notify when a reply is ready'),
-              subtitle: const Text(
+              title: const T('Notify when a reply is ready'),
+              subtitle: const T(
                 'When the app is in the background; tap it to open the chat',
               ),
               value: ui['notificationEnabled'] == true,
@@ -99,8 +101,8 @@ class NotificationSettings extends ConsumerWidget {
               },
             ),
             SwitchListTile(
-              title: const Text('Sound'),
-              subtitle: const Text('Play a sound with the notification'),
+              title: const T('Sound'),
+              subtitle: const T('Play a sound with the notification'),
               value: ui['notificationSound'] != false,
               onChanged: ui['notificationEnabled'] == true
                   ? (on) => set({'notificationSound': on})
@@ -112,11 +114,11 @@ class NotificationSettings extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
               child: Row(
                 children: [
-                  Expanded(child: Text('Webhooks', style: heading)),
+                  Expanded(child: T('Webhooks', style: heading)),
                   if (hooks.value != null)
                     TextButton.icon(
                       icon: const Icon(Icons.add),
-                      label: const Text('Add'),
+                      label: const T('Add'),
                       onPressed: () => _edit(context, ref, null),
                     ),
                 ],
@@ -130,14 +132,14 @@ class NotificationSettings extends ConsumerWidget {
               error: (e, _) => ListTile(title: Text('$e')),
               data: (list) => list == null
                   ? ListTile(
-                      title: Text(
+                      title: T(
                         'Your server\'s admin hasn\'t turned on webhooks.',
                         style: TextStyle(color: muted),
                       ),
                     )
                   : list.isEmpty
                   ? ListTile(
-                      title: Text(
+                      title: T(
                         'No webhooks. Add one to hear about finished chats, '
                         'channel messages or calendar alerts elsewhere.',
                         style: TextStyle(color: muted),
@@ -193,8 +195,8 @@ class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
 
   @override
   Widget build(BuildContext context) => SwitchListTile(
-    title: const Text('While the app is closed'),
-    subtitle: const Text(
+    title: const T('While the app is closed'),
+    subtitle: const T(
       'Checks about every 15 minutes for new replies and channel messages '
       '(this phone only)',
     ),
@@ -269,13 +271,10 @@ class _Webhook extends ConsumerWidget {
               ),
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'test', child: Text('Send test')),
+              const PopupMenuItem(value: 'test', child: T('Send test')),
               if (target['is_default'] != true)
-                const PopupMenuItem(
-                  value: 'default',
-                  child: Text('Make default'),
-                ),
-              const PopupMenuItem(value: 'delete', child: Text('Remove')),
+                const PopupMenuItem(value: 'default', child: T('Make default')),
+              const PopupMenuItem(value: 'delete', child: T('Remove')),
             ],
           ),
         ],
@@ -387,14 +386,14 @@ class _WebhookSheetState extends ConsumerState<_WebhookSheet> {
             TextField(
               controller: _url,
               keyboardType: TextInputType.url,
-              decoration: const InputDecoration(
-                labelText: 'Webhook address',
-                hintText: 'https://…',
+              decoration: InputDecoration(
+                labelText: tr('Webhook address'),
+                hintText: tr('https://…'),
                 border: OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 12),
-            Text('Send for', style: Theme.of(context).textTheme.titleSmall),
+            T('Send for', style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 4),
             events.when(
               loading: () => const LinearProgressIndicator(),
@@ -416,8 +415,8 @@ class _WebhookSheetState extends ConsumerState<_WebhookSheet> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Even while I\'m using it'),
-              subtitle: const Text('Off: only when you\'re away'),
+              title: const T('Even while I\'m using it'),
+              subtitle: const T('Off: only when you\'re away'),
               value: _always,
               onChanged: (on) => setState(() => _always = on),
             ),
@@ -433,7 +432,7 @@ class _WebhookSheetState extends ConsumerState<_WebhookSheet> {
               alignment: Alignment.centerRight,
               child: FilledButton(
                 onPressed: _saving ? null : _save,
-                child: const Text('Save'),
+                child: const T('Save'),
               ),
             ),
           ],
@@ -490,21 +489,21 @@ class _PhoneAllowsState extends State<_PhoneAllows>
           Icons.notifications_off_outlined,
           color: Theme.of(context).colorScheme.error,
         ),
-        title: const Text('Notifications are off for OpenAide on this phone'),
-        subtitle: const Text('Nothing below can show until they\'re on'),
+        title: const T('Notifications are off for OpenAide on this phone'),
+        subtitle: const T('Nothing below can show until they\'re on'),
         trailing: FilledButton(
           onPressed: () async {
             await allowNotifications();
             await _check();
           },
-          child: const Text('Turn on'),
+          child: const T('Turn on'),
         ),
       );
     }
     return ListTile(
       leading: const Icon(Icons.notifications_active_outlined),
-      title: const Text('Notifications are on for OpenAide'),
-      subtitle: const Text('Change their sound or style in Android settings'),
+      title: const T('Notifications are on for OpenAide'),
+      subtitle: const T('Change their sound or style in Android settings'),
       onTap: openNotificationSettings,
       trailing: TextButton(
         onPressed: () => notifyReply(
@@ -512,7 +511,7 @@ class _PhoneAllowsState extends State<_PhoneAllows>
           reply: 'This is a test notification.',
           chatId: '',
         ),
-        child: const Text('Test'),
+        child: const T('Test'),
       ),
     );
   }

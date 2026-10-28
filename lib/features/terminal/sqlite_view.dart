@@ -7,6 +7,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:sqlite3/sqlite3.dart' hide Row;
 
+import '../../core/i18n/app_strings.dart';
+
 /// Opens [bytes] as a database (a private copy; the server's file is not
 /// changed).
 Future<Database> openDatabaseCopy(List<int> bytes, String name) async {
@@ -124,7 +126,7 @@ class _SqliteViewState extends State<SqliteView> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: _custom ? null : _table,
-                  hint: const Text('Table'),
+                  hint: const T('Table'),
                   items: [
                     for (final t in _tables)
                       DropdownMenuItem(value: t, child: Text(t)),
@@ -134,7 +136,7 @@ class _SqliteViewState extends State<SqliteView> {
               ),
               if (!_custom && _table != null) ...[
                 IconButton(
-                  tooltip: 'Previous page',
+                  tooltip: tr('Previous page'),
                   icon: const Icon(Icons.chevron_left),
                   onPressed: _page == 0
                       ? null
@@ -142,7 +144,7 @@ class _SqliteViewState extends State<SqliteView> {
                 ),
                 Text('${_page + 1}'),
                 IconButton(
-                  tooltip: 'Next page',
+                  tooltip: tr('Next page'),
                   icon: const Icon(Icons.chevron_right),
                   onPressed: (rows?.length ?? 0) < _pageSize
                       ? null
@@ -159,10 +161,10 @@ class _SqliteViewState extends State<SqliteView> {
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
             decoration: InputDecoration(
               isDense: true,
-              hintText: 'SELECT … (read only)',
+              hintText: tr('SELECT … (read only)'),
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
-                tooltip: 'Run',
+                tooltip: tr('Run'),
                 icon: const Icon(Icons.play_arrow),
                 onPressed: () => _run(_query.text),
               ),
@@ -178,7 +180,7 @@ class _SqliteViewState extends State<SqliteView> {
         if (rows != null)
           Expanded(
             child: rows.isEmpty
-                ? const Center(child: Text('No rows'))
+                ? const Center(child: T('No rows'))
                 : SingleChildScrollView(
                     child: SingleChildScrollView(
                       scrollDirection: Axis.horizontal,

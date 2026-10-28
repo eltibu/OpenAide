@@ -6,6 +6,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 import '../../core/theme.dart';
 import 'studio_doc.dart';
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 class AiResult {
   const AiResult(this.instruction, this.text);
@@ -103,14 +104,14 @@ class AiSheetState extends State<AiSheet> {
               textInputAction: TextInputAction.send,
               onSubmitted: (_) => _go(),
               decoration: InputDecoration(
-                hintText: 'What should change?',
+                hintText: tr('What should change?'),
                 border: const OutlineInputBorder(),
                 suffixIcon: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (widget.dictate != null)
                       IconButton(
-                        tooltip: 'Say it',
+                        tooltip: tr('Say it'),
                         onPressed: writing
                             ? null
                             : () async {
@@ -124,7 +125,7 @@ class AiSheetState extends State<AiSheet> {
                         icon: const Icon(Icons.mic_none),
                       ),
                     IconButton(
-                      tooltip: 'Apply',
+                      tooltip: tr('Apply'),
                       onPressed: writing ? null : _go,
                       icon: const Icon(Icons.send),
                     ),
@@ -192,12 +193,12 @@ class AiSheetState extends State<AiSheet> {
                 children: [
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: const Text('Discard'),
+                    child: const T('Discard'),
                   ),
                   const Spacer(),
                   OutlinedButton(
                     onPressed: writing ? null : _go,
-                    child: const Text('Try again'),
+                    child: const T('Try again'),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
@@ -207,7 +208,7 @@ class AiSheetState extends State<AiSheet> {
                             context,
                             AiResult(_instruction.text.trim(), _text!),
                           ),
-                    child: const Text('Keep it'),
+                    child: const T('Keep it'),
                   ),
                 ],
               ),

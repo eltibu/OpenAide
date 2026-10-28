@@ -11,10 +11,7 @@ void main() {
     expect(noteIdIn('https://chat.example.com/c/abc', server), isNull);
     // A server under a path, as on the home network.
     expect(
-      noteIdIn(
-        'http://192.168.1.20/chat/notes/n1',
-        'http://192.168.1.20/chat',
-      ),
+      noteIdIn('http://192.168.1.20/chat/notes/n1', 'http://192.168.1.20/chat'),
       'n1',
     );
   });

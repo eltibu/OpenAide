@@ -10,9 +10,11 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/search_field.dart';
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// A person's chats, newest first, with search, reading and deleting.
 class UserChatsScreen extends ConsumerStatefulWidget {
@@ -85,11 +87,11 @@ class _UserChatsState extends ConsumerState<UserChatsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -135,7 +137,7 @@ class _UserChatsState extends ConsumerState<UserChatsScreen> {
                   )
                 : _chats.isEmpty && !_loading
                 ? Center(
-                    child: Text(
+                    child: T(
                       'No chats found for this user.',
                       style: TextStyle(color: muted),
                     ),
@@ -167,7 +169,7 @@ class _UserChatsState extends ConsumerState<UserChatsScreen> {
                               ),
                             ),
                             trailing: IconButton(
-                              tooltip: 'Delete',
+                              tooltip: tr('Delete'),
                               icon: const Icon(Icons.delete_outline),
                               onPressed: () => _delete(c),
                             ),
@@ -307,7 +309,7 @@ class UserPreviewScreen extends ConsumerWidget {
           return ListView(
             children: [
               ListTile(
-                title: const Text('Groups'),
+                title: const T('Groups'),
                 subtitle: Text(
                   groups.isEmpty ? 'In no groups' : groups.join(', '),
                   style: TextStyle(color: muted),

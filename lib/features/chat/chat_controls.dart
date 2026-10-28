@@ -11,6 +11,7 @@ import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'advanced_params.dart';
 import 'chat_controller.dart';
 import '../settings/tool_servers.dart' show chatToolsProvider;
+import '../../core/i18n/app_strings.dart';
 
 Future<void> showChatControls(BuildContext context) =>
     showModalBottomSheet<void>(
@@ -85,11 +86,11 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
                     await _chat.setParam(k, null);
                   }
                 },
-                child: const Text('Reset all'),
+                child: const T('Reset all'),
               ),
           ],
         ),
-        Text(
+        T(
           'Only for this chat, and saved with it. Anything left on '
           'default follows Settings and the model.',
           style: TextStyle(color: muted),
@@ -99,8 +100,8 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
           controller: _system,
           minLines: 2,
           maxLines: 8,
-          decoration: const InputDecoration(
-            hintText: 'How OpenAide should act in this chat',
+          decoration: InputDecoration(
+            hintText: tr('How OpenAide should act in this chat'),
             border: OutlineInputBorder(),
           ),
           onChanged: (v) {
@@ -169,7 +170,7 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
     );
     return [
       heading('Valves'),
-      Text(
+      T(
         'Your settings for the tools and functions this chat uses. They '
         'apply wherever you use them.',
         style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),

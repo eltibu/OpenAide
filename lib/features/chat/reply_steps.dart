@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'reply_parts.dart';
 import 'side_panel.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// A group of steps (thinking, tool calls, task steps) folded into one line,
 /// like the Claude app: tap to see each step, tap a step to see its detail.
@@ -295,7 +296,7 @@ class _StepState extends State<_Step> {
           if (result != null)
             box('Result', _clip(prettyJson(result)))
           else if (widget.live)
-            Text('Waiting for the result…', style: small),
+            T('Waiting for the result…', style: small),
         ],
       ),
       StatusPart() => const SizedBox.shrink(),

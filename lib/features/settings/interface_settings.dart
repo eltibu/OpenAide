@@ -12,6 +12,7 @@ import '../chat/chat_controller.dart' show userSettingsProvider;
 import '../../core/auth/session.dart';
 import 'settings_screen.dart' show settingsApiProvider, uiSettingsProvider;
 import 'user_location.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// A switch: the setting's key, its default, label and what it does.
 typedef UiSwitch = (String key, bool start, String label, String help);
@@ -224,7 +225,7 @@ class InterfaceSettings extends ConsumerWidget {
     );
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Interface')),
+      appBar: AppBar(title: const T('Interface')),
       body: ui.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Padding(
@@ -271,8 +272,8 @@ class InterfaceSettings extends ConsumerWidget {
                   ),
                 if (group.key == 'Chat') ...[
                   SwitchListTile(
-                    title: const Text('Allow User Location'),
-                    subtitle: Text(
+                    title: const T('Allow User Location'),
+                    subtitle: T(
                       'Models can use where you are ({{USER_LOCATION}}).',
                       style: TextStyle(color: muted),
                     ),
@@ -302,8 +303,8 @@ class InterfaceSettings extends ConsumerWidget {
                     },
                   ),
                   SwitchListTile(
-                    title: const Text('Quick Actions'),
-                    subtitle: Text(
+                    title: const T('Quick Actions'),
+                    subtitle: T(
                       'Ask and Explain next to Copy when you select reply text.',
                       style: TextStyle(color: muted),
                     ),
@@ -311,7 +312,7 @@ class InterfaceSettings extends ConsumerWidget {
                     onChanged: (on) => set({'showFloatingActionButtons': on}),
                   ),
                   ListTile(
-                    title: const Text('Manage Quick Actions'),
+                    title: const T('Manage Quick Actions'),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.push(
                       context,
@@ -330,7 +331,7 @@ class InterfaceSettings extends ConsumerWidget {
                   ),
                 if (group.key == 'Images' && ui['imageCompression'] == true)
                   ListTile(
-                    title: const Text('Largest size'),
+                    title: const T('Largest size'),
                     subtitle: Text(
                       [
                         '${size['width'] ?? ''}'.isEmpty
@@ -371,14 +372,14 @@ Future<Map<String, String>?> _askSize(BuildContext context, Map size) {
   return showDialog<Map<String, String>>(
     context: context,
     builder: (d) => AlertDialog(
-      title: const Text('Largest image size'),
+      title: const T('Largest image size'),
       content: Row(
         children: [
           Expanded(
             child: TextField(
               controller: w,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Width'),
+              decoration: InputDecoration(labelText: tr('Width')),
             ),
           ),
           const SizedBox(width: 12),
@@ -386,22 +387,19 @@ Future<Map<String, String>?> _askSize(BuildContext context, Map size) {
             child: TextField(
               controller: h,
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Height'),
+              decoration: InputDecoration(labelText: tr('Height')),
             ),
           ),
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(d),
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: () => Navigator.pop(d), child: const T('Cancel')),
         FilledButton(
           onPressed: () => Navigator.pop(d, {
             'width': w.text.trim(),
             'height': h.text.trim(),
           }),
-          child: const Text('Save'),
+          child: const T('Save'),
         ),
       ],
     ),

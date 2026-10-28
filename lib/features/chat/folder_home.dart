@@ -12,6 +12,7 @@ import '../../core/theme.dart';
 import 'chat_controller.dart';
 import 'emoji.dart';
 import 'folder_settings.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The folder as the server has it: name, meta (icon) and data (files).
 final folderDetailProvider = FutureProvider.autoDispose
@@ -92,7 +93,7 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
+                    child: T(
                       'Change folder icon',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
@@ -100,7 +101,7 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
                   if (current != null)
                     TextButton(
                       onPressed: () => Navigator.pop(context, ''),
-                      child: const Text('Remove'),
+                      child: const T('Remove'),
                     ),
                 ],
               ),
@@ -146,7 +147,7 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
             },
           );
       messenger.showSnackBar(
-        const SnackBar(content: Text('Folder updated successfully')),
+        const SnackBar(content: T('Folder updated successfully')),
       );
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
@@ -178,7 +179,7 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
             Row(
               children: [
                 IconButton(
-                  tooltip: 'Change folder icon',
+                  tooltip: tr('Change folder icon'),
                   onPressed: () => _pickIcon(emoji),
                   icon: emoji == null
                       ? const Icon(Icons.folder_outlined)
@@ -193,7 +194,7 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Edit folder',
+                  tooltip: tr('Edit folder'),
                   icon: const Icon(Icons.tune),
                   onPressed: () async {
                     await editFolder(context, f.id);
@@ -203,7 +204,7 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
                   },
                 ),
                 IconButton(
-                  tooltip: 'Leave folder',
+                  tooltip: tr('Leave folder'),
                   icon: const Icon(Icons.close),
                   onPressed: () => controller.newChat(),
                 ),
@@ -212,7 +213,7 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
             SegmentedButton<String>(
               showSelectedIcon: false,
               segments: [
-                const ButtonSegment(value: 'chats', label: Text('Chats')),
+                const ButtonSegment(value: 'chats', label: T('Chats')),
                 ButtonSegment(
                   value: 'knowledge',
                   label: Text(
@@ -246,14 +247,11 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
                   child: Center(child: CircularProgressIndicator()),
                 )
               else if (_more)
-                TextButton(
-                  onPressed: _loadChats,
-                  child: const Text('Load more'),
-                )
+                TextButton(onPressed: _loadChats, child: const T('Load more'))
               else if (_chats.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: Text(
+                  child: T(
                     'No chats in this folder yet.',
                     textAlign: TextAlign.center,
                     style: TextStyle(color: muted),

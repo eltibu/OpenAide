@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../settings/settings_screen.dart'
     show settingsApiProvider, uiSettingsProvider;
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 const toolApprovalModes = {
   'full': ('Full access', 'Run tools without asking for approval.'),
@@ -37,7 +38,7 @@ Future<void> pickToolApprovalMode(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const ListTile(title: Text('Tool Permissions')),
+          const ListTile(title: T('Tool Permissions')),
           for (final m in toolApprovalModes.entries)
             ListTile(
               leading: Icon(

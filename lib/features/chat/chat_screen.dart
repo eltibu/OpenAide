@@ -65,6 +65,7 @@ import 'chat_variables.dart';
 import 'compare_text.dart';
 import 'model_controls.dart';
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -235,7 +236,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       appBar: AppBar(
         leading: Builder(
           builder: (context) => IconButton(
-            tooltip: 'Chats',
+            tooltip: tr('Chats'),
             icon: const Icon(Icons.menu),
             onPressed: () => wide
                 // Docked: hide or show it; with a panel open, the panel
@@ -290,7 +291,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           // The web's chat panel: Controls, Files and Overview.
           IconButton(
-            tooltip: 'Controls, files and overview',
+            tooltip: tr('Controls, files and overview'),
             isSelected: state.params.isNotEmpty,
             icon: const Icon(Icons.tune),
             selectedIcon: const Icon(Icons.tune, color: NexusColors.accent),
@@ -298,7 +299,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           ),
           const ReadAloudButton(),
           IconButton(
-            tooltip: 'New chat',
+            tooltip: tr('New chat'),
             icon: const Icon(Icons.add_comment_outlined),
             onPressed: () =>
                 ref.read(chatControllerProvider.notifier).newChat(),
@@ -326,7 +327,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 TextButton(
                   onPressed: () =>
                       ref.read(chatControllerProvider.notifier).retry(),
-                  child: const Text('Retry'),
+                  child: const T('Retry'),
                 ),
               ],
             ),
@@ -373,17 +374,17 @@ class _TemporaryBar extends ConsumerWidget {
             ),
             const SizedBox(width: 10),
             const Expanded(
-              child: Text("Temporary chat. It won't be saved or kept."),
+              child: T("Temporary chat. It won't be saved or kept."),
             ),
             if (canSave)
               TextButton(
                 onPressed: controller.saveTemporary,
-                child: const Text('Save it'),
+                child: const T('Save it'),
               )
             else
               TextButton(
                 onPressed: () => controller.newChat(),
-                child: const Text('Turn off'),
+                child: const T('Turn off'),
               ),
           ],
         ),
@@ -528,7 +529,7 @@ class _Suggestions extends ConsumerWidget {
                 children: [
                   Icon(Icons.auto_awesome_outlined, size: 14, color: muted),
                   const SizedBox(width: 6),
-                  Text(
+                  T(
                     'Suggested',
                     style: text.labelMedium?.copyWith(color: muted),
                   ),
@@ -850,7 +851,7 @@ class _ModelAnswers extends ConsumerWidget {
                   children: [
                     Icon(Icons.merge, size: 18, color: theme.hintColor),
                     const SizedBox(width: 6),
-                    Text('Merged answer', style: theme.textTheme.labelLarge),
+                    T('Merged answer', style: theme.textTheme.labelLarge),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -1114,7 +1115,7 @@ class _MessageActions extends ConsumerWidget {
             action(Icons.copy_outlined, 'Copy', () {
               copyMessage(ref, message.content);
               ScaffoldMessenger.of(context)
-                  .showSnackBar(const SnackBar(content: Text('Copied')));
+                  .showSnackBar(const SnackBar(content: T('Copied')));
             }),
           if (!isUser && !compact) ...[
             if (message.content.isNotEmpty)
@@ -1163,7 +1164,7 @@ class _MessageActions extends ConsumerWidget {
     final edited = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Edit message'),
+        title: const T('Edit message'),
         content: TextField(
           controller: text,
           autofocus: true,
@@ -1173,11 +1174,11 @@ class _MessageActions extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, text.text),
-            child: const Text('Send'),
+            child: const T('Send'),
           ),
         ],
       ),
@@ -1257,14 +1258,14 @@ class _ComposerState extends ConsumerState<_Composer> {
         builder: (c) => Scaffold(
           appBar: AppBar(
             leading: IconButton(
-              tooltip: 'Collapse',
+              tooltip: tr('Collapse'),
               icon: const Icon(Icons.close_fullscreen),
               onPressed: () => Navigator.pop(c, false),
             ),
-            title: const Text('Message'),
+            title: const T('Message'),
             actions: [
               IconButton(
-                tooltip: 'Send',
+                tooltip: tr('Send'),
                 icon: const Icon(Icons.arrow_upward),
                 onPressed: () => Navigator.pop(c, true),
               ),
@@ -1462,7 +1463,7 @@ class _ComposerState extends ConsumerState<_Composer> {
           run(() {
             copyMessage(ref, lastReply.content);
             ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Copied')));
+                .showSnackBar(const SnackBar(content: T('Copied')));
           });
         }),
       SlashCommand(
@@ -1487,7 +1488,7 @@ class _ComposerState extends ConsumerState<_Composer> {
           () => run(() async {
             final messenger = ScaffoldMessenger.of(context);
             messenger.showSnackBar(
-              const SnackBar(content: Text('Compacting context…')),
+              const SnackBar(content: T('Compacting context…')),
             );
             try {
               final why = await controller.compact();
@@ -1656,7 +1657,7 @@ class _ComposerState extends ConsumerState<_Composer> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  title: const Text('Context usage'),
+                  title: const T('Context usage'),
                   subtitle: snap.connectionState != ConnectionState.done
                       ? const LinearProgressIndicator()
                       : u == null
@@ -1681,18 +1682,18 @@ class _ComposerState extends ConsumerState<_Composer> {
                 ),
                 if (state.queued.isNotEmpty)
                   ListTile(
-                    title: const Text('Queued messages'),
+                    title: const T('Queued messages'),
                     trailing: Text('${state.queued.length}'),
                   ),
                 if (state.streaming)
-                  const ListTile(title: Text('Tasks'), trailing: Text('1')),
+                  const ListTile(title: T('Tasks'), trailing: T('1')),
                 ListTile(
-                  title: const Text('Chat ID'),
+                  title: const T('Chat ID'),
                   subtitle: Text(id.isEmpty ? 'none' : id),
                   trailing: id.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: 'Copy chat ID',
+                          tooltip: tr('Copy chat ID'),
                           icon: const Icon(Icons.copy),
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: id));
@@ -1760,19 +1761,19 @@ class _ComposerState extends ConsumerState<_Composer> {
         children: [
           IconButton(
             visualDensity: VisualDensity.compact,
-            tooltip: 'Stop',
+            tooltip: tr('Stop'),
             icon: const Icon(Icons.stop_rounded),
             onPressed: controller.stop,
           ),
           IconButton(
             visualDensity: VisualDensity.compact,
-            tooltip: 'Steer: stop the reply and send this now',
+            tooltip: tr('Steer: stop the reply and send this now'),
             icon: const Icon(Icons.turn_right),
             onPressed: _steer,
           ),
           IconButton.filled(
             visualDensity: VisualDensity.compact,
-            tooltip: 'Queue: send this when the reply is done',
+            tooltip: tr('Queue: send this when the reply is done'),
             icon: const Icon(Icons.arrow_upward),
             onPressed: _queue,
           ),
@@ -1781,14 +1782,14 @@ class _ComposerState extends ConsumerState<_Composer> {
     } else if (widget.streaming) {
       action = IconButton.filled(
         visualDensity: VisualDensity.compact,
-        tooltip: 'Stop',
+        tooltip: tr('Stop'),
         icon: const Icon(Icons.stop_rounded),
         onPressed: controller.stop,
       );
     } else if (_hasText || hasFiles) {
       action = IconButton.filled(
         visualDensity: VisualDensity.compact,
-        tooltip: 'Send',
+        tooltip: tr('Send'),
         icon: const Icon(Icons.arrow_upward),
         onPressed: ready ? _send : null,
       );
@@ -1798,13 +1799,13 @@ class _ComposerState extends ConsumerState<_Composer> {
         children: [
           IconButton(
             visualDensity: VisualDensity.compact,
-            tooltip: 'Record a voice note',
+            tooltip: tr('Record a voice note'),
             icon: const Icon(Icons.mic_none),
             onPressed: ready ? () => setState(() => _recording = true) : null,
           ),
           IconButton.filled(
             visualDensity: VisualDensity.compact,
-            tooltip: 'Voice call',
+            tooltip: tr('Voice call'),
             icon: const Icon(Icons.graphic_eq),
             onPressed: ready
                 ? () => Navigator.push(
@@ -1898,7 +1899,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                         '\n'.allMatches(v.text).length >= 3 ||
                             v.text.length > 240
                         ? IconButton(
-                            tooltip: 'Expand input',
+                            tooltip: tr('Expand input'),
                             icon: const Icon(Icons.open_in_full, size: 18),
                             onPressed: _expand,
                           )
@@ -1967,7 +1968,7 @@ class _QueuedMessages extends ConsumerWidget {
               ),
               TextButton(
                 onPressed: controller.sendQueued,
-                child: const Text('Send now'),
+                child: const T('Send now'),
               ),
             ],
           ),
@@ -1983,13 +1984,13 @@ class _QueuedMessages extends ConsumerWidget {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Edit',
+                  tooltip: tr('Edit'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.edit_outlined, size: 18),
                   onPressed: () => onEdit(controller.unqueue(i)),
                 ),
                 IconButton(
-                  tooltip: 'Remove',
+                  tooltip: tr('Remove'),
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.close, size: 18),
                   onPressed: () => controller.unqueue(i),
@@ -2132,7 +2133,7 @@ class _AtModelChip extends ConsumerWidget {
             ),
           ),
           IconButton(
-            tooltip: 'Remove Selected Model',
+            tooltip: tr('Remove Selected Model'),
             visualDensity: VisualDensity.compact,
             icon: const Icon(Icons.close, size: 18),
             onPressed: () => ref.read(atModelProvider.notifier).set(null),
@@ -2246,7 +2247,7 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                    child: Text(
+                    child: T(
                       'Tap a model to use it. Tap + to have it answer too, '
                       'so you can compare.',
                       style: TextStyle(color: context.nexus.muted),
@@ -2260,7 +2261,7 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
                             : 'No results found',
                       ),
                       subtitle: all.isEmpty
-                          ? const Text(
+                          ? const T(
                               'Connect to an AI provider to start chatting',
                             )
                           : null,
@@ -2324,9 +2325,7 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
                     ListTile(
                       leading: const Icon(Icons.download),
                       title: Text('Download "${_query.trim()}"'),
-                      subtitle: const Text(
-                        'Pull it onto Ollama from Ollama.com',
-                      ),
+                      subtitle: const T('Pull it onto Ollama from Ollama.com'),
                       onTap: () => _download(_query.trim()),
                     ),
                   for (final p in pulls.entries)
@@ -2362,7 +2361,7 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
                   if (admin && list.isEmpty)
                     ListTile(
                       leading: const Icon(Icons.hub_outlined),
-                      title: const Text('Manage Connections'),
+                      title: const T('Manage Connections'),
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute<void>(
@@ -2438,24 +2437,24 @@ Future<void> _userMessageMenu(
         children: [
           ListTile(
             leading: const Icon(Icons.copy_outlined),
-            title: const Text('Copy'),
+            title: const T('Copy'),
             onTap: () => Navigator.pop(context, 'copy'),
           ),
           ListTile(
             leading: const Icon(Icons.edit_outlined),
-            title: const Text('Edit'),
+            title: const T('Edit'),
             onTap: () => Navigator.pop(context, 'edit'),
           ),
           ListTile(
             leading: const Icon(Icons.call_split),
-            title: const Text('Fork from here'),
-            subtitle: const Text('A new chat with the conversation so far'),
+            title: const T('Fork from here'),
+            subtitle: const T('A new chat with the conversation so far'),
             onTap: () => Navigator.pop(context, 'fork'),
           ),
           ListTile(
             leading: const Icon(Icons.delete_outline),
-            title: const Text('Delete'),
-            subtitle: const Text('This message and the reply to it'),
+            title: const T('Delete'),
+            subtitle: const T('This message and the reply to it'),
             onTap: () => Navigator.pop(context, 'delete'),
           ),
         ],
@@ -2467,7 +2466,7 @@ Future<void> _userMessageMenu(
     await copyMessage(ref, m.content);
     if (context.mounted) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Copied')));
+          .showSnackBar(const SnackBar(content: T('Copied')));
     }
   } else if (choice == 'edit') {
     await _MessageActions.edit(context, ref, m);
@@ -2498,7 +2497,7 @@ class _ChatVariablesButton extends ConsumerWidget {
     );
     if (fields.isEmpty) return const SizedBox.shrink();
     return IconButton(
-      tooltip: 'Chat Variables',
+      tooltip: tr('Chat Variables'),
       visualDensity: VisualDensity.compact,
       color: chatVariablesNeeded(fields, state.variables)
           ? context.nexus.muted
@@ -2544,7 +2543,7 @@ class _FeaturesButton extends ConsumerWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
-          tooltip: 'Tools',
+          tooltip: tr('Tools'),
           visualDensity: VisualDensity.compact,
           color: context.nexus.muted,
           icon: Badge(
@@ -2676,7 +2675,7 @@ class _TerminalChip extends ConsumerWidget {
                   padding: EdgeInsets.fromLTRB(24, 0, 24, 8),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: Text('Where code runs in this chat'),
+                    child: T('Where code runs in this chat'),
                   ),
                 ),
                 option('', Icons.block, 'Off', 'No sandbox or terminal'),
@@ -2698,12 +2697,12 @@ class _TerminalChip extends ConsumerWidget {
                   const Divider(),
                   ListTile(
                     leading: const Icon(Icons.folder_outlined),
-                    title: const Text('Open files'),
+                    title: const T('Open files'),
                     onTap: () => Navigator.pop(context, ':files'),
                   ),
                   ListTile(
                     leading: const Icon(Icons.terminal),
-                    title: const Text('Open terminal'),
+                    title: const T('Open terminal'),
                     onTap: () => Navigator.pop(context, ':shell'),
                   ),
                 ],
@@ -2876,7 +2875,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: 'Valves',
+                  tooltip: tr('Valves'),
                   icon: const Icon(Icons.tune, size: 20),
                   onPressed: () => Navigator.push(
                     context,
@@ -2923,7 +2922,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
+              child: T(
                 'Tools for this chat',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -2936,7 +2935,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
             else
               Padding(
                 padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: Text(
+                child: T(
                   'Nothing extra is on.',
                   style: TextStyle(color: muted),
                 ),
@@ -2984,7 +2983,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                         const RadioListTile<String>(
                           dense: true,
                           value: '',
-                          title: Text('No terminal'),
+                          title: T('No terminal'),
                         ),
                         for (final t in terminals)
                           RadioListTile<String>(
@@ -3013,7 +3012,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                             }
                           }
                         },
-                        child: const Text('All off'),
+                        child: const T('All off'),
                       ),
                 children: [
                   for (final t in shownTools)
@@ -3021,7 +3020,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                       ListTile(
                         dense: true,
                         title: Text(t.name),
-                        subtitle: const Text(
+                        subtitle: const T(
                           'Auth required',
                           style: TextStyle(color: Colors.amber),
                         ),
@@ -3032,7 +3031,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                             id: t.id,
                             name: t.name,
                           ),
-                          child: const Text('Reconnect'),
+                          child: const T('Reconnect'),
                         ),
                         onTap: () =>
                             reconnectTool(context, ref, id: t.id, name: t.name),
@@ -3042,7 +3041,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                       ListTile(
                         dense: true,
                         title: Text(t.name),
-                        subtitle: const Text(
+                        subtitle: const T(
                           'Connected',
                           style: TextStyle(color: Colors.green),
                         ),
@@ -3050,7 +3049,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              tooltip: 'Disconnect OAuth',
+                              tooltip: tr('Disconnect OAuth'),
                               icon: const Icon(Icons.link_off, size: 20),
                               onPressed: () async {
                                 chat.setTool(t.id, false);
@@ -3094,7 +3093,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                             }
                           }
                         },
-                        child: const Text('All off'),
+                        child: const T('All off'),
                       ),
                 children: [
                   for (final t in shownSkills)

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/app_strings.dart';
+
 /// The chat's right-hand panel on a wide screen (an unfolded Fold, a
 /// tablet), as in the Claude app: artifacts and pictures open beside the
 /// conversation, the chat list steps aside while it is open, and comes back
@@ -66,7 +68,7 @@ Widget? panelLeading(BuildContext context) {
   final panel = InSidePanel.maybeOf(context);
   if (panel == null) return null;
   return IconButton(
-    tooltip: 'Close',
+    tooltip: tr('Close'),
     icon: const Icon(Icons.close),
     onPressed: panel.close,
   );

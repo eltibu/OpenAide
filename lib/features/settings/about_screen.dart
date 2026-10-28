@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 import '../chat/chat_controller.dart'
     show serverConfigProvider, userSettingsProvider;
 import 'settings_screen.dart'
@@ -148,9 +149,9 @@ class _WhatsNewScreenState extends ConsumerState<WhatsNewScreen> {
     final version = ref.watch(serverConfigProvider).value?['version'];
     return Scaffold(
       appBar: AppBar(
-        title: const Text("What's New"),
+        title: const T("What's New"),
         leading: IconButton(
-          tooltip: 'Close',
+          tooltip: tr('Close'),
           icon: const Icon(Icons.close),
           onPressed: () => Navigator.pop(context),
         ),
@@ -263,7 +264,7 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
     final name = '${config?['name'] ?? 'Open WebUI'}';
     final version = '${config?['version'] ?? ''}';
     return Scaffold(
-      appBar: AppBar(title: const Text('About')),
+      appBar: AppBar(title: const T('About')),
       body: ListView(
         children: [
           ListTile(
@@ -284,7 +285,7 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
               },
             ),
             trailing: IconButton(
-              tooltip: 'Check for updates',
+              tooltip: tr('Check for updates'),
               icon: const Icon(Icons.refresh),
               onPressed: _check,
             ),
@@ -301,8 +302,8 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text("See what's new"),
-            subtitle: const Text("The server's release notes"),
+            title: const T("See what's new"),
+            subtitle: const T("The server's release notes"),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute<void>(builder: (_) => const WhatsNewScreen()),
@@ -314,13 +315,13 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
                 ? const SizedBox.shrink()
                 : ListTile(
                     leading: const Icon(Icons.memory),
-                    title: const Text('Ollama version'),
+                    title: const T('Ollama version'),
                     subtitle: Text(snap.data!),
                   ),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Text(
+            child: T(
               'Open WebUI is made by Open WebUI Inc. and its community. '
               'OpenAide is a separate app that works with it.',
               style: TextStyle(color: muted, fontSize: 12),
@@ -328,7 +329,7 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
           ),
           ListTile(
             leading: const Icon(Icons.code),
-            title: const Text('Open WebUI on GitHub'),
+            title: const T('Open WebUI on GitHub'),
             onTap: () => launchUrl(
               Uri.parse('https://github.com/open-webui/open-webui'),
               mode: LaunchMode.externalApplication,

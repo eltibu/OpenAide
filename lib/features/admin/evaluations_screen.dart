@@ -11,11 +11,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 const _base = '/api/v1/evaluations';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 class EvaluationsScreen extends StatelessWidget {
   const EvaluationsScreen({super.key});
@@ -25,7 +27,7 @@ class EvaluationsScreen extends StatelessWidget {
     length: 2,
     child: Scaffold(
       appBar: AppBar(
-        title: const Text('Evaluations'),
+        title: const T('Evaluations'),
         bottom: const TabBar(
           tabs: [
             Tab(text: 'Leaderboard'),
@@ -90,9 +92,9 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: TextField(
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Rank by topic (matches feedback tags)',
+                hintText: tr('Rank by topic (matches feedback tags)'),
               ),
               textInputAction: TextInputAction.search,
               onSubmitted: (v) {
@@ -114,7 +116,7 @@ class _LeaderboardViewState extends ConsumerState<LeaderboardView> {
           else if (entries.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Text(
+              child: T(
                 'No ratings yet. Thumbs up or down on replies (or arena '
                 'comparisons) rank the models here.',
                 style: TextStyle(color: muted),
@@ -232,15 +234,15 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
         context: context,
         builder: (d) => AlertDialog(
           title: Text(title),
-          content: const Text('This can\'t be undone.'),
+          content: const T('This can\'t be undone.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const Text('Delete'),
+              child: const T('Delete'),
             ),
           ],
         ),
@@ -311,11 +313,11 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
                     child: DropdownButtonFormField<String?>(
                       initialValue: _model,
                       isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Model'),
+                      decoration: InputDecoration(labelText: tr('Model')),
                       items: [
                         const DropdownMenuItem(
                           value: null,
-                          child: Text('All models'),
+                          child: T('All models'),
                         ),
                         for (final m in _models)
                           DropdownMenuItem(
@@ -332,8 +334,8 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
                   PopupMenuButton<String>(
                     onSelected: (v) => v == 'export' ? _export() : _deleteAll(),
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'export', child: Text('Export all')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete all')),
+                      PopupMenuItem(value: 'export', child: T('Export all')),
+                      PopupMenuItem(value: 'delete', child: T('Delete all')),
                     ],
                   ),
                 ],
@@ -375,7 +377,7 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
                     style: TextStyle(color: muted),
                   ),
                   trailing: IconButton(
-                    tooltip: 'Delete',
+                    tooltip: tr('Delete'),
                     onPressed: () => _delete(f),
                     icon: const Icon(Icons.delete_outline),
                   ),

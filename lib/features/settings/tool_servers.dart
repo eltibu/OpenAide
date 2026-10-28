@@ -7,6 +7,7 @@
 library;
 
 import '../../core/widgets/empty_state.dart';
+
 import 'dart:async';
 import 'dart:convert';
 
@@ -21,6 +22,7 @@ import '../chat/chat_controller.dart';
 import '../chat/request_options.dart' show Pickable;
 import '../terminal/terminal_api.dart';
 import 'settings_screen.dart';
+import '../../core/i18n/app_strings.dart';
 
 const userToolServersKey = 'toolServers';
 
@@ -599,7 +601,7 @@ class _ToolServersScreenState extends ConsumerState<ToolServersScreen> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Integrations'),
+        title: const T('Integrations'),
         actions: [
           if (_saving)
             const Padding(
@@ -611,7 +613,7 @@ class _ToolServersScreenState extends ConsumerState<ToolServersScreen> {
             ),
           if (allowed && list != null)
             IconButton(
-              tooltip: 'Add Connection',
+              tooltip: tr('Add Connection'),
               onPressed: () => _edit(null),
               icon: const Icon(Icons.add),
             ),
@@ -746,7 +748,8 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
     }
     if (!mounted) return;
     setState(() => _checking = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
   }
 
   @override
@@ -759,7 +762,7 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
         actions: [
           if (widget.server != null)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               onPressed: () => Navigator.pop(context, 'delete'),
               icon: const Icon(Icons.delete_outline),
             ),
@@ -768,14 +771,14 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
             child: FilledButton(
               onPressed: () {
                 if (_url.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Enter the URL')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: T('Enter the URL')));
                   return;
                 }
                 Navigator.pop(context, _result());
               },
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -786,23 +789,23 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
           TextField(
             controller: _url,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(labelText: 'URL'),
+            decoration: InputDecoration(labelText: tr('URL')),
           ),
           DropdownButtonFormField<String>(
             initialValue: _specType,
-            decoration: const InputDecoration(labelText: 'OpenAPI spec'),
+            decoration: InputDecoration(labelText: tr('OpenAPI spec')),
             items: const [
-              DropdownMenuItem(value: 'url', child: Text('From a URL path')),
-              DropdownMenuItem(value: 'json', child: Text('Paste JSON')),
+              DropdownMenuItem(value: 'url', child: T('From a URL path')),
+              DropdownMenuItem(value: 'json', child: T('Paste JSON')),
             ],
             onChanged: (v) => setState(() => _specType = v ?? 'url'),
           ),
           if (_specType == 'url')
             TextField(
               controller: _path,
-              decoration: const InputDecoration(
-                labelText: 'Path',
-                helperText: 'openapi.json, or a full address',
+              decoration: InputDecoration(
+                labelText: tr('Path'),
+                helperText: tr('openapi.json, or a full address'),
               ),
             )
           else
@@ -810,15 +813,15 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
               controller: _spec,
               minLines: 3,
               maxLines: 10,
-              decoration: const InputDecoration(labelText: 'JSON spec'),
+              decoration: InputDecoration(labelText: tr('JSON spec')),
             ),
           DropdownButtonFormField<String>(
             initialValue: _auth,
-            decoration: const InputDecoration(labelText: 'Auth'),
+            decoration: InputDecoration(labelText: tr('Auth')),
             items: const [
-              DropdownMenuItem(value: 'bearer', child: Text('Bearer key')),
-              DropdownMenuItem(value: 'session', child: Text('Your session')),
-              DropdownMenuItem(value: 'none', child: Text('None')),
+              DropdownMenuItem(value: 'bearer', child: T('Bearer key')),
+              DropdownMenuItem(value: 'session', child: T('Your session')),
+              DropdownMenuItem(value: 'none', child: T('None')),
             ],
             onChanged: (v) => setState(() => _auth = v ?? 'bearer'),
           ),
@@ -827,7 +830,7 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
               controller: _key,
               obscureText: _hidden,
               decoration: InputDecoration(
-                labelText: 'Key',
+                labelText: tr('Key'),
                 suffixIcon: IconButton(
                   tooltip: _hidden ? 'Show' : 'Hide',
                   onPressed: () => setState(() => _hidden = !_hidden),
@@ -837,15 +840,15 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
             ),
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(labelText: tr('Name')),
           ),
           TextField(
             controller: _description,
-            decoration: const InputDecoration(labelText: 'Description'),
+            decoration: InputDecoration(labelText: tr('Description')),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Enabled'),
+            title: const T('Enabled'),
             value: _enabled,
             onChanged: (on) => setState(() => _enabled = on),
           ),
@@ -858,7 +861,7 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditor> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.wifi_tethering),
-            label: const Text('Verify connection'),
+            label: const T('Verify connection'),
           ),
         ],
       ),
