@@ -113,26 +113,3 @@ class SettingsApi {
 
   Future<void> deleteAllChats() => client.send('DELETE', '/api/v1/chats/');
 }
-
-/// The model settings a person can set for all their chats (the web's
-/// Settings > General > Advanced Parameters), with what each one means.
-/// Left empty, the model's own value is used.
-const chatParams = <(String, String, String)>[
-  ('temperature', 'Temperature', 'Higher is more creative, lower more exact'),
-  ('max_tokens', 'Max tokens', 'Longest a reply can be'),
-  ('top_p', 'Top P', 'Keeps only the likeliest words adding up to this'),
-  ('top_k', 'Top K', 'Picks from this many likeliest words'),
-  ('min_p', 'Min P', 'Drops words much less likely than the best'),
-  ('frequency_penalty', 'Frequency penalty', 'Discourages repeating words'),
-  ('presence_penalty', 'Presence penalty', 'Encourages new topics'),
-  ('seed', 'Seed', 'Same seed, same reply'),
-  ('reasoning_effort', 'Reasoning effort', 'low, medium or high'),
-];
-
-/// A typed value as the web stores it: a number when it is one.
-Object? paramValue(String key, String text) {
-  final t = text.trim();
-  if (t.isEmpty) return null;
-  if (key == 'reasoning_effort') return t;
-  return int.tryParse(t) ?? double.tryParse(t) ?? t;
-}

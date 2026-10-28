@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
 import 'knowledge_screen.dart' show knowledgeListProvider;
 import 'models_api.dart';
@@ -139,6 +140,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   Set<String> _knowledge = {};
   Set<String> _tools = {};
   Set<String> _skills = {};
+  Map<String, dynamic> _params = {};
   bool _idEdited = false;
 
   bool get _isNew => widget.model == null;
@@ -167,6 +169,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _knowledge = {for (final k in m.knowledge) k.$1};
       _tools = m.ids('toolIds').toSet();
       _skills = m.ids('skillIds').toSet();
+      _params = {...m.params}..remove('system');
     } else if (widget.copyOf case final c?) {
       _name.text = '${c.name} (copy)';
       _id.text = modelIdFrom(_name.text);
@@ -177,6 +180,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _knowledge = {for (final k in c.knowledge) k.$1};
       _tools = c.ids('toolIds').toSet();
       _skills = c.ids('skillIds').toSet();
+      _params = {...c.params}..remove('system');
     } else {
       // A new model starts with the abilities the web turns on by default.
       _caps = {for (final k in defaultModelCapabilities) k: true};
@@ -195,7 +199,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     final old = _m?.json ?? <String, dynamic>{};
     final source = _m ?? widget.copyOf;
     final meta = {...?source?.meta};
-    final params = {...?source?.params};
+    final params = {..._params};
     meta['description'] = _description.text.trim();
     meta['capabilities'] = _caps;
     meta['toolIds'] = _tools.toList();
@@ -443,6 +447,26 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                     value: _caps[c.key] == true,
                     onChanged: (on) => setState(() => _caps[c.key] = on),
                   ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: ExpansionTile(
+                    tilePadding: EdgeInsets.zero,
+                    title: const Text('Model parameters'),
+                    subtitle: Text(
+                      _params.isEmpty
+                          ? 'All on default'
+                          : '${_params.length} set',
+                    ),
+                    children: [
+                      AdvancedParamsEditor(
+                        params: _params,
+                        onChanged: (k, v) => setState(
+                          () => v == null ? _params.remove(k) : _params[k] = v,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
     );

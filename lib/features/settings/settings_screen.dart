@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
@@ -404,10 +405,7 @@ class GeneralSettings extends ConsumerStatefulWidget {
 
 class _GeneralSettingsState extends ConsumerState<GeneralSettings> {
   final _system = TextEditingController();
-  final _params = {
-    for (final (key, _, _) in chatParams) key: TextEditingController(),
-  };
-  Map<String, dynamic> _kept = {};
+  Map<String, dynamic> _params = {};
   bool _loaded = false;
   bool _busy = false;
 
@@ -419,27 +417,14 @@ class _GeneralSettingsState extends ConsumerState<GeneralSettings> {
       final params = (ui['params'] as Map?)?.cast<String, dynamic>() ?? {};
       setState(() {
         _system.text = '${ui['system'] ?? ''}';
-        _kept = params;
-        for (final e in _params.entries) {
-          final v = params[e.key];
-          e.value.text = v == null ? '' : '$v';
-        }
+        _params = {...params};
         _loaded = true;
       });
     }, onError: (Object e) => setState(() => _loaded = true));
   }
 
   Future<void> _save() async {
-    // Settings the app doesn't show (stop words, penalties...) stay as set.
-    final params = {..._kept};
-    for (final e in _params.entries) {
-      final v = paramValue(e.key, e.value.text);
-      if (v == null) {
-        params.remove(e.key);
-      } else {
-        params[e.key] = v;
-      }
-    }
+    final params = _params;
     final system = _system.text.trim();
     setState(() => _busy = true);
     try {
@@ -494,25 +479,17 @@ class _GeneralSettingsState extends ConsumerState<GeneralSettings> {
                 const SizedBox(height: 24),
                 Text('Model settings', style: TextStyle(color: muted)),
                 Text(
-                  'Leave a box empty to use the model\'s own setting.',
+                  'Left on Default, the model\'s own setting is used. A chat\'s '
+                  'Controls can change them for that chat.',
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: muted),
                 ),
-                for (final (key, label, hint) in chatParams)
-                  TextField(
-                    controller: _params[key],
-                    keyboardType: key == 'reasoning_effort'
-                        ? TextInputType.text
-                        : const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          ),
-                    decoration: InputDecoration(
-                      labelText: label,
-                      helperText: hint,
-                      hintText: 'Default',
-                    ),
+                AdvancedParamsEditor(
+                  params: _params,
+                  onChanged: (k, v) => setState(
+                    () => v == null ? _params.remove(k) : _params[k] = v,
                   ),
+                ),
               ],
             ),
     );
