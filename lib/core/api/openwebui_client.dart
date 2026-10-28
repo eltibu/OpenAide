@@ -753,6 +753,32 @@ class OpenWebUiClient {
     return text.isEmpty ? null : jsonDecode(text);
   }
 
+  /// Posts several files under one form [field], with plain [fields].
+  Future<dynamic> sendFiles(
+    String path,
+    List<(List<int>, String)> files, {
+    String field = 'files',
+    Map<String, String>? fields,
+  }) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () => http.MultipartRequest('POST', _uri(path))
+          ..headers.addAll(authHeaders)
+          ..headers['Accept'] = 'application/json'
+          ..fields.addAll(fields ?? const {})
+          ..files.addAll([
+            for (final (bytes, name) in files)
+              http.MultipartFile.fromBytes(field, bytes, filename: name),
+          ]),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    final text = utf8.decode(res.bodyBytes);
+    return text.isEmpty ? null : jsonDecode(text);
+  }
+
   static String _errorText(List<int> body) {
     final text = utf8.decode(body, allowMalformed: true);
     try {

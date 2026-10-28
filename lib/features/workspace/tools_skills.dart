@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import 'skill_files.dart';
 import 'access_editor.dart' show ItemMenu;
 import '../chat/chat_controller.dart' show skillsProvider;
 import 'owner_filter.dart';
@@ -95,6 +96,11 @@ class ToolsScreen extends ConsumerWidget {
   }
 }
 
+/// A clone's id: tool ids must be Python names, so letters, digits and _.
+String cloneToolId(String id, DateTime now) =>
+    '${id.replaceAll(RegExp(r'[^A-Za-z0-9_]'), '_')}_copy_${now.millisecondsSinceEpoch % 100000}'
+        .toLowerCase();
+
 class ToolDetail extends ConsumerStatefulWidget {
   const ToolDetail({super.key, required this.id});
   final String id;
@@ -126,6 +132,33 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
     if (mounted) setState(() {});
   }
 
+  /// A copy under a new id, as the web's Clone; opened in its place.
+  Future<void> _clone() async {
+    final t = _tool!;
+    final id = cloneToolId(widget.id, DateTime.now());
+    try {
+      await _client.send(
+        'POST',
+        '/api/v1/tools/create',
+        body: {
+          'id': id,
+          'name': '${t['name'] ?? widget.id} (copy)',
+          'content': t['content'] ?? '',
+          'meta': t['meta'] ?? {},
+        },
+      );
+      ref.invalidate(_toolsListProvider);
+      if (mounted) {
+        await Navigator.pushReplacement(
+          context,
+          MaterialPageRoute<void>(builder: (_) => ToolDetail(id: id)),
+        );
+      }
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = _tool;
@@ -141,6 +174,7 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
               kind: 'tool',
               id: widget.id,
               name: '${t['name'] ?? ''}',
+              onClone: _clone,
               onRestored: _load,
             ),
         ],
@@ -417,7 +451,23 @@ class SkillsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Skills'),
-        actions: const [OwnerFilterButton()],
+        actions: [
+          IconButton(
+            tooltip: 'Import',
+            icon: const Icon(Icons.file_download_outlined),
+            onPressed: () async {
+              final done = await Navigator.push<bool>(
+                context,
+                MaterialPageRoute(builder: (_) => const SkillImportScreen()),
+              );
+              if (done == true) {
+                ref.invalidate(_skillsListProvider);
+                ref.invalidate(skillsProvider);
+              }
+            },
+          ),
+          const OwnerFilterButton(),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(_skillsListProvider.future),
@@ -620,6 +670,24 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
             name: _name.text,
             onClone: _clone,
             onRestored: _load,
+            extra: [
+              (
+                'Files',
+                () async {
+                  final changed = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => SkillFilesScreen(
+                        id: widget.id,
+                        name: '${_s?['name'] ?? _name.text}',
+                      ),
+                    ),
+                  );
+                  if (changed == true) _load();
+                },
+              ),
+              ('Export .skill', () => exportSkillFile(context, ref, widget.id)),
+            ],
           ),
           Padding(
             padding: const EdgeInsets.only(right: 8),

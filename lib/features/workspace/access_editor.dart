@@ -131,10 +131,14 @@ class ItemMenu extends ConsumerWidget {
     required this.name,
     this.onClone,
     this.onRestored,
+    this.extra = const [],
   });
 
   final String kind, id, name;
   final VoidCallback? onClone;
+
+  /// More entries for this kind: label and what it does.
+  final List<(String, VoidCallback)> extra;
 
   /// After another version was put in use, so the editor reloads.
   final VoidCallback? onRestored;
@@ -146,6 +150,8 @@ class ItemMenu extends ConsumerWidget {
       'access' => editAccess(context, ref, kind: kind, id: id, name: name),
       'export' => exportItem(context, ref, kind: kind, id: id, name: name),
       'clone' => onClone?.call(),
+      String v when v.startsWith('extra:') =>
+        extra[int.parse(v.substring(6))].$2(),
       'history' => () async {
         final changed = await Navigator.push<bool>(
           context,
@@ -163,6 +169,8 @@ class ItemMenu extends ConsumerWidget {
       if (onClone != null)
         const PopupMenuItem(value: 'clone', child: Text('Clone')),
       const PopupMenuItem(value: 'export', child: Text('Export')),
+      for (final (i, (label, _)) in extra.indexed)
+        PopupMenuItem(value: 'extra:$i', child: Text(label)),
       const PopupMenuItem(value: 'history', child: Text('Version history')),
     ],
   );

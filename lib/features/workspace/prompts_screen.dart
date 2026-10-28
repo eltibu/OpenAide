@@ -304,6 +304,13 @@ class PromptsScreen extends ConsumerWidget {
                   style: TextStyle(color: muted),
                 ),
                 onTap: () => edit(p),
+                // Copy Prompt, as on the web.
+                onLongPress: () {
+                  Clipboard.setData(ClipboardData(text: p.content));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Prompt copied')),
+                  );
+                },
                 trailing: Switch(
                   value: p.active,
                   onChanged: (_) async {
@@ -426,6 +433,15 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
     appBar: AppBar(
       title: Text(_p == null ? 'New prompt' : 'Edit prompt'),
       actions: [
+        IconButton(
+          tooltip: 'Copy content',
+          icon: const Icon(Icons.copy),
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: _content.text));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(const SnackBar(content: Text('Copied')));
+          },
+        ),
         if (_p != null)
           IconButton(
             tooltip: 'Delete',
