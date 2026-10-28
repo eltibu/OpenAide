@@ -15,6 +15,7 @@ import 'attach_more.dart';
 import 'chat_controller.dart';
 import 'file_details.dart';
 import 'side_panel.dart';
+import 'tool_permissions.dart';
 import 'voice_note.dart';
 
 /// The paperclip: photos and videos from the gallery or camera, or any file.
@@ -33,6 +34,14 @@ class AttachButton extends ConsumerWidget {
     ),
     icon: const Icon(Icons.add),
     onPressed: () async {
+      final permissions =
+          ((ref.read(serverConfigProvider).value?['features']
+              as Map?)?['enable_tool_permissions']) ==
+          true;
+      final mode = toolApprovalMode(
+        ref.read(chatControllerProvider).params,
+        ref.read(userSettingsProvider).value?['ui'] as Map?,
+      );
       final choice = await showModalBottomSheet<String>(
         context: context,
         showDragHandle: true,
@@ -42,6 +51,16 @@ class AttachButton extends ConsumerWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (permissions) ...[
+                  ListTile(
+                    leading: const Icon(Icons.shield_outlined),
+                    title: const Text('Tool Permissions'),
+                    subtitle: Text(toolApprovalModes[mode]!.$1),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => Navigator.pop(context, 'permissions'),
+                  ),
+                  const Divider(height: 1),
+                ],
                 ListTile(
                   leading: const Icon(Icons.photo_library_outlined),
                   title: const Text('Photos and videos'),
@@ -98,6 +117,9 @@ class AttachButton extends ConsumerWidget {
       );
       if (choice == null || !context.mounted) return;
       if (choice == 'compare') return onCompare?.call();
+      if (choice == 'permissions') {
+        return pickToolApprovalMode(context, ref, mode);
+      }
       if (choice == 'web') return attachWebpage(context, ref);
       if (const {'note', 'collection', 'chat'}.contains(choice)) {
         return attachFromServer(context, ref, choice);
