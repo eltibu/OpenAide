@@ -114,7 +114,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Nexus',
+                      'OpenAide',
                       style: Theme.of(context).textTheme.titleLarge
                           ?.copyWith(fontFamily: 'serif'),
                     ),
@@ -1383,7 +1383,7 @@ class _Account extends ConsumerWidget {
                   builder: (context) => AlertDialog(
                     title: const Text('Sign out?'),
                     content: const Text(
-                      "You'll need to sign in again to use Nexus.",
+                      "You'll need to sign in again to use OpenAide.",
                     ),
                     actions: [
                       TextButton(

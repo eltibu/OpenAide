@@ -115,7 +115,7 @@ class _VoiceNoteBarState extends ConsumerState<VoiceNoteBar> {
     if (status != 'started') {
       setState(
         () => _problem = status == 'denied'
-            ? 'Nexus needs the microphone for voice notes. Allow it in '
+            ? 'OpenAide needs the microphone for voice notes. Allow it in '
                   'Android settings.'
             : status,
       );

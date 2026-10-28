@@ -59,7 +59,7 @@ Future<bool> phoneCanLock() async {
 Future<bool> phoneUnlock() async {
   try {
     return await phoneChannel.invokeMethod<bool>('unlock', {
-          'reason': 'Use your fingerprint, face or screen lock to open Nexus.',
+          'reason': 'Use your fingerprint, face or screen lock to open OpenAide.',
         }) ??
         false;
   } on MissingPluginException {
@@ -154,7 +154,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                     const NexusLogo(size: 96),
                     const SizedBox(height: 24),
                     if (locked == true) ...[
-                      const Text('Nexus is locked'),
+                      const Text('OpenAide is locked'),
                       const SizedBox(height: 16),
                       FilledButton.icon(
                         icon: const Icon(Icons.fingerprint),

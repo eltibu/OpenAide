@@ -40,7 +40,7 @@ class NexusApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
     return MaterialApp(
-      title: 'Nexus Assistant',
+      title: 'OpenAide',
       debugShowCheckedModeBanner: false,
       // Settings > Phone and assistant > App lock.
       builder: (context, child) =>

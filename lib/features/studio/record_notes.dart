@@ -23,8 +23,8 @@ String _clock(Duration d) {
 }
 
 String _micProblem(String status) => status == 'denied'
-    ? 'Nexus needs the microphone. Allow it in Android Settings > Apps > '
-          'Nexus > Permissions.'
+    ? 'OpenAide needs the microphone. Allow it in Android Settings > Apps > '
+          'OpenAide > Permissions.'
     : status;
 
 /// A breathing circle that grows with the voice.

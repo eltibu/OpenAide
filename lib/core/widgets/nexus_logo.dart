@@ -12,6 +12,6 @@ class NexusLogo extends StatelessWidget {
     width: size,
     height: size,
     filterQuality: FilterQuality.medium,
-    semanticLabel: 'Nexus',
+    semanticLabel: 'OpenAide',
   );
 }

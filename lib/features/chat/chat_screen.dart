@@ -1442,7 +1442,7 @@ class _ComposerState extends ConsumerState<_Composer> {
         'read',
         readAloud
             ? 'Read aloud is on: turn it off'
-            : 'Read aloud: Nexus speaks every reply',
+            : 'Read aloud: OpenAide speaks every reply',
         readAloud ? Icons.volume_off_outlined : Icons.volume_up_outlined,
         () => run(() => ref.read(readAloudOnProvider.notifier).set(!readAloud)),
       ),
@@ -1883,7 +1883,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                 textCapitalization: TextCapitalization.sentences,
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
-                  hintText: empty ? 'Chat with Nexus' : 'Reply to Nexus',
+                  hintText: empty ? 'Chat with OpenAide' : 'Reply to OpenAide',
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: const EdgeInsets.fromLTRB(16, 12, 16, 6),

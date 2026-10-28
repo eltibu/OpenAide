@@ -23,7 +23,7 @@ import 'chat_controller.dart' show serverConfigProvider, userSettingsProvider;
 
 /// What the app answers for events it can't do (running JavaScript, or a
 /// tool that lives in a browser), so the server isn't left waiting.
-const cantRunHere = {'error': "The Nexus app can't run this here."};
+const cantRunHere = {'error': "The OpenAide app can't run this here."};
 
 /// The kinds of ask the app shows.
 const askTypes = {

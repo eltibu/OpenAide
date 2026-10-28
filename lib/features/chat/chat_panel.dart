@@ -299,7 +299,7 @@ class _Overview extends ConsumerWidget {
             message: m,
             name: m.role == 'user'
                 ? (showName ? '${me?['name'] ?? 'You'}' : 'You')
-                : names[m.model] ?? m.model ?? 'Nexus',
+                : names[m.model] ?? m.model ?? 'OpenAide',
             user: m.role == 'user' ? me : null,
             shown: shown.contains(m.id),
             last: i == rows.length - 1,

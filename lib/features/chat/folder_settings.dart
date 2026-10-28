@@ -139,7 +139,7 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
                     maxLines: 8,
                     decoration: const InputDecoration(
                       labelText: 'System prompt',
-                      hintText: 'How Nexus should act in these chats',
+                      hintText: 'How OpenAide should act in these chats',
                       border: OutlineInputBorder(),
                     ),
                   ),

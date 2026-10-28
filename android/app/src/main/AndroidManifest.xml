@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <application
-        android:label="Nexus Assistant"
+        android:label="OpenAide"
         android:usesCleartextTraffic="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
@@ -88,7 +88,7 @@
         <receiver
             android:name=".NexusWidget"
             android:exported="false"
-            android:label="Nexus">
+            android:label="OpenAide">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
@@ -100,7 +100,7 @@
         <service
             android:name=".NexusTileService"
             android:exported="true"
-            android:label="Nexus"
+            android:label="OpenAide"
             android:icon="@drawable/ic_tile"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
             <intent-filter>

@@ -70,12 +70,12 @@ void main() {
       ),
     );
     await t.pumpAndSettle(const Duration(milliseconds: 400));
-    expect(find.text('Nexus is locked'), findsOneWidget);
+    expect(find.text('OpenAide is locked'), findsOneWidget);
     expect(calls, contains('unlock'));
     unlockAnswer = true;
     await t.tap(find.text('Unlock'));
     await t.pumpAndSettle(const Duration(milliseconds: 400));
-    expect(find.text('Nexus is locked'), findsNothing);
+    expect(find.text('OpenAide is locked'), findsNothing);
     expect(find.text('secret'), findsOneWidget);
   });
 }

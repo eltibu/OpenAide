@@ -122,7 +122,7 @@ class BackgroundCheck : JobService() {
             if (updated <= since) continue
             if (!c.has("last_read_at") || c.isNull("last_read_at")) continue
             if (updated <= c.optLong("last_read_at")) continue
-            val title = text(c, "title").ifEmpty { "Nexus" }
+            val title = text(c, "title").ifEmpty { "OpenAide" }
             post(
                 text(c, "id").hashCode(),
                 title,

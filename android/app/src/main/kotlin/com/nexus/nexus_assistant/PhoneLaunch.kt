@@ -152,7 +152,7 @@ class PhoneLaunch(private val activity: Activity) : MethodChannel.MethodCallHand
             "addTile" -> if (Build.VERSION.SDK_INT >= 33) {
                 activity.getSystemService(StatusBarManager::class.java).requestAddTileService(
                     ComponentName(activity, NexusTileService::class.java),
-                    "Nexus",
+                    "OpenAide",
                     Icon.createWithResource(activity, R.drawable.ic_tile),
                     activity.mainExecutor,
                 ) { code -> result.success("$code") }
@@ -163,7 +163,7 @@ class PhoneLaunch(private val activity: Activity) : MethodChannel.MethodCallHand
             "unlock" -> {
                 @Suppress("DEPRECATION")
                 val ask = keyguard?.createConfirmDeviceCredentialIntent(
-                    "Unlock Nexus",
+                    "Unlock OpenAide",
                     call.argument<String>("reason"),
                 )
                 if (ask == null) {

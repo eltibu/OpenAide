@@ -292,7 +292,7 @@ class _AskUserCardState extends State<AskUserCard> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  q.header.isEmpty ? 'Nexus has a question' : q.header,
+                  q.header.isEmpty ? 'OpenAide has a question' : q.header,
                   style: theme.textTheme.labelLarge,
                 ),
               ),

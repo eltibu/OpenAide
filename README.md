@@ -1,4 +1,4 @@
-# Nexus Assistant
+# OpenAide (formerly Nexus Assistant)
 
 An Android assistant app for [Open WebUI](https://github.com/open-webui/open-webui). It keeps everything on your Open WebUI server, so the phone and the web UI always show the same chats, and new models or tools you add on the server appear in the app automatically.
 

@@ -237,7 +237,7 @@ class RealtimeCall extends ChangeNotifier {
       if (session != _session) return;
       if (started == 'denied') {
         throw const _CallError(
-          'Nexus needs the microphone for calls. Allow it in Android settings.',
+          'OpenAide needs the microphone for calls. Allow it in Android settings.',
         );
       }
       if (started != 'started') throw _CallError(started);

@@ -90,7 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 const Center(child: NexusLogo(size: 96)),
                 const SizedBox(height: 12),
                 Text(
-                  'Nexus Assistant',
+                  'OpenAide',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall,
                 ),

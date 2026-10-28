@@ -323,7 +323,7 @@ class _ReadAloudButtonState extends ConsumerState<ReadAloudButton> {
                 content: Text(
                   on
                       ? 'Read aloud off'
-                      : 'Read aloud on: Nexus speaks every reply until you '
+                      : 'Read aloud on: OpenAide speaks every reply until you '
                             'turn it off',
                 ),
               ),

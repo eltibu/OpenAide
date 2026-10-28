@@ -214,7 +214,7 @@ class Updater extends Notifier<UpdateState> {
       final outcome = await _channel.invokeMethod<String>('install');
       state = outcome == 'permission'
           ? const UpdateFailed(
-              'Allow "Install unknown apps" for Nexus Assistant, then tap '
+              'Allow "Install unknown apps" for OpenAide, then tap '
               'Install again.',
             )
           : outcome == 'started'

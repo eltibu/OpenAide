@@ -59,7 +59,7 @@ class MicService : Service() {
     /** Lets the headset button reach Nexus while a call runs. */
     private fun listenForButton() {
         if (media != null) return
-        media = MediaSession(this, "Nexus call").apply {
+        media = MediaSession(this, "OpenAide call").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
                     @Suppress("DEPRECATION")
@@ -101,7 +101,7 @@ class MicService : Service() {
         }
         val notification = builder
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(if (call) "Call with Nexus" else "Nexus is recording")
+            .setContentTitle(if (call) "Call with OpenAide" else "OpenAide is recording")
             .setContentText("Tap to go back")
             .setContentIntent(open)
             .setOngoing(true)

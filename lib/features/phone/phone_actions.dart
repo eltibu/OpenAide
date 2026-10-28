@@ -240,7 +240,7 @@ Future<String?> runPhoneAction(
       return (null, 'Phone actions work on the phone only.');
     }
     if (people == null) {
-      return (null, 'Nexus needs to see your contacts to find $who.');
+      return (null, 'OpenAide needs to see your contacts to find $who.');
     }
     final list = people.whereType<Map>().toList();
     if (list.isEmpty) return (null, 'No contact called $who.');

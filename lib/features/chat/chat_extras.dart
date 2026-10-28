@@ -25,7 +25,7 @@ String chatAsText(Chat chat) =>
 /// The same, as Markdown with who said what, for the PDF.
 String chatAsMarkdown(Chat chat) => [
   for (final m in chat.thread)
-    '${m.role == 'user' ? '**You**' : '**${m.model ?? 'Nexus'}**'}\n\n'
+    '${m.role == 'user' ? '**You**' : '**${m.model ?? 'OpenAide'}**'}\n\n'
         '${m.content}',
 ].join('\n\n---\n\n');
 

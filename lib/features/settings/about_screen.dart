@@ -322,7 +322,7 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: Text(
               'Open WebUI is made by Open WebUI Inc. and its community. '
-              'Nexus Assistant is a separate app that works with it.',
+              'OpenAide is a separate app that works with it.',
               style: TextStyle(color: muted, fontSize: 12),
             ),
           ),

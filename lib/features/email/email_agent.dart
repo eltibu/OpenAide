@@ -17,7 +17,7 @@ import '../../core/models/chat.dart';
 const _uuid = Uuid();
 
 /// The chat the app talks email in, and the settings key that remembers it.
-const emailChatTitle = 'Email (Nexus app)';
+const emailChatTitle = 'Email (OpenAide app)';
 const emailChatKey = 'nexusEmailChatId';
 
 /// Where the email chat keeps the emails the app has seen.
@@ -299,7 +299,7 @@ class EmailAgentError implements Exception {
 }
 
 const _rules =
-    'You are helping the Nexus app show my email. Use your Gmail access '
+    'You are helping the OpenAide app show my email. Use your Gmail access '
     '(the same tools you use when I ask you about email in chat). Answer '
     'with the JSON asked for and nothing else: no words before or after it, '
     'no code fence. If you can\'t reach Gmail, answer {"error": "what went '
@@ -559,7 +559,7 @@ class EmailAgent {
       if (reply.error != null) throw EmailAgentError(reply.error!);
       if (reply.done) return reply.content;
     }
-    throw const EmailAgentError('Nexus took too long to answer. Try again.');
+    throw const EmailAgentError('OpenAide took too long to answer. Try again.');
   }
 
   Future<void> _remember(String id) async {
@@ -587,7 +587,7 @@ class EmailAgent {
     }
     if (json == null) {
       throw EmailAgentError(
-        'Nexus answered in words instead of the list the app needs:\n\n'
+        'OpenAide answered in words instead of the list the app needs:\n\n'
         '${text.length > 400 ? '${text.substring(0, 400)}…' : text}',
       );
     }
@@ -647,7 +647,7 @@ class EmailAgent {
     if (json is Map && json['sent'] == true) return;
     final why = json is Map ? '${json['error'] ?? ''}' : '';
     throw EmailAgentError(
-      why.isEmpty ? 'Nexus didn\'t say it was sent. Check Sent.' : why,
+      why.isEmpty ? 'OpenAide didn\'t say it was sent. Check Sent.' : why,
     );
   }
 }

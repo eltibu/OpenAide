@@ -88,7 +88,7 @@ class NotificationSettings extends ConsumerWidget {
                   if (context.mounted) {
                     _say(
                       context,
-                      'Turn on notifications for Nexus, then try again',
+                      'Turn on notifications for OpenAide, then try again',
                     );
                   }
                   return;
@@ -175,7 +175,7 @@ class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
   Future<void> _set(bool on) async {
     if (on && !await allowNotifications()) {
       if (mounted) {
-        _say(context, 'Turn on notifications for Nexus, then try again');
+        _say(context, 'Turn on notifications for OpenAide, then try again');
       }
       return;
     }
@@ -488,7 +488,7 @@ class _PhoneAllowsState extends State<_PhoneAllows>
           Icons.notifications_off_outlined,
           color: Theme.of(context).colorScheme.error,
         ),
-        title: const Text('Notifications are off for Nexus on this phone'),
+        title: const Text('Notifications are off for OpenAide on this phone'),
         subtitle: const Text('Nothing below can show until they\'re on'),
         trailing: FilledButton(
           onPressed: () async {
@@ -501,12 +501,12 @@ class _PhoneAllowsState extends State<_PhoneAllows>
     }
     return ListTile(
       leading: const Icon(Icons.notifications_active_outlined),
-      title: const Text('Notifications are on for Nexus'),
+      title: const Text('Notifications are on for OpenAide'),
       subtitle: const Text('Change their sound or style in Android settings'),
       onTap: openNotificationSettings,
       trailing: TextButton(
         onPressed: () => notifyReply(
-          title: 'Nexus',
+          title: 'OpenAide',
           reply: 'This is a test notification.',
           chatId: '',
         ),

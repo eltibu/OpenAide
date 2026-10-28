@@ -100,7 +100,7 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
           minLines: 2,
           maxLines: 8,
           decoration: const InputDecoration(
-            hintText: 'How Nexus should act in this chat',
+            hintText: 'How OpenAide should act in this chat',
             border: OutlineInputBorder(),
           ),
           onChanged: (v) {

@@ -106,14 +106,14 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
             ),
             title: Text(
               _assistant == true
-                  ? "Nexus is your phone's assistant"
-                  : "Make Nexus your phone's assistant",
+                  ? "OpenAide is your phone's assistant"
+                  : "Make OpenAide your phone's assistant",
             ),
             subtitle: Text(
               _assistant == true
                   ? 'Long-press the power or home button to open it.'
                   : 'In the settings that open, choose Digital assistant app > '
-                        'Nexus Assistant. Then long-press the power or home '
+                        'OpenAide. Then long-press the power or home '
                         'button.',
               style: TextStyle(color: muted),
             ),
@@ -143,14 +143,14 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
             subtitle: Text(
               _tile
                   ? 'Starts a voice call from the pull-down menu.'
-                  : 'Edit your quick settings and drag the Nexus tile in. '
+                  : 'Edit your quick settings and drag the OpenAide tile in. '
                         'It starts a voice call.',
               style: TextStyle(color: muted),
             ),
             trailing: _tile
                 ? TextButton(
                     onPressed: () async {
-                      if (await addTile()) _say('Nexus is in quick settings');
+                      if (await addTile()) _say('OpenAide is in quick settings');
                     },
                     child: const Text('Add'),
                   )
@@ -160,7 +160,7 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
             leading: const Icon(Icons.touch_app_outlined),
             title: const Text('Icon shortcuts'),
             subtitle: Text(
-              'Long-press the Nexus icon for Voice call, Dictate and New '
+              'Long-press the OpenAide icon for Voice call, Dictate and New '
               'chat. Drag one to your home screen to keep it there.',
               style: TextStyle(color: muted),
             ),
@@ -169,18 +169,18 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
             leading: const Icon(Icons.widgets_outlined),
             title: const Text('Home-screen widget'),
             subtitle: Text(
-              'Long-press your home screen, choose Widgets, then Nexus: Ask '
-              'Nexus, Dictate and Voice call in one bar.',
+              'Long-press your home screen, choose Widgets, then OpenAide: Ask '
+              'OpenAide, Dictate and Voice call in one bar.',
               style: TextStyle(color: muted),
             ),
           ),
           ListTile(
             leading: const Icon(Icons.share_outlined),
-            title: const Text('Share to Nexus'),
+            title: const Text('Share to OpenAide'),
             subtitle: Text(
-              'In any app, Share > Nexus Assistant starts a chat with the '
+              'In any app, Share > OpenAide starts a chat with the '
               'text, photos or files. Select text anywhere and choose Ask '
-              'Nexus to ask about it.',
+              'OpenAide to ask about it.',
               style: TextStyle(color: muted),
             ),
           ),
@@ -192,7 +192,7 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
               '"call Mom", "text Sam saying running late", "open Spotify", '
               '"directions to the airport" or "turn on the flashlight" and '
               'the phone does it. Calls and texts open ready for you to press '
-              'call or send. Everything else goes to Nexus.',
+              'call or send. Everything else goes to OpenAide.',
               style: TextStyle(color: muted),
             ),
             value: phoneActionsOn(ui),
@@ -201,7 +201,7 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
           title('App lock'),
           SwitchListTile(
             secondary: const Icon(Icons.fingerprint),
-            title: const Text('Lock Nexus'),
+            title: const Text('Lock OpenAide'),
             subtitle: Text(
               _canLock
                   ? 'Ask for your fingerprint, face or screen lock to open '

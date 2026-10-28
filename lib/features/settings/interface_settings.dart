@@ -291,7 +291,7 @@ class InterfaceSettings extends ConsumerWidget {
                             content: Text(
                               where == null
                                   ? "Couldn't get your location. Is it "
-                                        'allowed for Nexus?'
+                                        'allowed for OpenAide?'
                                   : 'User location successfully retrieved.',
                             ),
                           ),

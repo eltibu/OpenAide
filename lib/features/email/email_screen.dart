@@ -285,8 +285,8 @@ class _EmailList extends ConsumerWidget {
     final muted = context.nexus.muted;
     final emails = box.emails;
     final waitText = folder == 'sent'
-        ? 'Nexus is reading what was sent…'
-        : 'Nexus is checking your inbox…';
+        ? 'OpenAide is reading what was sent…'
+        : 'OpenAide is checking your inbox…';
     return RefreshIndicator(
       onRefresh: notifier.check,
       child: ListView(
@@ -470,7 +470,7 @@ class _SearchScreenState extends ConsumerState<_SearchScreen> {
             future: _found,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
-                return const _Waiting('Nexus is searching your email…');
+                return const _Waiting('OpenAide is searching your email…');
               }
               if (snap.hasError) {
                 return Padding(
@@ -560,7 +560,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
             },
           ),
           IconButton(
-            tooltip: 'Ask Nexus to open it again',
+            tooltip: 'Ask OpenAide to open it again',
             icon: const Icon(Icons.refresh),
             onPressed: () => setState(() => _opened = _open(fresh: true)),
           ),
@@ -570,7 +570,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
         future: _opened,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return const _Waiting('Nexus is opening it…');
+            return const _Waiting('OpenAide is opening it…');
           }
           if (snap.hasError) {
             return ListView(
@@ -661,7 +661,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
               if (o.suggestedReply.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  'Nexus would reply',
+                  'OpenAide would reply',
                   style: Theme.of(context).textTheme.labelLarge
                       ?.copyWith(color: muted),
                 ),
@@ -820,7 +820,7 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
       context: context,
       builder: (d) => AlertDialog(
         title: const Text('Send this email?'),
-        content: Text('Nexus sends it from your Gmail to $to.'),
+        content: Text('OpenAide sends it from your Gmail to $to.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),

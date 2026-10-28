@@ -72,7 +72,7 @@ class ClassicCall extends ChangeNotifier {
         'The microphone could not be started';
     if (status != 'started') {
       problem = status == 'denied'
-          ? 'Nexus needs the microphone for calls.'
+          ? 'OpenAide needs the microphone for calls.'
           : status;
       await end();
       return;

@@ -149,7 +149,7 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
                 val body = call.argument<String>("body") ?: ""
                 val notification = builder
                     .setSmallIcon(R.mipmap.ic_launcher)
-                    .setContentTitle(call.argument<String>("title") ?: "Nexus")
+                    .setContentTitle(call.argument<String>("title") ?: "OpenAide")
                     .setContentText(body)
                     .setStyle(Notification.BigTextStyle().bigText(body))
                     .setContentIntent(tap)

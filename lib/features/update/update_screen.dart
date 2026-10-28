@@ -62,7 +62,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Nexus Assistant', style: theme.textTheme.titleLarge),
+                    Text('OpenAide', style: theme.textTheme.titleLarge),
                     Text(
                       'Installed: $_version',
                       style: theme.textTheme.bodyLarge,

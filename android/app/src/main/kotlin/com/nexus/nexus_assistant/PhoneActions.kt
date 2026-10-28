@@ -44,7 +44,7 @@ class PhoneActions(private val activity: Activity) : MethodChannel.MethodCallHan
                 start(
                     Intent(AlarmClock.ACTION_SET_TIMER)
                         .putExtra(AlarmClock.EXTRA_LENGTH, call.argument<Int>("seconds") ?: 60)
-                        .putExtra(AlarmClock.EXTRA_MESSAGE, call.argument<String>("label") ?: "Nexus")
+                        .putExtra(AlarmClock.EXTRA_MESSAGE, call.argument<String>("label") ?: "OpenAide")
                         .putExtra(AlarmClock.EXTRA_SKIP_UI, true),
                 ),
             )
@@ -53,7 +53,7 @@ class PhoneActions(private val activity: Activity) : MethodChannel.MethodCallHan
                     Intent(AlarmClock.ACTION_SET_ALARM)
                         .putExtra(AlarmClock.EXTRA_HOUR, call.argument<Int>("hour") ?: 7)
                         .putExtra(AlarmClock.EXTRA_MINUTES, call.argument<Int>("minute") ?: 0)
-                        .putExtra(AlarmClock.EXTRA_MESSAGE, call.argument<String>("label") ?: "Nexus")
+                        .putExtra(AlarmClock.EXTRA_MESSAGE, call.argument<String>("label") ?: "OpenAide")
                         .putExtra(AlarmClock.EXTRA_SKIP_UI, true),
                 ),
             )
