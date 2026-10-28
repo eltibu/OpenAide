@@ -49,6 +49,7 @@ String accessPath(String kind, String id) => switch (kind) {
   'knowledge' => '/api/v1/knowledge/$id/access/update',
   'note' => '/api/v1/notes/$id/access/update',
   'channel' => '/api/v1/channels/$id/access/update',
+  'folder' => '/api/v1/folders/$id/access/update',
   _ => throw ArgumentError(kind),
 };
 
@@ -61,6 +62,7 @@ String itemPath(String kind, String id) => switch (kind) {
   'knowledge' => '/api/v1/knowledge/$id',
   'note' => '/api/v1/notes/$id',
   'channel' => '/api/v1/channels/$id',
+  'folder' => '/api/v1/folders/$id',
   _ => throw ArgumentError(kind),
 };
 
@@ -73,9 +75,11 @@ Future<void> editAccess(
   required String name,
 }) async {
   Object? grants;
+  String? shareMode;
   try {
     final item = await ref.read(clientProvider).send('GET', itemPath(kind, id));
     grants = (item as Map?)?['access_grants'];
+    shareMode = (item?['data'] as Map?)?['share_mode'] as String?;
   } catch (e) {
     if (context.mounted) {
       ScaffoldMessenger.of(context)
@@ -92,6 +96,7 @@ Future<void> editAccess(
         id: id,
         name: name,
         grants: readGrants(grants),
+        shareMode: shareMode,
       ),
     ),
   );
@@ -185,10 +190,15 @@ class AccessEditor extends ConsumerStatefulWidget {
     required this.id,
     required this.name,
     required this.grants,
+    this.shareMode,
   });
 
   final String kind, id, name;
   final List<Grant> grants;
+
+  /// A folder's sharing mode: null (others can only clone its chats) or
+  /// 'continue' (they can reply in them).
+  final String? shareMode;
 
   @override
   ConsumerState<AccessEditor> createState() => _AccessEditorState();
@@ -196,6 +206,8 @@ class AccessEditor extends ConsumerStatefulWidget {
 
 class _AccessEditorState extends ConsumerState<AccessEditor> {
   late final List<Grant> _grants = [...widget.grants];
+  late String? _shareMode = widget.shareMode;
+  bool get _folder => widget.kind == 'folder';
   final Map<String, String> _names = {};
   List<Map<String, dynamic>> _groups = [];
   bool _busy = false;
@@ -309,6 +321,8 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
                 'name': widget.name,
               },
               'access_grants': writeGrants(_grants),
+              // Sent every time: the server resets it when left out.
+              if (_folder) 'share_mode': _shareMode,
             },
           );
       if (mounted) Navigator.pop(context, _grants);
@@ -339,24 +353,45 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
       ),
       body: ListView(
         children: [
-          ListTile(
-            title: const Text('Visibility'),
-            subtitle: Wrap(
-              spacing: 6,
-              children: [
-                ChoiceChip(
-                  label: const Text('Private'),
-                  selected: !_public,
-                  onSelected: (_) => _setPublic(false),
-                ),
-                ChoiceChip(
-                  label: const Text('Public'),
-                  selected: _public,
-                  onSelected: (_) => _setPublic(true),
-                ),
-              ],
+          if (_folder)
+            ListTile(
+              title: const Text('Sharing mode'),
+              subtitle: Wrap(
+                spacing: 6,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Clone only'),
+                    selected: _shareMode == null,
+                    onSelected: (_) => setState(() => _shareMode = null),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Allow replies'),
+                    selected: _shareMode == 'continue',
+                    onSelected: (_) => setState(() => _shareMode = 'continue'),
+                  ),
+                ],
+              ),
             ),
-          ),
+          // Folders are shared with people and groups only, as on the web.
+          if (!_folder)
+            ListTile(
+              title: const Text('Visibility'),
+              subtitle: Wrap(
+                spacing: 6,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Private'),
+                    selected: !_public,
+                    onSelected: (_) => _setPublic(false),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Public'),
+                    selected: _public,
+                    onSelected: (_) => _setPublic(true),
+                  ),
+                ],
+              ),
+            ),
           if (_public)
             SwitchListTile(
               title: const Text('Allow public write access'),

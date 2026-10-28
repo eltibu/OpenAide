@@ -34,6 +34,8 @@ import 'chat_controller.dart';
 import 'chat_extras.dart';
 import 'chat_panel.dart' show showChatPanel;
 import 'folder_settings.dart';
+import 'shared_folders.dart';
+import '../workspace/access_editor.dart' show editAccess;
 
 /// The web UI's sidebar: a short list of places at the top (new chat,
 /// search, notes, workspace), then Channels, Folders and Chats as sections
@@ -190,6 +192,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
             child: RefreshIndicator(
               onRefresh: () async {
                 refreshChatLists(ref.invalidate);
+                ref.invalidate(sharedFoldersProvider);
                 ref.invalidate(channelListProvider);
               },
               // Slim rows, as on the web, so more chats fit.
@@ -210,6 +213,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                           if (features['enable_channels'] == true)
                             ..._channels(),
                           ..._folders(),
+                          ..._shared(),
                           ..._pinned(),
                           ..._chats(),
                         ],
@@ -341,6 +345,29 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
       if (_open('Folders'))
         for (final f in folders.where((f) => f.parentId == null))
           FolderTile(folder: f, all: folders),
+    ];
+  }
+
+  /// Folders other people shared with you.
+  List<Widget> _shared() {
+    final shared = ref.watch(sharedFoldersProvider).value ?? const [];
+    final ids = {for (final f in shared) f.id};
+    final top = shared.where(
+      (f) => f.parentId == null || !ids.contains(f.parentId),
+    );
+    if (top.isEmpty) return const [];
+    return [
+      _section('Shared with you'),
+      if (_open('Shared with you'))
+        for (final f in top)
+          _SmallTile(
+            icon: f.writable
+                ? Icons.folder_shared_outlined
+                : Icons.visibility_outlined,
+            label: f.owner.isEmpty ? f.name : '${f.name} · ${f.owner}',
+            onTap: () =>
+                openPlace(context, (_) => SharedFolderScreen(folder: f)),
+          ),
     ];
   }
 
@@ -629,6 +656,7 @@ class _FolderTileState extends ConsumerState<FolderTile> {
           if (f.unread > 0)
             const PopupMenuItem(value: 'read', child: Text('Mark all as read')),
           const PopupMenuItem(value: 'edit', child: Text('Folder settings')),
+          const PopupMenuItem(value: 'share', child: Text('Share')),
           const PopupMenuItem(value: 'rename', child: Text('Rename')),
           const PopupMenuItem(value: 'sub', child: Text('New folder inside')),
           const PopupMenuItem(value: 'export', child: Text('Export')),
@@ -688,6 +716,15 @@ class _FolderTileState extends ConsumerState<FolderTile> {
           return;
         case 'edit':
           await editFolder(context, f.id);
+          return;
+        case 'share':
+          await editAccess(
+            context,
+            ref,
+            kind: 'folder',
+            id: f.id,
+            name: f.name,
+          );
           return;
         case 'rename':
           final name = await _askText(context, 'Rename folder', f.name);
