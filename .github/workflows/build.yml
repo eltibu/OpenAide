@@ -170,6 +170,44 @@ jobs:
           if [ "$CODE" != "200" ]; then
             echo "::error::The update token can't read releases (HTTP $CODE). The app would never see updates."; exit 1
           fi
+      # The on-device AI models (llama.cpp) need the NDK and CMake 3.31.6.
+      # The runner's SDK in /opt is read-only for the runner user, so they go
+      # in a writable SDK in its home that links to the rest.
+      - name: Install NDK and CMake
+        run: |
+          set -e
+          SDK="$HOME/android-sdk"
+          if [ ! -w "$ANDROID_HOME" ] && [ "$ANDROID_HOME" != "$SDK" ]; then
+            mkdir -p "$SDK"
+            for d in "$ANDROID_HOME"/*; do
+              n=$(basename "$d")
+              case "$n" in ndk|cmake|licenses) ;; *) [ -e "$SDK/$n" ] || ln -s "$d" "$SDK/$n" ;; esac
+            done
+            mkdir -p "$SDK/licenses" && cp -n "$ANDROID_HOME"/licenses/* "$SDK/licenses/" 2>/dev/null || true
+            SDKMANAGER=$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -1)
+            echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+            echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+          else
+            SDK="$ANDROID_HOME"
+            SDKMANAGER=$(ls "$SDK"/cmdline-tools/*/bin/sdkmanager | head -1)
+          fi
+          NDK=$(grep -rhoE 'ndkVersion[^"]*"[0-9.]+"' "$FLUTTER_ROOT/packages/flutter_tools/gradle/src/main/kotlin/" 2>/dev/null | grep -oE '[0-9]+\.[0-9.]+' | head -1)
+          PKGS=""
+          [ -d "$SDK/cmake/3.31.6" ] || PKGS="$PKGS cmake;3.31.6"
+          [ -z "$NDK" ] || [ -d "$SDK/ndk/$NDK" ] || PKGS="$PKGS ndk;$NDK"
+          echo "::notice::NDK $NDK; installing:${PKGS:- nothing}"
+          if [ -n "$PKGS" ]; then
+            yes | "$SDKMANAGER" --sdk_root="$SDK" --install $PKGS > /dev/null
+          fi
+      # The runner on Joel's PC keeps state between builds. A Kotlin daemon
+      # left from an earlier build can leave files pointing Gradle at a port
+      # nobody listens on, and every build then waits on it. Compile Kotlin
+      # inside Gradle and stop any leftover daemons first.
+      - name: Compile Kotlin in-process
+        run: |
+          echo "kotlin.compiler.execution.strategy=in-process" >> android/gradle.properties
+          pkill -u "$(id -u)" -f KotlinCompileDaemon || true
+          rm -rf "$HOME/.local/share/kotlin/daemon" "$HOME/.kotlin/daemon" 2>/dev/null || true
       - name: Build APK
         env:
           # Read-only token for the in-app updater (repo secret), so the app
