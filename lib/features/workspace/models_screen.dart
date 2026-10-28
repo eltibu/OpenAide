@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../admin/admin_api.dart' show AdminApi, ServerFunction;
 import '../chat/advanced_params.dart';
 import '../chat/model_controls.dart';
 import '../chat/chat_controller.dart';
@@ -29,6 +30,18 @@ final workspaceModelsProvider = FutureProvider<List<WorkspaceModel>>(
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+
+/// The server's filters and actions a model can use (everyone may list
+/// them, as the web's model editor does).
+final modelFunctionsProvider = FutureProvider.autoDispose<List<ServerFunction>>(
+  (ref) async {
+    try {
+      return await AdminApi(ref.watch(clientProvider)).functions();
+    } catch (_) {
+      return const [];
+    }
+  },
+);
 
 /// The workspace's own models.
 class ModelsScreen extends ConsumerWidget {
@@ -194,6 +207,9 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   Set<String> _knowledge = {};
   Set<String> _tools = {};
   Set<String> _skills = {};
+  Set<String> _filters = {};
+  Set<String> _defaultFilters = {};
+  Set<String> _actions = {};
   Map<String, dynamic> _params = {};
 
   /// Model controls, kept apart from the parameters while editing.
@@ -236,6 +252,9 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _knowledge = {for (final k in m.knowledge) k.$1};
       _tools = m.ids('toolIds').toSet();
       _skills = m.ids('skillIds').toSet();
+      _filters = m.ids('filterIds').toSet();
+      _defaultFilters = m.ids('defaultFilterIds').toSet();
+      _actions = m.ids('actionIds').toSet();
       _params = {...m.params}..remove('system');
       _controls = readModelControls(_params.remove('model_controls'));
       _suggestions = readSuggestions(m.meta['suggestion_prompts']);
@@ -252,6 +271,9 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _knowledge = {for (final k in c.knowledge) k.$1};
       _tools = c.ids('toolIds').toSet();
       _skills = c.ids('skillIds').toSet();
+      _filters = c.ids('filterIds').toSet();
+      _defaultFilters = c.ids('defaultFilterIds').toSet();
+      _actions = c.ids('actionIds').toSet();
       _params = {...c.params}..remove('system');
       _controls = readModelControls(_params.remove('model_controls'));
       _suggestions = readSuggestions(c.meta['suggestion_prompts']);
@@ -338,6 +360,17 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     meta['suggestion_prompts'] = _suggestions;
     meta['profile_image_url'] = _image ?? '/static/favicon.png';
     // As the web saves them: left out when not set.
+    for (final (key, ids) in [
+      ('filterIds', _filters),
+      ('defaultFilterIds', _defaultFilters),
+      ('actionIds', _actions),
+    ]) {
+      if (ids.isEmpty) {
+        meta.remove(key);
+      } else {
+        meta[key] = ids.toList();
+      }
+    }
     final tts = {...?(meta['tts'] as Map?)?.cast<String, dynamic>()};
     if (_voice.isEmpty) {
       tts.remove('voice');
@@ -441,6 +474,66 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     );
   }
 
+  /// Filters or actions, as the web's selectors: a global one is always
+  /// on (marked Global); a filter people can switch can start switched on
+  /// in new chats.
+  Widget _functionChips(
+    String title,
+    String help,
+    List<ServerFunction> all,
+    Set<String> picked, {
+    Set<String>? defaults,
+  }) {
+    if (all.isEmpty) return const SizedBox.shrink();
+    final muted = context.nexus.muted;
+    final switchable = [
+      for (final f in all)
+        if (defaults != null &&
+            f.json['meta'] is Map &&
+            (f.json['meta'] as Map)['toggle'] == true &&
+            (f.global || picked.contains(f.id)))
+          f,
+    ];
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: muted)),
+          Text(help, style: TextStyle(color: muted, fontSize: 12)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final f in all)
+                FilterChip(
+                  label: Text(f.global ? '${f.name} · Global' : f.name),
+                  tooltip: f.description.isEmpty ? null : f.description,
+                  selected: f.global || picked.contains(f.id),
+                  onSelected: f.global
+                      ? null
+                      : (on) => setState(
+                          () => on ? picked.add(f.id) : picked.remove(f.id),
+                        ),
+                ),
+            ],
+          ),
+          for (final f in switchable)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text('${f.name}: start enabled in new chats'),
+              value: defaults!.contains(f.id),
+              onChanged: (on) => setState(
+                () => on ? defaults.add(f.id) : defaults.remove(f.id),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// The voice its replies are read in (and its calls, without Realtime).
   Widget _voicePicker() {
     final voices = ref.watch(ttsVoicesProvider).value ?? const [];
@@ -498,6 +591,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     final kbs = ref.watch(knowledgeListProvider).value ?? const [];
     final tools = ref.watch(toolsProvider).value ?? const [];
     final skills = ref.watch(skillsProvider).value ?? const [];
+    final functions = ref.watch(modelFunctionsProvider).value ?? const [];
     final bases = [
       for (final m in models)
         if (m.id != _m?.id) m,
@@ -651,6 +745,19 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                 _chips('Skills', [
                   for (final s in skills) (s.id, s.name),
                 ], _skills),
+                _functionChips(
+                  'Filters',
+                  'Process messages before or after the model responds.',
+                  functions.where((f) => f.type == 'filter').toList(),
+                  _filters,
+                  defaults: _defaultFilters,
+                ),
+                _functionChips(
+                  'Actions',
+                  'Buttons under its replies.',
+                  functions.where((f) => f.type == 'action').toList(),
+                  _actions,
+                ),
                 _voicePicker(),
                 _terminalPicker(),
                 Padding(

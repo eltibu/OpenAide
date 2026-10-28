@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../channels/channels_screen.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_drawer.dart' show channelsProvider;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
@@ -353,21 +354,50 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
                         overflow: TextOverflow.ellipsis,
                       ),
                       trailing: r.chatId != null
-                          ? const Icon(Icons.chevron_right)
+                          ? Tooltip(
+                              message: r.chatId!.startsWith('channel:')
+                                  ? 'View channel'
+                                  : 'View chat',
+                              child: const Icon(Icons.chevron_right),
+                            )
                           : null,
                       onTap: r.chatId == null
                           ? null
-                          : () {
-                              ref
-                                  .read(chatControllerProvider.notifier)
-                                  .open(r.chatId!);
-                              Navigator.popUntil(context, (r) => r.isFirst);
-                            },
+                          : () => _openRun(r.chatId!),
                     ),
                 ],
               ),
             ),
     );
+  }
+}
+
+extension on _AutomationDetailState {
+  /// A run went into a chat, or into a channel ("channel:" and its id), as the
+  /// web's View chat / View channel.
+  Future<void> _openRun(String id) async {
+    final navigator = Navigator.of(context);
+    if (!id.startsWith('channel:')) {
+      ref.read(chatControllerProvider.notifier).open(id);
+      navigator.popUntil((r) => r.isFirst);
+      return;
+    }
+    try {
+      final channel = await ref
+          .read(channelsApiProvider)
+          .get(id.substring('channel:'.length));
+      await navigator.push(
+        MaterialPageRoute<void>(
+          builder: (_) => ChannelScreen(channel: channel),
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Couldn't open the channel: $e")),
+        );
+      }
+    }
   }
 }
 
