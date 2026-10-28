@@ -15,6 +15,8 @@ import 'models_api.dart';
 import '../chat/model_pins.dart'
     show modelLink, pinnedModelsProvider, togglePinnedModel;
 import 'owner_filter.dart';
+import '../settings/audio_settings.dart' show ttsVoicesProvider;
+import '../terminal/terminal_screen.dart' show terminalServersProvider;
 
 final modelsApiProvider = Provider<ModelsApi>(
   (ref) => ModelsApi(ref.watch(clientProvider)),
@@ -161,6 +163,10 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   Set<String> _skills = {};
   Map<String, dynamic> _params = {};
 
+  /// meta.tts.voice and meta.terminalId; empty for none.
+  String _voice = '';
+  String _terminal = '';
+
   /// The model's starter prompts; null uses the server's defaults.
   List<Map<String, dynamic>>? _suggestions;
   bool _idEdited = false;
@@ -197,6 +203,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _params = {...m.params}..remove('system');
       _suggestions = readSuggestions(m.meta['suggestion_prompts']);
       _image = m.meta['profile_image_url'] as String?;
+      _voice = '${(m.meta['tts'] as Map?)?['voice'] ?? ''}';
+      _terminal = '${m.meta['terminalId'] ?? ''}';
     } else if (widget.copyOf case final c?) {
       _name.text = '${c.name} (copy)';
       _id.text = modelIdFrom(_name.text);
@@ -210,6 +218,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _params = {...c.params}..remove('system');
       _suggestions = readSuggestions(c.meta['suggestion_prompts']);
       _image = c.meta['profile_image_url'] as String?;
+      _voice = '${(c.meta['tts'] as Map?)?['voice'] ?? ''}';
+      _terminal = '${c.meta['terminalId'] ?? ''}';
     } else {
       // A new model starts with the abilities the web turns on by default.
       _caps = {for (final k in defaultModelCapabilities) k: true};
@@ -286,6 +296,23 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     ];
     meta['suggestion_prompts'] = _suggestions;
     meta['profile_image_url'] = _image ?? '/static/favicon.png';
+    // As the web saves them: left out when not set.
+    final tts = {...?(meta['tts'] as Map?)?.cast<String, dynamic>()};
+    if (_voice.isEmpty) {
+      tts.remove('voice');
+    } else {
+      tts['voice'] = _voice;
+    }
+    if (tts.isEmpty) {
+      meta.remove('tts');
+    } else {
+      meta['tts'] = tts;
+    }
+    if (_terminal.isEmpty) {
+      meta.remove('terminalId');
+    } else {
+      meta['terminalId'] = _terminal;
+    }
     final system = _system.text.trim();
     if (system.isEmpty) {
       params.remove('system');
@@ -369,6 +396,57 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// The voice its replies are read in (and its calls, without Realtime).
+  Widget _voicePicker() {
+    final voices = ref.watch(ttsVoicesProvider).value ?? const [];
+    if (voices.isEmpty && _voice.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: DropdownButtonFormField<String>(
+        initialValue: _voice,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Speaking voice',
+          helperText: 'Replies from this model are read aloud in it.',
+        ),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('Default')),
+          for (final (id, name) in voices)
+            DropdownMenuItem(value: id, child: Text(name)),
+          if (_voice.isNotEmpty && !voices.any((v) => v.$1 == _voice))
+            DropdownMenuItem(value: _voice, child: Text(_voice)),
+        ],
+        onChanged: (v) => setState(() => _voice = v ?? ''),
+      ),
+    );
+  }
+
+  /// The terminal chats with this model start with, as the web's Default
+  /// terminal.
+  Widget _terminalPicker() {
+    final terminals = ref.watch(terminalServersProvider).value ?? const [];
+    if (terminals.isEmpty && _terminal.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      child: DropdownButtonFormField<String>(
+        initialValue: _terminal,
+        isExpanded: true,
+        decoration: const InputDecoration(
+          labelText: 'Default terminal',
+          helperText: 'Chats with this model start with this terminal.',
+        ),
+        items: [
+          const DropdownMenuItem(value: '', child: Text('None')),
+          for (final t in terminals)
+            DropdownMenuItem(value: t.id, child: Text(t.name)),
+          if (_terminal.isNotEmpty && !terminals.any((t) => t.id == _terminal))
+            DropdownMenuItem(value: _terminal, child: Text(_terminal)),
+        ],
+        onChanged: (v) => setState(() => _terminal = v ?? ''),
       ),
     );
   }
@@ -532,6 +610,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                 _chips('Skills', [
                   for (final s in skills) (s.id, s.name),
                 ], _skills),
+                _voicePicker(),
+                _terminalPicker(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
                   child: Text(

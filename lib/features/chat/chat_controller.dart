@@ -11,6 +11,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/models/model_info.dart';
 import '../studio/listen.dart' show transcribe;
+import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../voice/realtime_call.dart' show BridgeSubmission;
 import '../workspace/prompts_api.dart' show fillSystemVariables;
 import 'read_aloud.dart';
@@ -368,7 +369,24 @@ class ChatController extends Notifier<ChatState> {
     return const ChatState();
   }
 
-  void selectModel(String id) => state = state.copyWith(modelId: id);
+  /// Picks the model; its default terminal (set in its editor, as on the
+  /// web) comes with it when that terminal is there.
+  void selectModel(String id) {
+    final meta = ref
+        .read(modelsProvider)
+        .value
+        ?.where((m) => m.id == id)
+        .firstOrNull
+        ?.meta;
+    final tid = meta?['terminalId'];
+    final terminals = ref.read(terminalServersProvider).value ?? const [];
+    state = state.copyWith(
+      modelId: id,
+      terminalId: tid is String && terminals.any((t) => t.id == tid)
+          ? tid
+          : null,
+    );
+  }
 
   void setFeature(String id, bool on) =>
       state = state.copyWith(features: {...state.features, id: on});
