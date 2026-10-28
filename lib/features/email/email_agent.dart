@@ -350,7 +350,9 @@ String openRequest(Email e) =>
     '${e.thread.isEmpty ? '' : ' (thread ${e.thread})'}, subject '
     '"${e.subject}". Answer with a JSON object: {"messages": every message '
     'of its thread, oldest first, each {"from", "to", "date": ISO 8601, '
-    '"body": the full text as plain text}, "summary": two or three '
+    '"body": the full email as Markdown, keeping its paragraphs, headings, '
+    'lists, bold text and every link as [text](url); leave out tracking '
+    'pixels and layout-only text}, "summary": two or three '
     'sentences on what it is about and what is asked of me, '
     '"suggested_reply": the reply you would send for me, or "" if it needs '
     'none}.';
