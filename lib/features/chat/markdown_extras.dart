@@ -5,7 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+
+import 'chat_controller.dart' show serverConfigProvider;
+import 'code_run.dart';
 
 /// What the web UI draws in replies beyond plain Markdown: math (KaTeX
 /// syntax: `$…$`, `$$…$$`, `\(…\)`, `\[…\]`), Mermaid diagrams, and code
@@ -107,7 +111,7 @@ class LatexNode extends SpanNode {
 
 /// A code block with its language on top and a copy button; [collapsed]
 /// starts it folded to a line that opens it.
-class CodeFrame extends StatefulWidget {
+class CodeFrame extends ConsumerStatefulWidget {
   const CodeFrame({
     super.key,
     required this.code,
@@ -121,11 +125,32 @@ class CodeFrame extends StatefulWidget {
   final bool collapsed;
 
   @override
-  State<CodeFrame> createState() => _CodeFrameState();
+  ConsumerState<CodeFrame> createState() => _CodeFrameState();
 }
 
-class _CodeFrameState extends State<CodeFrame> {
+class _CodeFrameState extends ConsumerState<CodeFrame> {
   late bool _folded = widget.collapsed;
+
+  /// Bumped for each Run, so a new run replaces the last one's output.
+  int _runs = 0;
+
+  bool get _canRun =>
+      ((ref.watch(serverConfigProvider).value?['features']
+                  as Map?)?['enable_code_execution'] ??
+              true) ==
+          true &&
+      isPythonBlock(widget.language, widget.code);
+
+  void _expand() => Navigator.push(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => _CodePage(
+        code: widget.code,
+        language: widget.language,
+        canRun: _canRun,
+      ),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -164,40 +189,104 @@ class _CodeFrameState extends State<CodeFrame> {
         ),
       );
     }
-    return Stack(
+    Widget small(String tip, IconData icon, VoidCallback onTap) => IconButton(
+      tooltip: tip,
+      visualDensity: VisualDensity.compact,
+      iconSize: 16,
+      color: muted,
+      icon: Icon(icon),
+      onPressed: onTap,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        child,
-        Positioned(
-          top: 2,
-          right: 2,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (language.isNotEmpty)
-                Text(
-                  language,
-                  style: Theme.of(context).textTheme.labelSmall
-                      ?.copyWith(color: muted),
-                ),
-              IconButton(
-                tooltip: 'Copy code',
-                visualDensity: VisualDensity.compact,
-                iconSize: 16,
-                color: muted,
-                icon: const Icon(Icons.copy_outlined),
-                onPressed: () {
-                  Clipboard.setData(ClipboardData(text: code));
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('Code copied')));
-                },
+        Stack(
+          children: [
+            child,
+            Positioned(
+              top: 2,
+              right: 2,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (language.isNotEmpty)
+                    Text(
+                      language,
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: muted),
+                    ),
+                  if (_canRun)
+                    small(
+                      'Run',
+                      Icons.play_arrow_rounded,
+                      () => setState(() => _runs++),
+                    ),
+                  small('Expand', Icons.open_in_full, _expand),
+                  small('Copy code', Icons.copy_outlined, () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Code copied')),
+                    );
+                  }),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
+        if (_runs > 0) CodeRunPanel(key: ValueKey(_runs), code: code),
       ],
     );
   }
+}
+
+/// A code block full screen: wraps long lines, selectable, with Run.
+class _CodePage extends StatefulWidget {
+  const _CodePage({
+    required this.code,
+    required this.language,
+    required this.canRun,
+  });
+  final String code;
+  final String language;
+  final bool canRun;
+
+  @override
+  State<_CodePage> createState() => _CodePageState();
+}
+
+class _CodePageState extends State<_CodePage> {
+  int _runs = 0;
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(
+      title: Text(widget.language.isEmpty ? 'Code' : widget.language),
+      actions: [
+        if (widget.canRun)
+          IconButton(
+            tooltip: 'Run',
+            icon: const Icon(Icons.play_arrow_rounded),
+            onPressed: () => setState(() => _runs++),
+          ),
+        IconButton(
+          tooltip: 'Copy code',
+          icon: const Icon(Icons.copy_outlined),
+          onPressed: () => Clipboard.setData(ClipboardData(text: widget.code)),
+        ),
+      ],
+    ),
+    body: ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        SelectableText(
+          widget.code,
+          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+        if (_runs > 0) CodeRunPanel(key: ValueKey(_runs), code: widget.code),
+      ],
+    ),
+  );
 }
 
 /// The page that draws one Mermaid diagram, as the web UI does with

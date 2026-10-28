@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:nexus_assistant/features/chat/markdown_extras.dart';
@@ -13,18 +14,20 @@ void main() {
     final opened = <String>[];
     void onFile(FileRef f) => opened.add('$f');
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: MarkdownBlock(
-            data:
-                'Saved to `/home/eltibu/Pictures/cat.png`. Run `ls -la` or '
-                'open [the notes](/home/eltibu/notes.md).\n\n'
-                '```\ncat /etc/hosts\n```',
-            config: withFileLinks(
-              withReplyCode(MarkdownConfig.defaultConfig, false),
-              onFile,
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: MarkdownBlock(
+              data:
+                  'Saved to `/home/eltibu/Pictures/cat.png`. Run `ls -la` or '
+                  'open [the notes](/home/eltibu/notes.md).\n\n'
+                  '```\ncat /etc/hosts\n```',
+              config: withFileLinks(
+                withReplyCode(MarkdownConfig.defaultConfig, false),
+                onFile,
+              ),
+              generator: withFileTaps(replyMarkdownGenerator(), onFile),
             ),
-            generator: withFileTaps(replyMarkdownGenerator(), onFile),
           ),
         ),
       ),

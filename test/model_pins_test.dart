@@ -10,7 +10,12 @@ void main() {
     final config = {'default_pinned_models': 'a, b,'};
     expect(pinnedModelIds(null, config), ['a', 'b']);
     expect(pinnedModelIds({'pinnedModels': <String>[]}, config), isEmpty);
-    expect(pinnedModelIds({'pinnedModels': ['c']}, config), ['c']);
+    expect(
+      pinnedModelIds({
+        'pinnedModels': ['c'],
+      }, config),
+      ['c'],
+    );
   });
 
   test('tags, connection kind and link', () {

@@ -4,10 +4,12 @@ import 'package:nexus_assistant/features/chat/compare_text.dart';
 
 void main() {
   test('by line, by word, ignoring spacing and emphasis', () {
-    expect(
-      textDiff('a\nb\nc', 'a\nB\nc').map((l) => '${l.kind}${l.text}'),
-      [' a', '-b', '+B', ' c'],
-    );
+    expect(textDiff('a\nb\nc', 'a\nB\nc').map((l) => '${l.kind}${l.text}'), [
+      ' a',
+      '-b',
+      '+B',
+      ' c',
+    ]);
     final words = textDiff('the quick fox', 'the slow fox', approximate: true);
     expect(words.where((l) => l.kind != ' ').map((l) => l.text.trim()), [
       'quick',
@@ -18,8 +20,11 @@ void main() {
       isTrue,
     );
     expect(
-      textDiff('**bold** text', 'bold text', ignoreEmphasis: true)
-          .every((l) => l.kind == ' '),
+      textDiff(
+        '**bold** text',
+        'bold text',
+        ignoreEmphasis: true,
+      ).every((l) => l.kind == ' '),
       isTrue,
     );
   });
@@ -34,8 +39,7 @@ void main() {
               used = await Navigator.push<String>(
                 context,
                 MaterialPageRoute(
-                  builder: (_) =>
-                      const CompareTextScreen(original: 'one\ntwo'),
+                  builder: (_) => const CompareTextScreen(original: 'one\ntwo'),
                 ),
               );
             },
