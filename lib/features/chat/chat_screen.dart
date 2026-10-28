@@ -19,6 +19,7 @@ import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import 'artifacts_view.dart';
 import '../workspace/prompts_api.dart' show Prompt;
 import '../workspace/prompts_screen.dart';
+import '../workspace/tools_skills.dart' show ValvesScreen;
 import '../voice/call_screen.dart';
 import '../phone/phone_launch.dart';
 import 'attachments.dart';
@@ -2440,20 +2441,59 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
       );
     }
 
-    Widget item(Pickable p, bool value, ValueChanged<bool> onChanged) =>
-        SwitchListTile(
-          dense: true,
-          title: Text(p.name),
-          subtitle: (p.description ?? '').isEmpty
-              ? null
-              : Text(
-                  p.description!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+    Widget item(
+      Pickable p,
+      bool value,
+      ValueChanged<bool> onChanged, {
+      String? valves,
+    }) => valves != null
+        // A tool's own settings (Valves), next to its switch.
+        ? ListTile(
+            dense: true,
+            title: Text(p.name),
+            subtitle: (p.description ?? '').isEmpty
+                ? null
+                : Text(
+                    p.description!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'Valves',
+                  icon: const Icon(Icons.tune, size: 20),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => ValvesScreen(
+                        title: p.name,
+                        specPath: '$valves/valves/user/spec',
+                        valuesPath: '$valves/valves/user',
+                        savePath: '$valves/valves/user/update',
+                      ),
+                    ),
+                  ),
                 ),
-          value: value,
-          onChanged: onChanged,
-        );
+                Switch(value: value, onChanged: onChanged),
+              ],
+            ),
+            onTap: () => onChanged(!value),
+          )
+        : SwitchListTile(
+            dense: true,
+            title: Text(p.name),
+            subtitle: (p.description ?? '').isEmpty
+                ? null
+                : Text(
+                    p.description!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+            value: value,
+            onChanged: onChanged,
+          );
 
     final shownTools = tools.where(matches).toList();
     final shownSkills = skills.where(matches).toList();
@@ -2574,6 +2614,10 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                       t,
                       activeTools.contains(t.id),
                       (v) => chat.setTool(t.id, v),
+                      // Tool servers have no valves; workspace tools do.
+                      valves: t.id.contains(':')
+                          ? null
+                          : '/api/v1/tools/id/${t.id}',
                     ),
                 ],
               ),
