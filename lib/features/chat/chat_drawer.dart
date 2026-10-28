@@ -833,7 +833,13 @@ class ChatTile extends ConsumerWidget {
               .send('POST', '/api/v1/chats/${chat.id}/unread');
           refreshChatLists(ref.invalidate);
         case 'rename':
-          final title = await _askText(context, 'Rename chat', chat.title);
+          final title = await _askText(
+            context,
+            'Rename chat',
+            chat.title,
+            generate: () =>
+                generateChatTitle(ref.read(clientProvider), chat.id),
+          );
           if (title != null) await controller.renameChat(chat.id, title);
         case 'pin':
           await controller.togglePin(chat.id);
@@ -1023,17 +1029,51 @@ Future<String?> _pickFolder(BuildContext context, List<Folder> folders) {
 Future<String?> _askText(
   BuildContext context,
   String title,
-  String initial,
-) async {
+  String initial, {
+  Future<String?> Function()? generate,
+}) async {
   final text = TextEditingController(text: initial);
+  var busy = false;
   final value = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
-      content: TextField(
-        controller: text,
-        autofocus: true,
-        onSubmitted: (v) => Navigator.pop(context, v),
+      content: StatefulBuilder(
+        builder: (context, setState) => TextField(
+          controller: text,
+          autofocus: true,
+          onSubmitted: (v) => Navigator.pop(context, v),
+          decoration: InputDecoration(
+            suffixIcon: generate == null
+                ? null
+                : busy
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox.square(
+                      dimension: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                : IconButton(
+                    tooltip: 'Generate',
+                    icon: const Icon(Icons.auto_awesome_outlined),
+                    onPressed: () async {
+                      setState(() => busy = true);
+                      try {
+                        final t = await generate();
+                        if (t != null) text.text = t;
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Couldn't generate: $e")),
+                          );
+                        }
+                      }
+                      if (context.mounted) setState(() => busy = false);
+                    },
+                  ),
+          ),
+        ),
       ),
       actions: [
         TextButton(

@@ -88,6 +88,52 @@ Future<void> exportChat(
   }
 }
 
+/// The title in the server's reply to a title task, or null.
+String? titleFromTask(Object? res) {
+  final text =
+      ((((res as Map?)?['choices'] as List?)?.firstOrNull as Map?)?['message']
+              as Map?)?['content']
+          as String? ??
+      '';
+  final start = text.indexOf('{');
+  final end = text.lastIndexOf('}');
+  if (start == -1 || end <= start) return null;
+  try {
+    final parsed = jsonDecode(
+      text.substring(start, end + 1).replaceAll(RegExp('[\'‘’`]'), '"'),
+    );
+    final title = parsed is Map ? parsed['title'] : null;
+    return title is String && title.trim().isNotEmpty ? title.trim() : null;
+  } on FormatException {
+    return null;
+  }
+}
+
+/// A new title for chat [id] from its messages, as the web's Generate.
+Future<String?> generateChatTitle(OpenWebUiClient client, String id) async {
+  final chat = await client.chat(id);
+  final thread = chat.thread;
+  final model =
+      thread.reversed
+          .where((m) => m.role == 'assistant' && m.model != null)
+          .firstOrNull
+          ?.model ??
+      chat.models.firstOrNull;
+  if (model == null) return null;
+  final res = await client.send(
+    'POST',
+    '/api/v1/tasks/title/completions',
+    body: {
+      'model': model,
+      'messages': [
+        for (final m in thread) {'role': m.role, 'content': m.content},
+      ],
+      'chat_id': id,
+    },
+  );
+  return titleFromTask(res);
+}
+
 /// A copy of chat [id] ("Clone of …"), opened.
 Future<void> cloneChat(WidgetRef ref, String id, String title) async {
   final res = await ref
