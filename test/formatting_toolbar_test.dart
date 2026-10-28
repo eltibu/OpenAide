@@ -50,4 +50,17 @@ void main() {
     await tester.tap(find.byTooltip('H1'));
     expect(c.text, '# *hello*');
   });
+
+  test('the toolbar pops up only on a selection or an empty new line', () {
+    TextEditingValue v(String t, int a, [int? b]) => TextEditingValue(
+      text: t,
+      selection: TextSelection(baseOffset: a, extentOffset: b ?? a),
+    );
+    expect(formattingToolbarWanted(v('', 0)), isFalse);
+    expect(formattingToolbarWanted(v('hello', 5)), isFalse);
+    expect(formattingToolbarWanted(v('hello', 0, 5)), isTrue);
+    expect(formattingToolbarWanted(v('hello\n', 6)), isTrue);
+    expect(formattingToolbarWanted(v('hello\n\nworld', 6)), isTrue);
+    expect(formattingToolbarWanted(v('hello\nworld', 8)), isFalse);
+  });
 }

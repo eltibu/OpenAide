@@ -1181,10 +1181,12 @@ class _Composer extends ConsumerStatefulWidget {
 
 class _ComposerState extends ConsumerState<_Composer> {
   final _text = RichInputController();
+  final _focus = FocusNode();
 
   @override
   void dispose() {
     _text.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
@@ -1844,13 +1846,21 @@ class _ComposerState extends ConsumerState<_Composer> {
                   commands: _commands(),
                 ),
               if (autocompleteOn(ref)) AutocompleteBar(controller: _text),
-              // Settings > Interface > Formatting toolbar.
+              // Settings > Interface > Formatting toolbar: as on the web, it
+              // pops up while text is selected or on an empty new line.
               if ((ref.watch(userSettingsProvider).value?['ui']
                       as Map?)?['showFormattingToolbar'] ==
                   true)
-                FormattingToolbar(controller: _text),
+                ListenableBuilder(
+                  listenable: Listenable.merge([_text, _focus]),
+                  builder: (context, _) =>
+                      _focus.hasFocus && formattingToolbarWanted(_text.value)
+                      ? FormattingToolbar(controller: _text)
+                      : const SizedBox.shrink(),
+                ),
               TextField(
                 controller: _text,
+                focusNode: _focus,
                 minLines: 1,
                 maxLines: 6,
                 textCapitalization: TextCapitalization.sentences,
