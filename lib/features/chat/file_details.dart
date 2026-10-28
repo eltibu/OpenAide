@@ -270,7 +270,8 @@ function load(b64){
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
     var raw=atob(b64), bytes=new Uint8Array(raw.length);
     for(var i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-    pdfjsLib.getDocument({data:bytes}).promise.then(function(d){doc=d; draw();}).catch(fail);
+    // isEvalSupported off: a crafted PDF can't run script (CVE-2024-4367).
+    pdfjsLib.getDocument({data:bytes,isEvalSupported:false}).promise.then(function(d){doc=d; draw();}).catch(fail);
   }catch(err){fail(err);}
 }
 </script></body></html>''';

@@ -4,6 +4,7 @@
 library;
 
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 
@@ -281,9 +282,62 @@ String htmlText(String html) =>
   return (title: title, text: text);
 }
 
+/// Whether [a] is on this phone or the home network: loopback, private
+/// ranges (10/8, 172.16/12, 192.168/16, fc00::/7), link-local and CGNAT.
+bool isLocalAddress(InternetAddress a) {
+  if (a.isLoopback || a.isLinkLocal) return true;
+  final b = a.rawAddress;
+  if (a.type == InternetAddressType.IPv4) {
+    return b[0] == 0 ||
+        b[0] == 10 ||
+        (b[0] == 172 && b[1] >= 16 && b[1] < 32) ||
+        (b[0] == 192 && b[1] == 168) ||
+        (b[0] == 100 && b[1] >= 64 && b[1] < 128);
+  }
+  // ::, fc00::/7, and IPv4 written as ::ffff:a.b.c.d.
+  if (b.every((x) => x == 0) || (b[0] & 0xfe) == 0xfc) return true;
+  final mapped =
+      b.sublist(0, 10).every((x) => x == 0) && b[10] == 0xff && b[11] == 0xff;
+  return mapped &&
+      isLocalAddress(InternetAddress.fromRawAddress(b.sublist(12)));
+}
+
+/// Turns away addresses on the phone or the home network. A page the model
+/// reads can tell it what to open next, so without this a web page could
+/// make it read a router or a home server and pass the text on.
+Future<void> _checkPublic(
+  Uri u,
+  Future<List<InternetAddress>> Function(String host) lookup,
+) async {
+  final host = u.host.toLowerCase();
+  final literal = InternetAddress.tryParse(host);
+  List<InternetAddress> addresses;
+  if (literal != null) {
+    addresses = [literal];
+  } else if (host == 'localhost' || host.endsWith('.localhost')) {
+    addresses = [InternetAddress.loopbackIPv4];
+  } else {
+    try {
+      addresses = await lookup(host);
+    } on SocketException {
+      return; // The request itself says the name doesn't resolve.
+    }
+  }
+  if (addresses.any(isLocalAddress)) {
+    throw Exception(
+      "$host is on this phone or your home network. For safety, the "
+      "assistant only reads public web pages.",
+    );
+  }
+}
+
 /// A page's text for the model: HTML made readable, JSON and plain text as
-/// they are.
-Future<String> fetchPage(String url, {http.Client? httpClient}) async {
+/// they are. Only public addresses, and every redirect is checked too.
+Future<String> fetchPage(
+  String url, {
+  http.Client? httpClient,
+  Future<List<InternetAddress>> Function(String host)? lookup,
+}) async {
   var u = Uri.tryParse(url.trim());
   if (u == null || u.host.isEmpty) {
     u = Uri.tryParse('https://${url.trim()}');
@@ -291,19 +345,34 @@ Future<String> fetchPage(String url, {http.Client? httpClient}) async {
   if (u == null || !(u.scheme == 'http' || u.scheme == 'https')) {
     throw Exception('That is not a web address: $url');
   }
+  final resolve = lookup ?? InternetAddress.lookup;
   final client = httpClient ?? http.Client();
+  var at = u;
   try {
-    final r = await client
-        .get(
-          u,
-          headers: {
-            'User-Agent': browserAgent,
-            'Accept':
-                'text/html,application/xhtml+xml,application/json,'
-                'text/plain;q=0.9,*/*;q=0.5',
-          },
-        )
-        .timeout(const Duration(seconds: 30));
+    late http.Response r;
+    for (var hops = 0; ; hops++) {
+      await _checkPublic(at, resolve);
+      final req = http.Request('GET', at)
+        ..followRedirects = false
+        ..headers.addAll({
+          'User-Agent': browserAgent,
+          'Accept':
+              'text/html,application/xhtml+xml,application/json,'
+              'text/plain;q=0.9,*/*;q=0.5',
+        });
+      r = await http.Response.fromStream(
+        await client.send(req),
+      ).timeout(const Duration(seconds: 30));
+      final location = r.headers['location'];
+      if (r.statusCode < 300 || r.statusCode >= 400 || location == null) {
+        break;
+      }
+      if (hops >= 5) throw Exception('The page redirects too many times');
+      at = at.resolve(location);
+      if (!(at.scheme == 'http' || at.scheme == 'https')) {
+        throw Exception('The page redirects to $at');
+      }
+    }
     if (r.statusCode >= 400) {
       throw Exception('The page answered ${r.statusCode}');
     }
@@ -311,14 +380,14 @@ Future<String> fetchPage(String url, {http.Client? httpClient}) async {
     final body = utf8.decode(r.bodyBytes, allowMalformed: true);
     if (type.contains('html') || body.trimLeft().startsWith('<')) {
       final p = pageText(body);
-      return '${p.title.isEmpty ? '' : '# ${p.title}\n'}$u\n\n${p.text}';
+      return '${p.title.isEmpty ? '' : '# ${p.title}\n'}$at\n\n${p.text}';
     }
     if (type.startsWith('image/') ||
         type.startsWith('video/') ||
         type.startsWith('audio/') ||
         type.contains('octet-stream') ||
         type.contains('pdf')) {
-      return "$u is a file ($type), not a page I can read.";
+      return "$at is a file ($type), not a page I can read.";
     }
     return body;
   } finally {
