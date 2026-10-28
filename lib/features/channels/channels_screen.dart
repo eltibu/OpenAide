@@ -15,6 +15,7 @@ import '../chat/chat_controller.dart';
 import '../studio/record_notes.dart' show dictate;
 import 'channel_manage.dart';
 import 'encrypted_chat.dart';
+import 'person_card.dart';
 import '../workspace/access_editor.dart' show editAccess;
 import '../settings/settings_screen.dart' show meProvider;
 import 'channels_api.dart';
@@ -832,6 +833,41 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
     ),
   );
 
+  /// The author's card, with Message for a one-to-one chat with them.
+  VoidCallback? _authorTap(ChannelMessage m) {
+    final id = m.userId;
+    if (id == null || m.modelName != null) return null;
+    final me = id == _me(ref);
+    return () => showPersonCard(
+      context,
+      ref.read(clientProvider),
+      userId: id,
+      name: m.author,
+      onMessage: me
+          ? null
+          : () async {
+              try {
+                final dm = await _api.directMessage(id);
+                if (!mounted) return;
+                if (dm.id == widget.channel.id) return;
+                final full = await _api.get(dm.id).catchError((_) => dm);
+                if (!mounted) return;
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => ChannelScreen(channel: full),
+                  ),
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context)
+                      .showSnackBar(SnackBar(content: Text('$e')));
+                }
+              }
+            },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = _channel.title(_myName(ref));
@@ -1001,6 +1037,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                                   me: _me(ref),
                                   onLongPress: () => _menu(_parent!),
                                   onReact: (e) => _toggleReaction(_parent!, e),
+                                  onAuthor: _authorTap(_parent!),
                                 ),
                                 const Divider(),
                               ],
@@ -1022,6 +1059,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
                             onLongPress: () => _menu(m),
                             onReact: (e) => _toggleReaction(m, e),
                             onThread: _isThread ? null : () => _openThread(m),
+                            onAuthor: _authorTap(m),
                           );
                         },
                       ),
@@ -1121,6 +1159,7 @@ class _MessageTile extends StatelessWidget {
     required this.onLongPress,
     required this.onReact,
     this.onThread,
+    this.onAuthor,
     this.compact = false,
   });
 
@@ -1129,6 +1168,9 @@ class _MessageTile extends StatelessWidget {
   final VoidCallback onLongPress;
   final ValueChanged<String> onReact;
   final VoidCallback? onThread;
+
+  /// Opens the author's card (people only, not models).
+  final VoidCallback? onAuthor;
   final bool compact;
 
   @override
@@ -1150,18 +1192,21 @@ class _MessageTile extends StatelessWidget {
               width: 44,
               child: compact
                   ? null
-                  : CircleAvatar(
-                      radius: 17,
-                      backgroundColor: m.modelName != null
-                          ? NexusColors.accent
-                          : scheme.surfaceContainerHighest,
-                      child: m.modelName != null
-                          ? const Icon(
-                              Icons.auto_awesome,
-                              size: 16,
-                              color: Colors.white,
-                            )
-                          : Text(initial),
+                  : GestureDetector(
+                      onTap: onAuthor,
+                      child: CircleAvatar(
+                        radius: 17,
+                        backgroundColor: m.modelName != null
+                            ? NexusColors.accent
+                            : scheme.surfaceContainerHighest,
+                        child: m.modelName != null
+                            ? const Icon(
+                                Icons.auto_awesome,
+                                size: 16,
+                                color: Colors.white,
+                              )
+                            : Text(initial),
+                      ),
                     ),
             ),
             Expanded(
@@ -1172,10 +1217,15 @@ class _MessageTile extends StatelessWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
-                            m.author,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          child: GestureDetector(
+                            onTap: onAuthor,
+                            child: Text(
+                              m.author,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(width: 8),
