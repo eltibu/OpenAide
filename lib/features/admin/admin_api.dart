@@ -45,6 +45,7 @@ const adminSwitches = <(String, String, String)>[
   ('ENABLE_MEMORIES', 'Memories', 'Models remember things about people'),
   ('ENABLE_USER_STATUS', 'User status', 'People can set a status'),
   ('ENABLE_USER_WEBHOOKS', 'User webhooks', 'Notifications to a webhook'),
+  ('ENABLE_APPS', 'Apps', 'Outside apps that join channels (experimental)'),
   ('SHOW_ADMIN_DETAILS', 'Show admin contact', 'On the pending-account page'),
 ];
 

@@ -308,6 +308,8 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
   }
 
   Future<void> _save() async {
+    // An app's access is saved with the rest of the app.
+    if (widget.kind == 'app') return Navigator.pop(context, _grants);
     setState(() => _busy = true);
     try {
       await ref
@@ -392,7 +394,7 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
                 ],
               ),
             ),
-          if (_public)
+          if (_public && widget.kind != 'app')
             SwitchListTile(
               title: const Text('Allow public write access'),
               subtitle: const Text('Anyone can change it, not just use it'),

@@ -1,3 +1,4 @@
+import 'apps_screen.dart';
 import 'arena_screen.dart';
 import 'events_screen.dart';
 
@@ -143,6 +144,12 @@ class AdminScreen extends StatelessWidget {
             title: const Text('Integrations'),
             subtitle: const Text('Tool servers (OpenAPI, MCP) and terminals'),
             onTap: () => open(const IntegrationsScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.apps),
+            title: const Text('Apps'),
+            subtitle: const Text('Outside apps that join channels'),
+            onTap: () => open(const AppsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.account_tree_outlined),
