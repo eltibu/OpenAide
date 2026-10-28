@@ -31,6 +31,16 @@ const _kUrl = 'server_url';
 const _kToken = 'token';
 const _kCookie = 'cookie';
 
+/// True once this phone has signed in to a server before (the address is
+/// kept after signing out).
+Future<bool> hasSavedServer() async {
+  try {
+    return (await _storage.read(key: _kUrl))?.isNotEmpty == true;
+  } catch (_) {
+    return false;
+  }
+}
+
 class SessionNotifier extends AsyncNotifier<Session?> {
   /// False only while the saved session is first being restored.
   bool booted = false;

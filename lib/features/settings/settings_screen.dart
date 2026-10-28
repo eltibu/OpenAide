@@ -1,3 +1,4 @@
+import '../providers/ai_providers_screen.dart';
 import '../phone/phone_settings.dart';
 
 import 'dart:convert';
@@ -196,6 +197,12 @@ class SettingsScreen extends ConsumerWidget {
               'Default assistant, shortcuts, Share, app lock',
             ),
             onTap: () => open(const PhoneSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.hub_outlined),
+            title: const Text('AI providers'),
+            subtitle: const Text('OpenRouter, Claude and OpenAI'),
+            onTap: () => open(const AiProvidersScreen()),
           ),
           if ((ref.watch(serverConfigProvider).value?['features']
                   as Map?)?['enable_direct_connections'] ==
