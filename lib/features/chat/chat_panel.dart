@@ -283,6 +283,11 @@ class _Overview extends ConsumerWidget {
     walk([for (final r in roots) r.id], 0);
     final me =
         ref.watch(meProvider).value ?? ref.watch(sessionProvider).value?.user;
+    // Settings > Interface > Show your name.
+    final showName =
+        (ref.watch(userSettingsProvider).value?['ui']
+            as Map?)?['showUsername'] ==
+        true;
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
       itemCount: rows.length,
@@ -293,7 +298,7 @@ class _Overview extends ConsumerWidget {
           child: _Node(
             message: m,
             name: m.role == 'user'
-                ? '${me?['name'] ?? 'You'}'
+                ? (showName ? '${me?['name'] ?? 'You'}' : 'You')
                 : names[m.model] ?? m.model ?? 'Nexus',
             user: m.role == 'user' ? me : null,
             shown: shown.contains(m.id),

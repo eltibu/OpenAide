@@ -166,6 +166,11 @@ const appFollows = {
   'imageCompressionInChannels',
   'showFilesOnTerminalSelect',
   'showFormattingToolbar',
+  'showUsername',
+  'scrollOnBranchChange',
+  'promptAutocomplete',
+  'iframeSandboxAllowScripts',
+  'iframeSandboxAllowSameOrigin',
 };
 
 class InterfaceSettings extends ConsumerWidget {

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/theme.dart';
+import 'chat_controller.dart' show userSettingsProvider;
 import 'side_panel.dart';
 
 /// Something a reply built that can be shown live, as in the web UI's
@@ -216,20 +219,29 @@ class ArtifactCard extends StatelessWidget {
 }
 
 /// The artifact, running, with its versions and its code.
-class ArtifactScreen extends StatefulWidget {
+class ArtifactScreen extends ConsumerStatefulWidget {
   const ArtifactScreen({super.key, required this.all, required this.index});
   final List<Artifact> all;
   final int index;
 
   @override
-  State<ArtifactScreen> createState() => _ArtifactScreenState();
+  ConsumerState<ArtifactScreen> createState() => _ArtifactScreenState();
 }
 
-class _ArtifactScreenState extends State<ArtifactScreen> {
+class _ArtifactScreenState extends ConsumerState<ArtifactScreen> {
   late int _index = widget.index;
   bool _code = false;
+  // Settings > Interface > Artifacts and embeds: scripts, and whether the
+  // page counts as the server's own (same origin).
+  late final Map<String, dynamic> _ui =
+      ((ref.read(userSettingsProvider).value?['ui'] as Map?) ?? const {})
+          .cast<String, dynamic>();
   late final WebViewController _web = WebViewController()
-    ..setJavaScriptMode(JavaScriptMode.unrestricted)
+    ..setJavaScriptMode(
+      _ui['iframeSandboxAllowScripts'] == false
+          ? JavaScriptMode.disabled
+          : JavaScriptMode.unrestricted,
+    )
     ..setBackgroundColor(Colors.white)
     ..setNavigationDelegate(
       NavigationDelegate(
@@ -249,7 +261,12 @@ class _ArtifactScreenState extends State<ArtifactScreen> {
     _load();
   }
 
-  void _load() => _web.loadHtmlString(_artifact.page);
+  void _load() => _web.loadHtmlString(
+    _artifact.page,
+    baseUrl: _ui['iframeSandboxAllowSameOrigin'] == true
+        ? ref.read(clientProvider).baseUrl
+        : null,
+  );
 
   void _go(int to) {
     setState(() => _index = to);

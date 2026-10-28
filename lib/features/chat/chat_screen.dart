@@ -21,6 +21,7 @@ import '../workspace/prompts_api.dart' show Prompt;
 import '../workspace/prompts_screen.dart';
 import '../voice/call_screen.dart';
 import 'attachments.dart';
+import 'autocomplete.dart';
 import 'attach_more.dart';
 import 'chat_controls.dart';
 import 'chat_panel.dart';
@@ -772,6 +773,19 @@ class _MessageActions extends ConsumerWidget {
       icon: Icon(icon),
     );
 
+    // Settings > Interface > Scroll on branch change: back to the newest
+    // message after showing another version.
+    Future<void> branch(int step) async {
+      final scroll = PrimaryScrollController.maybeOf(context);
+      await controller.switchBranch(message, step);
+      final ui = ref.read(userSettingsProvider).value?['ui'] as Map?;
+      if (ui?['scrollOnBranchChange'] != false &&
+          scroll != null &&
+          scroll.hasClients) {
+        scroll.jumpTo(0);
+      }
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
@@ -781,7 +795,7 @@ class _MessageActions extends ConsumerWidget {
             action(
               Icons.chevron_left,
               'Previous version',
-              index > 0 ? () => controller.switchBranch(message, -1) : null,
+              index > 0 ? () => branch(-1) : null,
             ),
             Text(
               '${index + 1}/${siblings.length}',
@@ -790,9 +804,7 @@ class _MessageActions extends ConsumerWidget {
             action(
               Icons.chevron_right,
               'Next version',
-              index < siblings.length - 1
-                  ? () => controller.switchBranch(message, 1)
-                  : null,
+              index < siblings.length - 1 ? () => branch(1) : null,
             ),
           ],
           if (!compact && message.content.isNotEmpty)
@@ -1522,6 +1534,7 @@ class _ComposerState extends ConsumerState<_Composer> {
                   onPick: _usePrompt,
                   commands: _commands(),
                 ),
+              if (autocompleteOn(ref)) AutocompleteBar(controller: _text),
               // Settings > Interface > Formatting toolbar.
               if ((ref.watch(userSettingsProvider).value?['ui']
                       as Map?)?['showFormattingToolbar'] ==
