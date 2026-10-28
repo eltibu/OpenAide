@@ -15,6 +15,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
 import '../workspace/models_api.dart';
 import 'manage_ollama.dart';
+import 'model_defaults.dart';
 import '../workspace/models_screen.dart'
     show ModelEditor, modelsApiProvider, workspaceModelsProvider;
 
@@ -426,9 +427,20 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                     'import' => _import(),
                     'export' => _export(),
                     'order' => _resetOrder(),
+                    'defaults' => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ModelDefaultsScreen(),
+                      ),
+                    ).then((_) => _load()),
                     _ => null,
                   },
                   itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'defaults',
+                      child: Text('Model Defaults'),
+                    ),
+                    PopupMenuDivider(),
                     PopupMenuItem(value: 'on', child: Text('Enable all')),
                     PopupMenuItem(value: 'off', child: Text('Disable all')),
                     PopupMenuItem(value: 'show', child: Text('Show all')),
