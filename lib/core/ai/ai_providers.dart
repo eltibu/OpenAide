@@ -11,12 +11,14 @@ import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
 import '../api/sse.dart';
+import 'copilot.dart';
 import '../models/model_info.dart';
 
 enum AiProvider {
   openRouter('openrouter', 'OpenRouter'),
   anthropic('anthropic', 'Claude'),
-  openAi('openai', 'OpenAI');
+  openAi('openai', 'OpenAI'),
+  copilot('copilot', 'GitHub Copilot');
 
   const AiProvider(this.id, this.label);
 
@@ -83,6 +85,7 @@ const providerKeyPages = {
   AiProvider.openRouter: 'https://openrouter.ai/settings/keys',
   AiProvider.anthropic: 'https://console.anthropic.com/settings/keys',
   AiProvider.openAi: 'https://platform.openai.com/api-keys',
+  AiProvider.copilot: 'https://github.com/settings/copilot',
 };
 
 Map<String, String> _headers(AiProvider p, String key) => switch (p) {
@@ -97,6 +100,8 @@ Map<String, String> _headers(AiProvider p, String key) => switch (p) {
     'anthropic-version': _anthropicVersion,
   },
   AiProvider.openAi => {'Authorization': 'Bearer $key'},
+  // Copilot's token comes from copilotSession; see copilot.dart.
+  AiProvider.copilot => copilotHeaders(key),
 };
 
 /// The provider's own words for what went wrong, else the status.
@@ -208,6 +213,28 @@ Future<List<ModelInfo>> listProviderModels(
               vision: true,
             ),
         ];
+      case AiProvider.copilot:
+        final session = await copilotSession(key, client);
+        final json = await _getJson(
+          client,
+          Uri.parse('${session.base}/models'),
+          copilotHeaders(session.token),
+        );
+        return [
+          for (final m
+              in ((json as Map)['data'] as List? ?? const []).whereType<Map>())
+            if ((m['capabilities'] as Map?)?['type'] == 'chat' &&
+                m['model_picker_enabled'] != false)
+              _model(
+                p,
+                '${m['id']}',
+                '${m['name'] ?? m['id']}',
+                vision:
+                    ((m['capabilities'] as Map?)?['supports']
+                        as Map?)?['vision'] ==
+                    true,
+              ),
+        ];
       case AiProvider.openAi:
         final json = await _getJson(
           client,
@@ -269,7 +296,15 @@ Stream<AiChunk> streamProviderReply({
   final client = httpClient ?? http.Client();
   try {
     final http.Request req;
-    if (provider == AiProvider.anthropic) {
+    var headers = _headers(provider, key);
+    if (provider == AiProvider.copilot) {
+      final session = await copilotSession(key, client);
+      headers = copilotHeaders(session.token);
+      req = http.Request('POST', Uri.parse('${session.base}/chat/completions'))
+        ..body = jsonEncode(
+          openAiBody(model, messages, system: system, params: params),
+        );
+    } else if (provider == AiProvider.anthropic) {
       req = http.Request('POST', Uri.parse('$_anthropicBase/messages'))
         ..body = jsonEncode(
           anthropicBody(model, messages, system: system, params: params),
@@ -284,11 +319,14 @@ Stream<AiChunk> streamProviderReply({
         );
     }
     req.headers.addAll({
-      ..._headers(provider, key),
+      ...headers,
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
     });
     final res = await client.send(req).timeout(const Duration(seconds: 60));
+    if (res.statusCode == 401 && provider == AiProvider.copilot) {
+      dropCopilotSession(key);
+    }
     if (res.statusCode >= 400) {
       throw AiException(
         _errorText(res.statusCode, await res.stream.bytesToString()),

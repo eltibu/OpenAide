@@ -2,11 +2,15 @@
 /// OpenAI key, so their models can answer straight from the phone.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/ai_providers.dart';
+import '../../core/ai/copilot.dart';
 import '../../core/theme.dart';
 import 'ai_keys.dart';
 
@@ -97,12 +101,20 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
     AiProvider.openAi =>
       'GPT models straight from OpenAI. Needs an API key from the OpenAI '
           'platform (pay as you go); a ChatGPT plan is separate.',
+    AiProvider.copilot =>
+      copilotSignInAvailable
+          ? 'Use your own Copilot plan (Claude, GPT, Gemini and more). '
+                "Experimental: GitHub doesn't officially support Copilot in "
+                'other apps, so it may stop working.'
+          : "Use your own Copilot plan. Sign-in isn't set up in this "
+                'version yet.',
   };
 
   String get _hint => switch (_p) {
     AiProvider.openRouter => 'sk-or-…',
     AiProvider.anthropic => 'sk-ant-…',
     AiProvider.openAi => 'sk-…',
+    AiProvider.copilot => 'gho_…',
   };
 
   /// Lists the models [key] unlocks; saves it if that works.
@@ -143,6 +155,44 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
       if (mounted) setState(() => _error = '$e');
     } finally {
       _signIn = null;
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _signInWithGitHub() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final cancel = Completer<void>();
+    try {
+      final code = await startGitHubDeviceSignIn();
+      if (!mounted) return;
+      final waiting = waitForGitHubSignIn(code, cancelled: cancel.future);
+      var open = true;
+      void close() {
+        if (open && mounted) Navigator.of(context, rootNavigator: true).pop();
+      }
+
+      // The dialog closes itself once GitHub answers.
+      unawaited(waiting.then((_) => close(), onError: (_) => close()));
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => _DeviceCodeDialog(
+          code: code,
+          onCancel: () {
+            if (!cancel.isCompleted) cancel.complete();
+            Navigator.pop(context);
+          },
+        ),
+      );
+      open = false;
+      await _check(await waiting);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (!cancel.isCompleted) cancel.complete();
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -198,7 +248,10 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                   ),
                 ],
               ),
-            ] else if (_typing || (!saved && _p != AiProvider.openRouter)) ...[
+            ] else if (_typing ||
+                (!saved &&
+                    _p != AiProvider.openRouter &&
+                    _p != AiProvider.copilot)) ...[
               TextField(
                 controller: _key,
                 obscureText: true,
@@ -257,12 +310,21 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                       icon: const Icon(Icons.login),
                       label: const Text('Sign in with OpenRouter'),
                     ),
-                  OutlinedButton(
-                    onPressed: _busy
-                        ? null
-                        : () => setState(() => _typing = true),
-                    child: Text(saved ? 'Change key' : 'Paste a key'),
-                  ),
+                  if (!saved && _p == AiProvider.copilot)
+                    FilledButton.icon(
+                      onPressed: _busy || !copilotSignInAvailable
+                          ? null
+                          : _signInWithGitHub,
+                      icon: const Icon(Icons.login),
+                      label: const Text('Sign in with GitHub'),
+                    ),
+                  if (_p != AiProvider.copilot)
+                    OutlinedButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() => _typing = true),
+                      child: Text(saved ? 'Change key' : 'Paste a key'),
+                    ),
                   if (saved)
                     TextButton(
                       onPressed: _busy ? null : _remove,
@@ -279,4 +341,64 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
       ),
     );
   }
+}
+
+/// Shows the code to type on GitHub, with a button that opens the page.
+class _DeviceCodeDialog extends StatelessWidget {
+  const _DeviceCodeDialog({required this.code, required this.onCancel});
+  final DeviceCode code;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Sign in with GitHub'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('Open GitHub and enter this code:'),
+        const SizedBox(height: 16),
+        SelectableText(
+          code.userCode,
+          style: Theme.of(context).textTheme.headlineMedium
+              ?.copyWith(letterSpacing: 4, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: () =>
+              Clipboard.setData(ClipboardData(text: code.userCode)),
+          icon: const Icon(Icons.copy, size: 18),
+          label: const Text('Copy code'),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Waiting for GitHub…',
+                style: TextStyle(color: context.nexus.muted),
+              ),
+            ),
+          ],
+        ),
+      ],
+    ),
+    actions: [
+      TextButton(onPressed: onCancel, child: const Text('Cancel')),
+      FilledButton(
+        onPressed: () {
+          Clipboard.setData(ClipboardData(text: code.userCode));
+          launchUrl(
+            Uri.parse(code.verificationUri),
+            mode: LaunchMode.externalApplication,
+          );
+        },
+        child: const Text('Open GitHub'),
+      ),
+    ],
+  );
 }
