@@ -74,8 +74,9 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
     // Section names in the accent colour, as on every settings page.
-    final heading = Theme.of(context).textTheme.titleSmall
-        ?.copyWith(color: Theme.of(context).colorScheme.primary);
+    final heading = Theme.of(
+      context,
+    ).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary);
     final ui = ref.watch(uiSettingsProvider).value;
     final opens = assistantOpens(ui);
     final lock = ref.watch(appLockProvider).value;
@@ -152,8 +153,7 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
             trailing: _tile
                 ? TextButton(
                     onPressed: () async {
-                      if (await addTile())
-                        _say('OpenAide is in quick settings');
+                      if (await addTile()) _say('OpenAide is in quick settings');
                     },
                     child: const Text('Add'),
                   )
