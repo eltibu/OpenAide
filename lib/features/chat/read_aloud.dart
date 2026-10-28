@@ -93,6 +93,9 @@ class ReadAloud {
   /// True while something is being said.
   final speaking = ValueNotifier<bool>(false);
 
+  /// The piece being said now, for the call's emoji.
+  final saying = ValueNotifier<String>('');
+
   /// Why speaking failed, for the screen to say once.
   final errors = StreamController<String>.broadcast();
 
@@ -145,11 +148,16 @@ class ReadAloud {
     speaking.value = true;
     try {
       String? dir;
-      Future<List<int>>? next = _queue.isEmpty ? null : _fetch(_take());
+      Future<(String, List<int>)> fetch(String text) async =>
+          (text, await _fetch(text));
+      Future<(String, List<int>)>? next = _queue.isEmpty
+          ? null
+          : fetch(_take());
       while (next != null && gen == _gen) {
+        String text;
         List<int> audio;
         try {
-          audio = await next;
+          (text, audio) = await next;
         } catch (e) {
           if (gen == _gen) errors.add('$e');
           await stop();
@@ -157,8 +165,9 @@ class ReadAloud {
         }
         if (gen != _gen) return;
         // The next piece is fetched while this one plays.
-        next = _queue.isEmpty ? null : _fetch(_take());
+        next = _queue.isEmpty ? null : fetch(_take());
         if (audio.isNotEmpty) {
+          saying.value = text;
           dir ??= await _channel.invokeMethod<String>('dir');
           final wav =
               audio.length > 4 && String.fromCharCodes(audio.take(4)) == 'RIFF';
@@ -171,7 +180,7 @@ class ReadAloud {
           });
         }
         if (next == null && _queue.isNotEmpty && gen == _gen) {
-          next = _fetch(_take());
+          next = fetch(_take());
         }
       }
     } on MissingPluginException {

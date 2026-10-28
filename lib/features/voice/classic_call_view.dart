@@ -15,6 +15,7 @@ import '../../core/auth/session.dart';
 import '../chat/chat_controller.dart';
 import '../chat/read_aloud.dart';
 import '../studio/listen.dart' as listen;
+import 'call_emoji.dart';
 import 'classic_call.dart';
 
 class _Host implements ClassicCallHost {
@@ -28,6 +29,8 @@ class _Host implements ClassicCallHost {
 
   /// Kept, so the call can still be quieted as the screen closes.
   final ReadAloud _speaker;
+
+  ValueListenable<String> get saying => _speaker.saying;
 
   ChatController get _chat => ref.read(chatControllerProvider.notifier);
 
@@ -89,6 +92,11 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
   List<CameraDescription> _cameras = const [];
   int _which = 0;
 
+  /// Display Emoji in Call: the emoji for what's being said now.
+  String? _emoji;
+  final _emojis = <String, String?>{};
+  late final _host = _call.host as _Host;
+
   @override
   void initState() {
     super.initState();
@@ -96,10 +104,30 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
       ..voiceCall = true
       ..classicCall = true;
     unawaited(_call.start());
+    _host.saying.addListener(_newPiece);
+  }
+
+  Future<void> _newPiece() async {
+    final text = _host.saying.value;
+    final ui = ref.read(userSettingsProvider).value?['ui'] as Map?;
+    if (text.isEmpty || !emojiInCallOn(ui)) return;
+    final state = ref.read(chatControllerProvider);
+    final emoji = _emojis.containsKey(text)
+        ? _emojis[text]
+        : _emojis[text] = await emojiFor(
+            ref.read(clientProvider),
+            model: state.modelId ?? '',
+            text: text,
+            chatId: state.chat?.id,
+          );
+    if (mounted && _host.saying.value == text && emoji != null) {
+      setState(() => _emoji = emoji);
+    }
   }
 
   @override
   void dispose() {
+    _host.saying.removeListener(_newPiece);
     _controller
       ..voiceCall = false
       ..classicCall = false;
@@ -197,6 +225,8 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
                                 child: CameraPreview(camera),
                               ),
                             )
+                          : call.phase == CallPhase.speaking && _emoji != null
+                          ? Text(_emoji!, style: const TextStyle(fontSize: 120))
                           : AnimatedContainer(
                               duration: const Duration(milliseconds: 120),
                               width: 160 + 80 * level,
