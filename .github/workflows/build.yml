@@ -163,9 +163,16 @@ jobs:
           echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$NEW_KS"
           OLD=(--ks "$OLD_KS" --ks-key-alias "$OLD_ALIAS" --ks-pass env:OLD_STORE_PASS --key-pass env:OLD_KEY_PASS)
           NEW=(--ks "$NEW_KS" --ks-key-alias nexus --ks-pass env:RELEASE_KEY_PASSWORD --key-pass env:RELEASE_KEY_PASSWORD)
-          LINEAGE="$RUNNER_TEMP/lineage.bin"
-          "$APKSIGNER" rotate --out "$LINEAGE.tmp" --old-signer "${OLD[@]}" --new-signer "${NEW[@]}"
-          "$APKSIGNER" lineage --in "$LINEAGE.tmp" --out "$LINEAGE" --signer "${OLD[@]}" --set-rollback true
+          # The proof is made once with both keys. After that it lives in the
+          # repo (it holds certificates and signatures, no private key), so
+          # the old key is no longer needed to sign.
+          LINEAGE=android/signing-lineage.bin
+          if [ ! -f "$LINEAGE" ]; then
+            LINEAGE="$RUNNER_TEMP/lineage.bin"
+            "$APKSIGNER" rotate --out "$LINEAGE.tmp" --old-signer "${OLD[@]}" --new-signer "${NEW[@]}"
+            "$APKSIGNER" lineage --in "$LINEAGE.tmp" --out "$LINEAGE" --signer "${OLD[@]}" --set-rollback true
+            echo "::notice::New rotation proof; commit it as android/signing-lineage.bin (base64): $(base64 -w0 "$LINEAGE")"
+          fi
           "$APKSIGNER" lineage --in "$LINEAGE" --print-certs -v
           APK=build/app/outputs/flutter-apk/app-release.apk
           "$APKSIGNER" sign "${NEW[@]}" --lineage "$LINEAGE" \
