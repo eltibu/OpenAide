@@ -12,10 +12,32 @@ import '../chat/request_options.dart';
 import '../studio/ai_sheet.dart';
 import '../studio/record_notes.dart' show dictate;
 import '../studio/studio_doc.dart' show cleanAiText;
+import '../accounts/accounts_screen.dart';
+import '../accounts/mail_accounts.dart';
+import 'direct_mail.dart';
 import 'email_agent.dart';
 
-/// Nexus, set up to work with email as it works in any chat.
-final emailAgentProvider = FutureProvider<EmailAgent>((ref) async {
+/// Said when there is neither an account on the phone nor a server.
+const noMailAccount =
+    'Add an email account to read and send mail here. Gmail, iCloud, '
+    'Yahoo and most others work with an app password.';
+
+/// Whose mail Email shows: [nexusMailSource] (through Nexus on the
+/// server) or the address of an account the app reads itself.
+final mailSourceProvider = FutureProvider<String>(
+  (ref) async =>
+      (await ref.watch(mailAccountsProvider.future)).current?.email ??
+      nexusMailSource,
+);
+
+/// The mail Email shows: an account the app reads itself (no server
+/// needed), or Nexus, set up to work with email as in any chat.
+final emailAgentProvider = FutureProvider<MailSource>((ref) async {
+  final account = (await ref.watch(mailAccountsProvider.future)).current;
+  if (account != null) return DirectMail(account);
+  if ((await ref.watch(sessionProvider.future)) == null) {
+    throw const EmailAgentError(noMailAccount);
+  }
   final model = await ref.watch(defaultModelProvider.future);
   if (model == null) throw const EmailAgentError('No model to ask');
   final models = await ref.watch(modelsProvider.future);
@@ -81,12 +103,16 @@ class EmailFolderNotifier extends Notifier<EmailFolder> {
 
   @override
   EmailFolder build() {
-    Future.microtask(_start);
+    // A new list whenever Email switches whose mail it shows.
+    final source = ref.watch(mailSourceProvider.select((s) => s.value));
+    if (source != null) Future.microtask(() => _start(source));
     return const EmailFolder();
   }
 
-  Future<void> _start() async {
-    final phone = await const EmailCache().read();
+  Future<void> _start(String source) async {
+    final phone = source == nexusMailSource
+        ? await const EmailCache().read()
+        : await DirectMailStore(source).read();
     if (!state.loaded && (phone[folder] as List? ?? const []).isNotEmpty) {
       state = EmailFolder(
         emails: keptIn(phone, folder),
@@ -238,7 +264,7 @@ class EmailScreen extends ConsumerWidget {
     length: 2,
     child: Scaffold(
       appBar: AppBar(
-        title: const Text('Email'),
+        title: const _SourceTitle(),
         bottom: const TabBar(
           tabs: [
             Tab(text: 'Inbox'),
@@ -246,6 +272,7 @@ class EmailScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          const _SourceMenu(),
           IconButton(
             tooltip: 'Search',
             onPressed: () => Navigator.push(
@@ -284,7 +311,10 @@ class _EmailList extends ConsumerWidget {
     final notifier = ref.read(emailFolderProvider(folder).notifier);
     final muted = context.nexus.muted;
     final emails = box.emails;
-    final waitText = folder == 'sent'
+    final direct = ref.watch(mailSourceProvider).value != nexusMailSource;
+    final waitText = direct
+        ? (folder == 'sent' ? 'Getting what was sent…' : 'Checking your inbox…')
+        : folder == 'sent'
         ? 'Nexus is reading what was sent…'
         : 'Nexus is checking your inbox…';
     return RefreshIndicator(
@@ -310,16 +340,29 @@ class _EmailList extends ConsumerWidget {
           if (box.error != null)
             MaterialBanner(
               content: Text(
-                emails.isEmpty
+                box.error == noMailAccount
+                    ? noMailAccount
+                    : emails.isEmpty
                     ? 'Couldn\'t get your email.\n\n${box.error}'
                     : 'Couldn\'t check for new email. These are the ones '
                           'kept from before.\n\n${box.error}',
               ),
               actions: [
-                TextButton(
-                  onPressed: notifier.check,
-                  child: const Text('Try again'),
-                ),
+                if (box.error == noMailAccount)
+                  FilledButton(
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const AddMailAccount(),
+                      ),
+                    ),
+                    child: const Text('Add an account'),
+                  )
+                else
+                  TextButton(
+                    onPressed: notifier.check,
+                    child: const Text('Try again'),
+                  ),
               ],
             ),
           if (emails.isEmpty && (box.checking || !box.loaded))
@@ -470,7 +513,7 @@ class _SearchScreenState extends ConsumerState<_SearchScreen> {
             future: _found,
             builder: (context, snap) {
               if (snap.connectionState != ConnectionState.done) {
-                return const _Waiting('Nexus is searching your email…');
+                return const _Waiting('Searching your email…');
               }
               if (snap.hasError) {
                 return Padding(
@@ -560,7 +603,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
             },
           ),
           IconButton(
-            tooltip: 'Ask Nexus to open it again',
+            tooltip: 'Open it again',
             icon: const Icon(Icons.refresh),
             onPressed: () => setState(() => _opened = _open(fresh: true)),
           ),
@@ -570,7 +613,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
         future: _opened,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return const _Waiting('Nexus is opening it…');
+            return const _Waiting('Opening it…');
           }
           if (snap.hasError) {
             return ListView(
@@ -816,11 +859,17 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
     final to = o == null
         ? _to.text.trim()
         : (_all ? 'everyone on the thread' : o.email.from);
+    final source = await ref.read(mailSourceProvider.future);
+    if (!mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
         title: const Text('Send this email?'),
-        content: Text('Nexus sends it from your Gmail to $to.'),
+        content: Text(
+          source == nexusMailSource
+              ? 'Nexus sends it from your Gmail to $to.'
+              : 'Sent from $source to $to.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
@@ -955,6 +1004,80 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// "Email", with whose mail it is under it.
+class _SourceTitle extends ConsumerWidget {
+  const _SourceTitle();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final source = ref.watch(mailSourceProvider).value;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Text('Email'),
+        if (source != null)
+          Text(
+            source == nexusMailSource ? 'Through Nexus' : source,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 12, color: context.nexus.muted),
+          ),
+      ],
+    );
+  }
+}
+
+/// Picks whose mail Email shows: each account on the phone, or Nexus when
+/// signed in to a server; and adds accounts.
+class _SourceMenu extends ConsumerWidget {
+  const _SourceMenu();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accounts = ref.watch(mailAccountsProvider).value;
+    final source = ref.watch(mailSourceProvider).value;
+    final server = ref.watch(sessionProvider).value != null;
+    return PopupMenuButton<String>(
+      tooltip: 'Accounts',
+      icon: const Icon(Icons.account_circle_outlined),
+      onSelected: (v) {
+        if (v == '+') {
+          Navigator.push(
+            context,
+            MaterialPageRoute<void>(builder: (_) => const AddMailAccount()),
+          );
+        } else {
+          ref.read(mailAccountsProvider.notifier).show(v);
+        }
+      },
+      itemBuilder: (_) => [
+        if (server)
+          CheckedPopupMenuItem(
+            value: nexusMailSource,
+            checked: source == nexusMailSource,
+            child: const Text('Through Nexus'),
+          ),
+        for (final a in accounts?.accounts ?? const <MailAccountConfig>[])
+          CheckedPopupMenuItem(
+            value: a.email,
+            checked: source == a.email,
+            child: Text(a.email),
+          ),
+        const PopupMenuDivider(),
+        const PopupMenuItem(
+          value: '+',
+          child: ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.add),
+            title: Text('Add an email account'),
+          ),
+        ),
+      ],
     );
   }
 }

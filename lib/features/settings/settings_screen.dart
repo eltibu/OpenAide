@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../accounts/accounts_screen.dart';
 import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
@@ -179,6 +180,14 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Notifications'),
             subtitle: const Text('When a reply is ready, and webhooks'),
             onTap: () => open(const NotificationSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.manage_accounts_outlined),
+            title: const Text('Accounts'),
+            subtitle: const Text(
+              'Email and other services the app signs in to',
+            ),
+            onTap: () => open(const AccountsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.phone_android),
