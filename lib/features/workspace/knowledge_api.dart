@@ -10,12 +10,17 @@ class Knowledge {
     required this.description,
     required this.updated,
     this.writable = true,
+    this.userId,
   });
+
+  /// Who made it.
+  final String? userId;
 
   factory Knowledge.fromJson(Map j) => Knowledge(
     id: '${j['id']}',
     name: '${j['name'] ?? ''}',
     description: '${j['description'] ?? ''}',
+    userId: j['user_id']?.toString(),
     updated: fromServerTime((j['updated_at'] as num?) ?? 0),
     writable: j['write_access'] != false,
   );

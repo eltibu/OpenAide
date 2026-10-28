@@ -6,6 +6,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import 'access_editor.dart' show ItemMenu;
 import '../chat/chat_controller.dart' show skillsProvider;
+import 'owner_filter.dart';
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -44,7 +45,10 @@ class ToolsScreen extends ConsumerWidget {
     final list = ref.watch(_toolsListProvider);
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Tools')),
+      appBar: AppBar(
+        title: const Text('Tools'),
+        actions: const [OwnerFilterButton()],
+      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(_toolsListProvider.future),
         child: list.when(
@@ -64,7 +68,7 @@ class ToolsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(24),
                   child: Text('No tools yet', style: TextStyle(color: muted)),
                 ),
-              for (final t in items)
+              for (final t in ownerFiltered(ref, items, (t) => t['user_id']))
                 ListTile(
                   leading: const Icon(Icons.build_outlined),
                   title: Text('${t['name'] ?? t['id']}'),
@@ -411,7 +415,10 @@ class SkillsScreen extends ConsumerWidget {
     final muted = context.nexus.muted;
     final client = ref.read(clientProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Skills')),
+      appBar: AppBar(
+        title: const Text('Skills'),
+        actions: const [OwnerFilterButton()],
+      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(_skillsListProvider.future),
         child: list.when(
@@ -431,7 +438,7 @@ class SkillsScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(24),
                   child: Text('No skills yet', style: TextStyle(color: muted)),
                 ),
-              for (final s in items)
+              for (final s in ownerFiltered(ref, items, (s) => s['user_id']))
                 ListTile(
                   leading: const Icon(Icons.psychology_outlined),
                   title: Text('${s['name'] ?? s['id']}'),

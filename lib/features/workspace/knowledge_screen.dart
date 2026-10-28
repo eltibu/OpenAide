@@ -6,6 +6,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import 'access_editor.dart' show editAccess;
 import 'knowledge_api.dart';
+import 'owner_filter.dart';
 
 final knowledgeApiProvider = Provider<KnowledgeApi>(
   (ref) => KnowledgeApi(ref.watch(clientProvider)),
@@ -70,7 +71,10 @@ class KnowledgeScreen extends ConsumerWidget {
     final list = ref.watch(knowledgeListProvider);
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Knowledge')),
+      appBar: AppBar(
+        title: const Text('Knowledge'),
+        actions: const [OwnerFilterButton()],
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'New knowledge base',
         onPressed: () async {
@@ -116,7 +120,7 @@ class KnowledgeScreen extends ConsumerWidget {
                     style: TextStyle(color: muted),
                   ),
                 ),
-              for (final k in items)
+              for (final k in ownerFiltered(ref, items, (k) => k.userId))
                 ListTile(
                   leading: const Icon(Icons.menu_book_outlined),
                   title: Text(k.name),

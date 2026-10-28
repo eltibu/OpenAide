@@ -6,6 +6,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import 'access_editor.dart' show ItemMenu;
 import 'prompts_api.dart';
+import 'owner_filter.dart';
 
 final promptsApiProvider = Provider<PromptsApi>(
   (ref) => PromptsApi(ref.watch(clientProvider)),
@@ -261,7 +262,10 @@ class PromptsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Prompts')),
+      appBar: AppBar(
+        title: const Text('Prompts'),
+        actions: const [OwnerFilterButton()],
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'New prompt',
         onPressed: edit,
@@ -286,7 +290,11 @@ class PromptsScreen extends ConsumerWidget {
               )
             else if (prompts.isLoading && !prompts.hasValue)
               const Center(child: CircularProgressIndicator()),
-            for (final p in prompts.value ?? const <Prompt>[])
+            for (final p in ownerFiltered(
+              ref,
+              prompts.value ?? const <Prompt>[],
+              (p) => p.userId,
+            ))
               ListTile(
                 title: Text('/${p.command}'),
                 subtitle: Text(

@@ -11,13 +11,18 @@ class Prompt {
     required this.content,
     this.active = true,
     this.tags = const [],
+    this.userId,
   });
+
+  /// Who made it.
+  final String? userId;
 
   factory Prompt.fromJson(Map j) => Prompt(
     id: '${j['id'] ?? j['command']}',
     command: '${j['command'] ?? ''}'.replaceFirst(RegExp('^/'), ''),
     name: '${j['name'] ?? j['title'] ?? ''}',
     content: '${j['content'] ?? ''}',
+    userId: j['user_id']?.toString(),
     active: j['is_active'] != false,
     tags: [for (final t in (j['tags'] as List? ?? const [])) '$t'],
   );

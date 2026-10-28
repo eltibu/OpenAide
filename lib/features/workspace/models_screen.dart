@@ -11,6 +11,7 @@ import 'access_editor.dart' show ItemMenu, readGrants, writeGrants;
 import 'models_api.dart';
 import '../chat/model_pins.dart'
     show modelLink, pinnedModelsProvider, togglePinnedModel;
+import 'owner_filter.dart';
 
 final modelsApiProvider = Provider<ModelsApi>(
   (ref) => ModelsApi(ref.watch(clientProvider)),
@@ -41,7 +42,10 @@ class ModelsScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Models')),
+      appBar: AppBar(
+        title: const Text('Models'),
+        actions: const [OwnerFilterButton()],
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'New model',
         onPressed: edit,
@@ -71,7 +75,7 @@ class ModelsScreen extends ConsumerWidget {
                     style: TextStyle(color: muted),
                   ),
                 ),
-              for (final m in items)
+              for (final m in ownerFiltered(ref, items, (m) => m.userId))
                 ListTile(
                   leading: const CircleAvatar(
                     child: Icon(Icons.auto_awesome_outlined),

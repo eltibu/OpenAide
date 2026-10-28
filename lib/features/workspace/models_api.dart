@@ -13,6 +13,7 @@ class WorkspaceModel {
   String? get baseModelId => json['base_model_id'] as String?;
   bool get active => json['is_active'] != false;
   bool get writable => json['write_access'] != false;
+  String? get userId => json['user_id']?.toString();
 
   Map<String, dynamic> get meta =>
       (json['meta'] as Map?)?.cast<String, dynamic>() ?? {};
