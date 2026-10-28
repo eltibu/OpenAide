@@ -78,6 +78,17 @@ final defaultModelProvider = FutureProvider<String?>((ref) async {
   );
 });
 
+/// The model picked with "@" in the chat box: it answers the next message
+/// only, then the chat's own model carries on, as on the web.
+class AtModel extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? id) => state = id;
+}
+
+final atModelProvider = NotifierProvider<AtModel, String?>(AtModel.new);
+
 /// The tools and skills this person may switch on in a chat.
 final toolsProvider = FutureProvider<List<Pickable>>((ref) async {
   final res = await ref.watch(clientProvider).send('GET', '/api/v1/tools/');
@@ -810,7 +821,11 @@ class ChatController extends Notifier<ChatState> {
   /// The composer's photos and files go with it; an edit keeps the
   /// original's. Returns false if nothing was sent.
   Future<bool> send(String text, {ChatMessage? editOf}) async {
-    final modelId = state.modelId;
+    // A model picked with "@" answers this one message, as on the web.
+    final at = ref.read(atModelProvider);
+    final chatModel = state.modelId;
+    final modelId = at ?? chatModel;
+    final also = at != null ? const <String>[] : state.compareIds;
     final files = editOf != null
         ? editOf.attachments
         : [
@@ -828,7 +843,7 @@ class ChatController extends Notifier<ChatState> {
             text.trim().isNotEmpty ? text.trim() : files.first.name,
           ),
           messages: {},
-          models: [modelId],
+          models: [chatModel ?? modelId],
         );
     final user = ChatMessage(
       id: _uuid.v4(),
@@ -836,15 +851,16 @@ class ChatController extends Notifier<ChatState> {
       content: text.trim(),
       parentId: editOf != null ? editOf.parentId : chat.currentId,
       extra: {
-        'models': [modelId, ...state.compareIds],
+        'models': [modelId, ...also],
         if (files.isNotEmpty) 'files': [for (final f in files) f.toJson()],
       },
     );
     chat
-      ..models = [modelId, ...state.compareIds]
+      ..models = [chatModel ?? modelId, ...state.compareIds]
       ..append(user);
     if (editOf == null) state = state.copyWith(attachments: const []);
-    await _reply(chat, user, modelId, also: state.compareIds);
+    if (at != null) ref.read(atModelProvider.notifier).set(null);
+    await _reply(chat, user, modelId, also: also);
     return true;
   }
 

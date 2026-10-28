@@ -1541,7 +1541,7 @@ class _ComposerState extends ConsumerState<_Composer> {
   }
 
   void _pickModel(String id) {
-    ref.read(chatControllerProvider.notifier).selectModel(id);
+    ref.read(atModelProvider.notifier).set(id);
     final text = _text.text.replaceFirst(RegExp(r'@\S*$'), '');
     _text.value = TextEditingValue(
       text: text,
@@ -1683,6 +1683,7 @@ class _ComposerState extends ConsumerState<_Composer> {
               )
             else ...[
               if (_at != null) _ModelMentions(query: _at!, onPick: _pickModel),
+              const _AtModelChip(),
               if (_colon != null)
                 EmojiSuggestions(query: _colon!, onPick: _pickEmoji),
               if (_hash != null) HashMentions(query: _hash!, onDone: _dropHash),
@@ -1903,6 +1904,58 @@ class _ModelChip extends ConsumerWidget {
         children: [
           Flexible(child: Text(name, overflow: TextOverflow.ellipsis)),
           const Icon(Icons.expand_more, size: 18),
+        ],
+      ),
+    );
+  }
+}
+
+/// "Talking to" the model picked with "@", with Remove, as on the web.
+class _AtModelChip extends ConsumerWidget {
+  const _AtModelChip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final id = ref.watch(atModelProvider);
+    if (id == null) return const SizedBox.shrink();
+    final name =
+        ref
+            .watch(modelsProvider)
+            .value
+            ?.where((m) => m.id == id)
+            .firstOrNull
+            ?.name ??
+        id;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+      child: Row(
+        children: [
+          Icon(Icons.alternate_email, size: 16, color: context.nexus.muted),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text.rich(
+              TextSpan(
+                children: [
+                  TextSpan(
+                    text: 'Talking to ',
+                    style: TextStyle(color: context.nexus.muted),
+                  ),
+                  TextSpan(
+                    text: name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Remove Selected Model',
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.close, size: 18),
+            onPressed: () => ref.read(atModelProvider.notifier).set(null),
+          ),
         ],
       ),
     );
@@ -2329,6 +2382,22 @@ class _FeaturesButton extends ConsumerWidget {
             builder: (context) => const _ToolsSheet(),
           ),
         ),
+        // Tools in use that need a sign-in first, as the web's chips.
+        for (final t in tools)
+          if (t.authenticated == false && activeTools.contains(t.id))
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Tooltip(
+                message: 'Click to connect',
+                child: ActionChip(
+                  visualDensity: VisualDensity.compact,
+                  avatar: const Icon(Icons.link, size: 16),
+                  label: Text(t.name),
+                  onPressed: () =>
+                      reconnectTool(context, ref, id: t.id, name: t.name),
+                ),
+              ),
+            ),
         // What's switched on, at a glance, as in the web UI's text box.
         if (on('web_search')) Icon(Icons.language, size: 20, color: accent),
         if (on('image_generation'))

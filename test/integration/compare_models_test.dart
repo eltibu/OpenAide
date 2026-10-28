@@ -85,6 +85,20 @@ void main() {
       await controller.open(saved.id);
       expect(now().compareIds, ['fake2']);
       await client.deleteChat(saved.id);
+
+      // "@" a model: it answers that one message, then the chat's own.
+      controller
+        ..newChat()
+        ..selectModel('fake')
+        ..setCompare(const []);
+      container.read(atModelProvider.notifier).set('fake2');
+      await controller.send('Just you');
+      expect(now().messages.last.model, 'fake2');
+      expect(container.read(atModelProvider), isNull);
+      expect(now().modelId, 'fake');
+      await controller.send('And now');
+      expect(now().messages.last.model, 'fake');
+      await client.deleteChat(now().chat!.id);
     },
     skip: skip,
     timeout: const Timeout(Duration(minutes: 2)),

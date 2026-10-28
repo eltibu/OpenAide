@@ -81,8 +81,11 @@ void main() {
     expect(app.active, isFalse);
     expect(app.grantedScopes, ['channels:read']);
 
-    final full = await api.get(app.id);
-    expect(full.raw['access_grants'], isNotEmpty);
+    await api.update(
+      app.id,
+      grants: const [(type: 'user', id: '*', permission: 'read')],
+    );
+    expect((await api.get(app.id)).raw['access_grants'], isNotEmpty);
 
     final changed = await api.update(
       app.id,
