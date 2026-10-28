@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Uint8List;
@@ -210,6 +212,73 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
     }
   }
 
+  /// A folder from the phone, as the web's Upload directory and Sync
+  /// directory.
+  Future<void> _addFolder({required bool sync}) async {
+    final from = await FilePicker.getDirectoryPath();
+    if (from == null || !mounted) return;
+    if (sync) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: const Text('Sync directory?'),
+          content: const Text(
+            'This knowledge base will match the folder: new and changed '
+            "files are uploaded, and files that aren't in the folder are "
+            'removed from it.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: const Text('Sync'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final status = ValueNotifier('Reading the folder…');
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(days: 1),
+        content: ValueListenableBuilder(
+          valueListenable: status,
+          builder: (_, v, _) => Text(v),
+        ),
+      ),
+    );
+    try {
+      final r = await _api.addFolder(
+        _k.id,
+        Directory(from),
+        sync: sync,
+        under: [for (final f in _listing?.path ?? const []) f.name].join('/'),
+        underId: _folder,
+        progress: (s) => status.value = s,
+      );
+      messenger.hideCurrentSnackBar();
+      if (mounted) {
+        _say(
+          context,
+          r.added + r.modified + r.deleted + r.unchanged + r.failed == 0
+              ? "Nothing in that folder could be read. Android may keep it "
+                    'private; try picking the files instead.'
+              : '${sync ? 'Sync' : 'Upload'} done: ${r.summary}',
+        );
+      }
+    } catch (e) {
+      messenger.hideCurrentSnackBar();
+      if (mounted) _say(context, "Couldn't ${sync ? 'sync' : 'upload'}: $e");
+    }
+    status.dispose();
+    await _load();
+  }
+
   Future<void> _addWebpage() async {
     final url = TextEditingController();
     final ok = await showDialog<bool>(
@@ -336,6 +405,17 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
               onTap: () => Navigator.pop(sheet, 'files'),
             ),
             ListTile(
+              leading: const Icon(Icons.drive_folder_upload_outlined),
+              title: const Text('Upload directory'),
+              onTap: () => Navigator.pop(sheet, 'dir'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.sync),
+              title: const Text('Sync directory'),
+              subtitle: const Text('Make this knowledge match a folder'),
+              onTap: () => Navigator.pop(sheet, 'sync'),
+            ),
+            ListTile(
               leading: const Icon(Icons.language),
               title: const Text('Add webpage'),
               onTap: () => Navigator.pop(sheet, 'web'),
@@ -352,6 +432,10 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
     switch (pick) {
       case 'files':
         await _add();
+      case 'dir':
+        await _addFolder(sync: false);
+      case 'sync':
+        await _addFolder(sync: true);
       case 'web':
         await _addWebpage();
       case 'text':

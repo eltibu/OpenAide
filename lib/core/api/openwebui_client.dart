@@ -649,6 +649,7 @@ class OpenWebUiClient {
     String filename, {
     String? contentType,
     bool process = true,
+    Map<String, dynamic>? metadata,
   }) async {
     final url = _uri('/api/v1/files/', {'process': '$process'});
     final res = await http.Response.fromStream(
@@ -656,6 +657,9 @@ class OpenWebUiClient {
         final req = http.MultipartRequest('POST', url)
           ..headers.addAll(authHeaders)
           ..headers['Accept'] = 'application/json'
+          ..fields.addAll({
+            if (metadata != null) 'metadata': jsonEncode(metadata),
+          })
           ..files.add(
             http.MultipartFile.fromBytes(
               'file',
