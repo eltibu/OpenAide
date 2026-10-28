@@ -86,8 +86,10 @@ typedef ModelTurn = Stream<AiChunk> Function({
   required List<AiToolTurn> turns,
 });
 
-/// The longest tool result sent back, so one page can't fill the context.
+/// The longest tool result sent back, so one page can't fill the context;
+/// models on the phone have much smaller contexts.
 const maxToolOutput = 24000;
+const maxPromptToolOutput = 4000;
 
 /// Runs [turn] with [tools] until the model answers without calling one,
 /// or [maxSteps] rounds of tools have run.
@@ -174,10 +176,11 @@ Stream<AgentEvent> runAgent({
           failed = true;
         }
       }
-      if (output.length > maxToolOutput) {
+      final most = nativeTools ? maxToolOutput : maxPromptToolOutput;
+      if (output.length > most) {
         output =
-            '${output.substring(0, maxToolOutput)}\n\n'
-            '[Cut: ${output.length - maxToolOutput} more characters]';
+            '${output.substring(0, most)}\n\n'
+            '[Cut: ${output.length - most} more characters]';
       }
       results.add(output);
       yield AgentToolDone(c.id, output, failed: failed);
@@ -196,7 +199,7 @@ class _Call {
 String promptToolInstructions(List<AgentTool> tools) {
   final list = [
     for (final t in tools)
-      '- ${t.name}: ${t.description}\n'
+      '- ${t.name}: ${_firstSentence(t.description)}\n'
           '  arguments: ${jsonEncode(_compactSchema(t.parameters))}',
   ].join('\n');
   return '# Tools\n\n'
@@ -206,6 +209,12 @@ String promptToolInstructions(List<AgentTool> tools) {
       '</tool_call>\n'
       'The result comes back in <tool_response>. Then answer the user '
       'normally. Use a tool only when it helps; never make up a result.';
+}
+
+/// Small models get each tool's first sentence only.
+String _firstSentence(String text) {
+  final m = RegExp(r'^.*?[.!?](?=\s|$)', dotAll: true).firstMatch(text);
+  return (m?[0] ?? text).trim();
 }
 
 /// Just the argument names, types and what they're for, to keep the
