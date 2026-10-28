@@ -20,6 +20,7 @@ class MainActivity : FlutterActivity() {
     private var notifier: ReplyNotifier? = null
     private var launches: PhoneLaunch? = null
     private var actions: PhoneActions? = null
+    private var localLlm: LocalLlm? = null
     private var speech: MediaPlayer? = null
     private var speechDone: MethodChannel.Result? = null
 
@@ -72,6 +73,11 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        // Models on the phone, see LocalLlm.
+        val llm = localLlm ?: LocalLlm(applicationContext).also { localLlm = it }
+        MethodChannel(messenger, "nexus/local_llm").setMethodCallHandler(llm)
+        EventChannel(messenger, "nexus/local_llm/reply").setStreamHandler(llm)
 
         // Reply notifications, see ReplyNotifier.
         val replies = notifier ?: ReplyNotifier(this).also { notifier = it }

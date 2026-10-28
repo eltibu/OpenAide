@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/search_field.dart';
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -111,13 +112,8 @@ class _UserChatsState extends ConsumerState<UserChatsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: TextField(
-              decoration: const InputDecoration(
-                hintText: 'Search chats',
-                prefixIcon: Icon(Icons.search),
-                isDense: true,
-                border: OutlineInputBorder(),
-              ),
+            child: SearchField(
+              hint: 'Search chats',
               onChanged: (v) {
                 _query = v.trim();
                 _load();

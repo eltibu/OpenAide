@@ -27,6 +27,7 @@ import 'integrations_screen.dart';
 import 'pipelines_screen.dart';
 import 'user_extras.dart';
 import '../workspace/code_editor.dart';
+import '../../core/widgets/search_field.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -227,11 +228,8 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-            child: TextField(
-              decoration: const InputDecoration(
-                prefixIcon: Icon(Icons.search),
-                hintText: 'Search people',
-              ),
+            child: SearchField(
+              hint: 'Search people',
               onSubmitted: (v) => setState(() => _query = v.trim()),
               onChanged: (v) {
                 if (v.isEmpty) setState(() => _query = '');

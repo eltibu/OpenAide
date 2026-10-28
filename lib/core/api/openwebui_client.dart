@@ -18,8 +18,31 @@ class ApiException implements Exception {
   final Uri? redirectTo;
 
   @override
-  String toString() =>
-      statusCode >= 400 ? 'Open WebUI error $statusCode: $message' : message;
+  String toString() => friendlyApiError(statusCode, message);
+}
+
+/// What an error from the server says to a person: the server's own
+/// sentence when it gave one, else a plain line for the status code.
+String friendlyApiError(int statusCode, String message) {
+  final text = message.trim();
+  final readable =
+      text.isNotEmpty &&
+      text.length <= 300 &&
+      !text.startsWith('<') &&
+      !text.startsWith('{') &&
+      text != 'null';
+  if (statusCode < 400) return text;
+  if (readable) return text;
+  return switch (statusCode) {
+    401 => 'You were signed out of the server. Sign in again.',
+    403 => "Your account isn't allowed to do that on this server.",
+    404 => "The server doesn't have that, or it was deleted.",
+    408 || 504 => 'The server took too long to answer. Try again.',
+    413 => 'That is too big for the server to take.',
+    429 => 'The server is busy. Wait a moment and try again.',
+    >= 500 => 'The server ran into a problem ($statusCode). Try again.',
+    _ => 'The server said no ($statusCode).',
+  };
 }
 
 /// Thin client over the Open WebUI REST API.

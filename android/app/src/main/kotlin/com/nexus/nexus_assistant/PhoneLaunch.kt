@@ -69,7 +69,7 @@ class PhoneLaunch(private val activity: Activity) : MethodChannel.MethodCallHand
             mkdirs()
         }
         val files = mutableListOf<String>()
-        for ((i, uri) in uris.take(MAX_FILES).withIndex()) {
+        for ((i, uri) in uris.filter(::isOutside).take(MAX_FILES).withIndex()) {
             try {
                 val name = displayName(uri) ?: "shared-$i"
                 val out = File(File(dir, "$i").apply { mkdirs() }, name.replace('/', '_'))
@@ -86,6 +86,17 @@ class PhoneLaunch(private val activity: Activity) : MethodChannel.MethodCallHand
             intent.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString(),
         ).filter { it.isNotBlank() }.distinct().joinToString("\n\n")
         return mapOf("kind" to "share", "text" to text, "files" to files)
+    }
+
+    /**
+     * Only files another app hands over. A share naming this app's own files
+     * (a file:// path, or one of its own providers) is dropped: the app can
+     * read its private files, so another app could use a share to slip the
+     * app's sign-ins into a chat.
+     */
+    private fun isOutside(uri: Uri): Boolean = when (uri.scheme) {
+        "content" -> uri.authority?.startsWith(activity.packageName) != true
+        else -> false
     }
 
     private fun displayName(uri: Uri): String? {

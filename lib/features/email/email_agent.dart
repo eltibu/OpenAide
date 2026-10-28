@@ -20,6 +20,9 @@ const _uuid = Uuid();
 const emailChatTitle = 'Email (OpenAide app)';
 const emailChatKey = 'nexusEmailChatId';
 
+/// Chats the app works in on its own (Email), kept out of reply toasts.
+final appWorkingChats = <String>{};
+
 /// Where the email chat keeps the emails the app has seen.
 const emailStoreKey = 'nexusEmails';
 
@@ -483,7 +486,9 @@ class EmailAgent implements MailSource {
     try {
       final ui = (await client.userSettings())['ui'];
       final id = ui is Map ? ui[emailChatKey] : null;
-      return id is String && id.isNotEmpty ? id : null;
+      if (id is! String || id.isEmpty) return null;
+      appWorkingChats.add(id);
+      return id;
     } catch (_) {
       return null;
     }
@@ -683,6 +688,7 @@ class EmailAgent implements MailSource {
   }
 
   Future<void> _remember(String id) async {
+    appWorkingChats.add(id);
     try {
       await client.renameChat(id, emailChatTitle);
       await client.send(
@@ -707,8 +713,8 @@ class EmailAgent implements MailSource {
     }
     if (json == null) {
       throw EmailAgentError(
-        'OpenAide answered in words instead of the list the app needs:\n\n'
-        '${text.length > 400 ? '${text.substring(0, 400)}…' : text}',
+        "OpenAide's answer wasn't the email list the app needs. Try again, "
+        'and check that its model can use your email tool.',
       );
     }
     return json;
