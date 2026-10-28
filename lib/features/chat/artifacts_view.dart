@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -228,6 +231,44 @@ class ArtifactScreen extends ConsumerStatefulWidget {
   ConsumerState<ArtifactScreen> createState() => _ArtifactScreenState();
 }
 
+/// Script run in each artifact page, for Settings > Interface's iframe
+/// sandbox switches: without forms, submitting does nothing; with
+/// downloads, a download link hands its file to the app.
+String artifactGuards({required bool forms, required bool downloads}) => [
+  if (!forms)
+    "document.addEventListener('submit', function (e) { e.preventDefault(); "
+        "e.stopPropagation(); }, true);",
+  if (downloads)
+    '''
+document.addEventListener('click', function (e) {
+  var a = e.target && e.target.closest && e.target.closest('a[download]');
+  if (!a || !window.NexusDownload) return;
+  e.preventDefault();
+  var name = a.getAttribute('download') || 'download';
+  fetch(a.href).then(function (r) { return r.blob(); }).then(function (b) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      NexusDownload.postMessage(JSON.stringify({name: name, data: reader.result}));
+    };
+    reader.readAsDataURL(b);
+  });
+}, true);
+''',
+].join('\n');
+
+/// The name and bytes a page sent: {name, data: a data: URL}.
+(String, Uint8List) downloadFromPage(String message) {
+  final m = jsonDecode(message) as Map;
+  final data = '${m['data']}';
+  final comma = data.indexOf(',');
+  final body = data.substring(comma + 1);
+  final bytes = data.substring(0, comma).endsWith(';base64')
+      ? base64Decode(body)
+      : utf8.encode(Uri.decodeComponent(body));
+  final name = '${m['name'] ?? ''}'.trim();
+  return (name.isEmpty ? 'download' : name, Uint8List.fromList(bytes));
+}
+
 class _ArtifactScreenState extends ConsumerState<ArtifactScreen> {
   late int _index = widget.index;
   bool _code = false;
@@ -243,8 +284,15 @@ class _ArtifactScreenState extends ConsumerState<ArtifactScreen> {
           : JavaScriptMode.unrestricted,
     )
     ..setBackgroundColor(Colors.white)
+    ..addJavaScriptChannel('NexusDownload', onMessageReceived: _download)
     ..setNavigationDelegate(
       NavigationDelegate(
+        onPageFinished: (_) => _web.runJavaScript(
+          artifactGuards(
+            forms: _ui['iframeSandboxAllowForms'] != false,
+            downloads: _ui['iframeSandboxAllowDownloads'] != false,
+          ),
+        ),
         // Links stay inside the artifact, as in the web UI.
         onNavigationRequest: (r) =>
             r.url.startsWith('about:') || r.url.startsWith('data:')
@@ -254,6 +302,20 @@ class _ArtifactScreenState extends ConsumerState<ArtifactScreen> {
     );
 
   Artifact get _artifact => widget.all[_index];
+
+  /// A file the page offers to download, saved where the person picks.
+  Future<void> _download(JavaScriptMessage m) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final (name, bytes) = downloadFromPage(m.message);
+      final saved = await FilePicker.saveFile(fileName: name, bytes: bytes);
+      if (saved != null) {
+        messenger.showSnackBar(SnackBar(content: Text('Saved $name')));
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text("Couldn't save: $e")));
+    }
+  }
 
   @override
   void initState() {

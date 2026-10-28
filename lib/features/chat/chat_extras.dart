@@ -8,6 +8,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
 
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
@@ -26,6 +28,37 @@ String chatAsMarkdown(Chat chat) => [
     '${m.role == 'user' ? '**You**' : '**${m.model ?? 'Nexus'}**'}\n\n'
         '${m.content}',
 ].join('\n\n---\n\n');
+
+/// The chat as a plain PDF: each message's role and text, unstyled.
+Future<Uint8List> plainChatPdf(Chat chat, {pw.ThemeData? theme}) async {
+  final doc = pw.Document(title: chat.title, theme: theme);
+  doc.addPage(
+    pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.all(40),
+      build: (_) => [
+        for (final m in chat.thread)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(bottom: 10),
+            child: pw.Text(
+              '${m.role}: ${m.content}',
+              style: const pw.TextStyle(fontSize: 10),
+            ),
+          ),
+      ],
+    ),
+  );
+  return doc.save();
+}
+
+Future<Object?> _optionalUi(WidgetRef ref, String key) async {
+  try {
+    final ui = (await ref.read(userSettingsProvider.future))['ui'];
+    return ui is Map ? ui[key] : null;
+  } catch (_) {
+    return null;
+  }
+}
 
 /// A file name made from the chat's title.
 String chatFileName(String title, String ext) {
@@ -58,11 +91,15 @@ Future<void> exportChat(
         'application/json',
       ),
       'pdf' => (
-        await toPdf(
-          chat.title,
-          chatAsMarkdown(chat),
-          theme: await pdfTheme(rootBundle.load),
-        ),
+        // Settings > Interface > Stylized PDF Export, as on the web: off
+        // gives plain text, one "role: message" after another.
+        await _optionalUi(ref, 'stylizedPdfExport') == false
+            ? await plainChatPdf(chat, theme: await pdfTheme(rootBundle.load))
+            : await toPdf(
+                chat.title,
+                chatAsMarkdown(chat),
+                theme: await pdfTheme(rootBundle.load),
+              ),
         'application/pdf',
       ),
       _ => (Uint8List.fromList(utf8.encode(chatAsText(chat))), 'text/plain'),

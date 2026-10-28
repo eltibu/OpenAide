@@ -9,11 +9,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../studio/office_preview.dart';
+import 'chat_controller.dart' show userSettingsProvider;
 
 String fileSize(num? bytes) {
   if (bytes == null) return '';
@@ -208,10 +210,22 @@ class _FileDetailsScreenState extends ConsumerState<FileDetailsScreen> {
                       ),
                   ],
                 ),
-                SelectableText(
-                  content.isEmpty ? 'No content' : shown,
-                  style: TextStyle(color: content.isEmpty ? muted : null),
-                ),
+                // Settings > Interface > Render Markdown in Previews.
+                if (content.isNotEmpty &&
+                    (ref.watch(userSettingsProvider).value?['ui']
+                            as Map?)?['renderMarkdownInPreviews'] !=
+                        false)
+                  MarkdownBlock(
+                    data: shown,
+                    config: Theme.of(context).brightness == Brightness.dark
+                        ? MarkdownConfig.darkConfig
+                        : MarkdownConfig.defaultConfig,
+                  )
+                else
+                  SelectableText(
+                    content.isEmpty ? 'No content' : shown,
+                    style: TextStyle(color: content.isEmpty ? muted : null),
+                  ),
                 if (!_all && content.length > filePreviewLength)
                   Align(
                     alignment: Alignment.centerLeft,

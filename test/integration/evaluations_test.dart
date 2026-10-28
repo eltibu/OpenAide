@@ -33,13 +33,22 @@ void main() {
         },
       },
     ) as Map;
-    final list = await client.send(
-      'GET',
-      '$base/feedbacks/list',
-      query: {'page': '1', 'model_id': 'fake'},
-    ) as Map;
-    final item =
-        (list['items'] as List).firstWhere((f) => f['id'] == made['id']) as Map;
+    // Earlier runs leave feedback behind, so look through the pages.
+    Map? item;
+    for (var page = 1; item == null && page <= 50; page++) {
+      final list = await client.send(
+        'GET',
+        '$base/feedbacks/list',
+        query: {'page': '$page', 'model_id': 'fake'},
+      ) as Map;
+      final items = list['items'] as List;
+      if (items.isEmpty) break;
+      item = items.firstWhere(
+        (f) => f['id'] == made['id'],
+        orElse: () => null,
+      ) as Map?;
+    }
+    item!;
     expect((item['data'] as Map)['reason'], 'Not helpful');
     expect((item['user'] as Map)['name'], isNotEmpty);
     expect(
