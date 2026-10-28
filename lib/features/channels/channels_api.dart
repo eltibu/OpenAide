@@ -426,6 +426,19 @@ class ChannelsApi {
     body: {'user_ids': userIds},
   );
 
+  /// The apps (Admin > Apps) that have joined the channel, as the server
+  /// lists them.
+  Future<List<Map<String, dynamic>>> apps(String id) async => [
+    for (final a in await client.send('GET', '${_c(id)}/apps') as List? ?? [])
+      if (a is Map) a.cast<String, dynamic>(),
+  ];
+
+  Future<void> inviteApp(String id, String appId) =>
+      client.send('POST', '${_c(id)}/apps', body: {'app_id': appId});
+
+  Future<void> removeApp(String id, String appId) =>
+      client.send('DELETE', '${_c(id)}/apps/${Uri.encodeComponent(appId)}');
+
   /// Renames a channel; the rest of it stays as it was.
   Future<void> update(
     Channel c, {

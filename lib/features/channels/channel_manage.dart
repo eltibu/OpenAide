@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../admin/apps_screen.dart' show AppsApi, ServerApp;
+import '../chat/chat_controller.dart' show serverConfigProvider;
 import 'channels_api.dart';
 
 void _say(BuildContext context, String text) =>
@@ -247,8 +249,116 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
     widget.channel.id,
   );
 
-  void _reload() =>
-      setState(() => _members = widget.api.members(widget.channel.id));
+  Future<List<ServerApp>> _apps = Future.value(const []);
+
+  /// Set from the server's features as the screen builds.
+  bool _appsOn = false;
+
+  Future<List<ServerApp>> _loadApps() async {
+    if (!_appsOn) return const [];
+    return [
+      for (final a in await widget.api.apps(widget.channel.id)) ServerApp(a),
+    ];
+  }
+
+  void _reload() => setState(() {
+    _members = widget.api.members(widget.channel.id);
+    _apps = _loadApps();
+  });
+
+  /// Invites an app the user can use and that hasn't joined yet.
+  Future<void> _addApp(List<ServerApp> joined) async {
+    final List<ServerApp> all;
+    try {
+      all = await AppsApi(widget.api.client).list();
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+      return;
+    }
+    final have = {for (final a in joined) a.id};
+    final open = [
+      for (final a in all)
+        if (a.active && a.configured && !have.contains(a.id)) a,
+    ];
+    if (!mounted) return;
+    if (open.isEmpty) {
+      _say(context, 'No other apps to add');
+      return;
+    }
+    final pick = await showModalBottomSheet<ServerApp>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            for (final a in open)
+              ListTile(
+                leading: _AppAvatar(a),
+                title: Text(a.name),
+                subtitle: _appBlurb(a),
+                onTap: () => Navigator.pop(context, a),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (pick == null) return;
+    try {
+      await widget.api.inviteApp(widget.channel.id, pick.id);
+      _reload();
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
+  Future<void> _removeApp(ServerApp a) async {
+    try {
+      await widget.api.removeApp(widget.channel.id, a.id);
+      _reload();
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
+  Widget _appsSection(bool manage) => FutureBuilder<List<ServerApp>>(
+    future: _apps,
+    builder: (context, snap) {
+      final apps = snap.data ?? const <ServerApp>[];
+      if (!_appsOn || (apps.isEmpty && !manage)) {
+        return const SizedBox.shrink();
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text('Apps', style: Theme.of(context).textTheme.titleSmall),
+          ),
+          if (manage)
+            ListTile(
+              leading: const CircleAvatar(child: Icon(Icons.apps)),
+              title: const Text('Add an app'),
+              onTap: snap.hasData ? () => _addApp(apps) : null,
+            ),
+          for (final a in apps)
+            ListTile(
+              leading: _AppAvatar(a),
+              title: Text(a.name),
+              subtitle: _appBlurb(a),
+              trailing: manage
+                  ? IconButton(
+                      tooltip: 'Remove app',
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: () => _removeApp(a),
+                    )
+                  : null,
+            ),
+        ],
+      );
+    },
+  );
 
   Future<void> _add(List<ChannelMember> now) async {
     final u = await pickPerson(
@@ -277,6 +387,15 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
   @override
   Widget build(BuildContext context) {
     final manage = canManage(ref, widget.channel) && !widget.channel.isDm;
+    final appsOn =
+        !widget.channel.isDm &&
+        (ref.watch(serverConfigProvider).value?['features']
+                as Map?)?['enable_apps'] ==
+            true;
+    if (appsOn != _appsOn) {
+      _appsOn = appsOn;
+      _apps = _loadApps();
+    }
     final me = ref.read(sessionProvider).value?.user?['id'];
     return Scaffold(
       appBar: AppBar(title: const Text('Members')),
@@ -315,10 +434,38 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
                         )
                       : null,
                 ),
+              _appsSection(manage),
             ],
           );
         },
       ),
+    );
+  }
+}
+
+Widget? _appBlurb(ServerApp a) {
+  final d = a.manifest?['description'];
+  return d is String && d.isNotEmpty
+      ? Text(d, maxLines: 2, overflow: TextOverflow.ellipsis)
+      : null;
+}
+
+class _AppAvatar extends StatelessWidget {
+  const _AppAvatar(this.app);
+  final ServerApp app;
+
+  @override
+  Widget build(BuildContext context) {
+    final img = app.image;
+    final letter = Text(app.name.isEmpty ? '?' : app.name.characters.first);
+    if (img == null || !img.startsWith('http') && !img.startsWith('data:')) {
+      return CircleAvatar(child: letter);
+    }
+    return CircleAvatar(
+      foregroundImage: img.startsWith('data:')
+          ? MemoryImage(UriData.parse(img).contentAsBytes())
+          : NetworkImage(img) as ImageProvider,
+      child: letter,
     );
   }
 }
