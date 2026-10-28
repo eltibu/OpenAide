@@ -5,7 +5,7 @@ import 'package:nexus_assistant/core/models/chat.dart';
 import 'package:nexus_assistant/features/chat/attachments.dart';
 
 void main() {
-  final client = OpenWebUiClient(baseUrl: 'http://192.168.1.209/chat')
+  final client = OpenWebUiClient(baseUrl: 'http://192.168.1.20/chat')
     ..token = 't';
 
   test('a generated picture loads from its file, signed in', () {
@@ -17,7 +17,7 @@ void main() {
     expect(a.fileId, 'abc-123');
     expect(
       attachmentUri(a, client).toString(),
-      'http://192.168.1.209/chat/api/v1/files/abc-123/content',
+      'http://192.168.1.20/chat/api/v1/files/abc-123/content',
     );
     final image = attachmentImage(a, client) as NetworkImage;
     expect(image.headers?['Authorization'], 'Bearer t');
@@ -44,7 +44,7 @@ void main() {
 
   test('markdown pictures resolve server paths and data URLs', () {
     final server = markdownImage('/static/x.png', client) as NetworkImage;
-    expect(server.url, 'http://192.168.1.209/chat/static/x.png');
+    expect(server.url, 'http://192.168.1.20/chat/static/x.png');
     expect(server.headers?['Authorization'], 'Bearer t');
     final other =
         markdownImage('https://example.com/a.png', client) as NetworkImage;

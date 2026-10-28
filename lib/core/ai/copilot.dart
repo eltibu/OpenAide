@@ -61,7 +61,7 @@ Future<CopilotSession> copilotSession(
     final api = (json['endpoints'] as Map?)?['api'] as String?;
     final expires = (json['expires_at'] as num?)?.toInt();
     final session = CopilotSession(
-      api ?? _defaultApi,
+      copilotApiBase(api),
       '${json['token']}',
       expires == null
           ? DateTime.now().add(const Duration(minutes: 20))
@@ -76,11 +76,28 @@ Future<CopilotSession> copilotSession(
     );
   }
   // No exchange for this app: the GitHub token goes to Copilot directly.
+  // Kept briefly, so a passing GitHub error doesn't stick.
   return _sessions[githubToken] = CopilotSession(
     _defaultApi,
     githubToken,
-    DateTime.now().add(const Duration(days: 365)),
+    DateTime.now().add(const Duration(minutes: 15)),
   );
+}
+
+/// The API address GitHub names for this account, used only when it's an
+/// https Copilot host, so the token never goes anywhere else.
+String copilotApiBase(String? api) {
+  final uri = api == null ? null : Uri.tryParse(api);
+  final host = uri?.host ?? '';
+  final ok =
+      uri != null &&
+      uri.scheme == 'https' &&
+      !uri.hasPort &&
+      uri.userInfo.isEmpty &&
+      (host == 'githubcopilot.com' || host.endsWith('.githubcopilot.com'));
+  if (!ok) return _defaultApi;
+  final base = '${uri.scheme}://$host${uri.path}';
+  return base.endsWith('/') ? base.substring(0, base.length - 1) : base;
 }
 
 /// Forget the Copilot token so the next request asks for a fresh one.

@@ -3,9 +3,11 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/markdown_style.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_screen.dart' show readingInset;
 import '../chat/request_options.dart';
@@ -54,6 +56,7 @@ final emailAgentProvider = FutureProvider<MailSource>((ref) async {
 
   return EmailAgent(
     ref.watch(clientProvider),
+    socket: ref.watch(chatSocketProvider),
     model: model,
     options: requestOptions(
       models.where((m) => m.id == model).firstOrNull,
@@ -414,6 +417,7 @@ class _EmailList extends ConsumerWidget {
           96,
         ),
         children: [
+          if (!direct) const _ConnectGmail(),
           if (box.checking && emails.isNotEmpty)
             const LinearProgressIndicator(minHeight: 2)
           else if (box.checkedAt != null && emails.isNotEmpty)
@@ -669,6 +673,9 @@ class _EmailViewState extends ConsumerState<EmailView> {
   OpenedEmail? _o;
   Object? _error;
 
+  /// Still being read: [_o] is what has come so far.
+  bool _reading = false;
+
   @override
   void initState() {
     super.initState();
@@ -684,15 +691,26 @@ class _EmailViewState extends ConsumerState<EmailView> {
   Future<void> _load({bool fresh = false}) async {
     setState(() {
       _error = null;
+      _reading = true;
       if (fresh) _o = null;
     });
     try {
       final box = await ref.read(emailAgentProvider.future);
       final kept = fresh ? null : await box.keptOpen(_email);
-      final o = kept ?? await box.openAndKeep(_email);
+      final o =
+          kept ??
+          await box.openAndKeep(
+            _email,
+            // What OpenAide has read so far shows while it reads on.
+            onProgress: (partial) {
+              if (mounted) setState(() => _o = partial);
+            },
+          );
       if (mounted) setState(() => _o = o);
     } catch (e) {
       if (mounted) setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _reading = false);
     }
   }
 
@@ -784,7 +802,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
           ),
         ],
       ),
-      bottomNavigationBar: o == null
+      bottomNavigationBar: o == null || _reading
           ? null
           : SafeArea(
               child: Padding(
@@ -828,8 +846,9 @@ class _EmailViewState extends ConsumerState<EmailView> {
               ),
               children: [
                 _EmailHeader(email: e, message: first, onStar: _star),
-                if (o == null && _error == null) ...[
+                if (_reading && _error == null)
                   const LinearProgressIndicator(minHeight: 2),
+                if (o == null && _error == null) ...[
                   if (e.snippet.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.all(16),
@@ -889,10 +908,13 @@ class _EmailViewState extends ConsumerState<EmailView> {
         if (m.attachments.isNotEmpty) _Attachments(m.attachments),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: SelectableText(
-            m.body,
-            style: const TextStyle(fontSize: 15, height: 1.45),
-          ),
+          // What OpenAide read comes back as Markdown, links and all.
+          child: ref.read(mailSourceProvider).value == nexusMailSource
+              ? MarkdownBlock(data: m.body, config: nexusMarkdown(context))
+              : SelectableText(
+                  m.body,
+                  style: const TextStyle(fontSize: 15, height: 1.45),
+                ),
         ),
       ],
       if (o.suggestedReply.isNotEmpty)
@@ -1428,6 +1450,48 @@ class _SourceMenu extends ConsumerWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Through OpenAide every email waits for the AI; asks to connect the
+/// mailbox itself, which opens mail at once and as its sender laid it out.
+class _ConnectGmail extends StatelessWidget {
+  const _ConnectGmail();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      elevation: 0,
+      color: scheme.primaryContainer.withValues(alpha: 0.5),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Emails open slowly here because OpenAide reads each one '
+              'first. Connect your Gmail for instant email that looks like '
+              'Gmail.',
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.tonalIcon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const AddMailAccount(),
+                  ),
+                ),
+                icon: const Icon(Icons.bolt, size: 18),
+                label: const Text('Connect Gmail'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
