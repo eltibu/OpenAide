@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -896,6 +897,7 @@ class _ComposerState extends ConsumerState<_Composer> {
       ref.read(composerDraftProvider.notifier).clear();
     });
     _text.addListener(() {
+      _pastedAsFile();
       final has = _text.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
       // "/" at the start offers the person's saved prompts, as on the web.
@@ -916,6 +918,36 @@ class _ComposerState extends ConsumerState<_Composer> {
   }
 
   bool _hasText = false;
+  String _before = '';
+
+  /// Settings > Interface > Paste large text as file: a paste of more than
+  /// 1,000 characters becomes an attached text file, as on the web. Only a
+  /// real paste (what's on the clipboard) counts, not text the app fills in.
+  void _pastedAsFile() {
+    final now = _text.text;
+    final before = _before;
+    _before = now;
+    if (now.length - before.length <= pastedTextLimit) return;
+    final ui = ref.read(userSettingsProvider).value?['ui'] as Map?;
+    if (ui?['largeTextAsFile'] != true) return;
+    final inserted = insertedText(before, now);
+    if (inserted.length <= pastedTextLimit) return;
+    Clipboard.getData(Clipboard.kTextPlain).then((clip) {
+      if (!mounted || clip?.text != inserted || _text.text != now) return;
+      _text.value = TextEditingValue(
+        text: before,
+        selection: TextSelection.collapsed(offset: before.length),
+      );
+      ref
+          .read(chatControllerProvider.notifier)
+          .attach(
+            utf8.encode(inserted),
+            'Pasted_Text_${DateTime.now().millisecondsSinceEpoch}.txt',
+            mimeType: 'text/plain',
+          );
+    });
+  }
+
   bool _recording = false;
   String? _slash;
   String? _at;
@@ -1829,6 +1861,11 @@ class _TerminalChip extends ConsumerWidget {
         chat
           ..setTerminal(choice)
           ..setFeature('code_interpreter', false);
+        // Settings > Interface > Show files on terminal select.
+        final ui = ref.read(userSettingsProvider).value?['ui'] as Map?;
+        if (ui?['showFilesOnTerminalSelect'] != false && choice != terminal?.id) {
+          showChatPanel(context, tab: 1, serverId: choice);
+        }
     }
   }
 }

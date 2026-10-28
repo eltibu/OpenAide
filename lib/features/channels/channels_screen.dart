@@ -9,7 +9,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart' show Attachment;
-import '../chat/attachments.dart' show MessageAttachments;
+import '../chat/attachments.dart' show MessageAttachments, imageLimits;
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import 'channel_manage.dart';
@@ -332,6 +332,10 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
       ),
     );
     if (choice == null) return;
+    final (maxW, maxH) = imageLimits(
+      ref.read(userSettingsProvider).value?['ui'] as Map?,
+      channels: true,
+    );
     final picker = ImagePicker();
     final picked = <(List<int>, String, String?)>[];
     try {
@@ -344,14 +348,14 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
             ? [
                 ?await picker.pickImage(
                   source: ImageSource.camera,
-                  maxWidth: 2048,
-                  maxHeight: 2048,
+                  maxWidth: maxW,
+                  maxHeight: maxH,
                   imageQuality: 85,
                 ),
               ]
             : await picker.pickMultiImage(
-                maxWidth: 2048,
-                maxHeight: 2048,
+                maxWidth: maxW,
+                maxHeight: maxH,
                 imageQuality: 85,
               );
         for (final p in photos) {

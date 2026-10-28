@@ -482,7 +482,16 @@ class ChatController extends Notifier<ChatState> {
         name: name,
         isImage: isImage,
         bytes: isImage ? bytes : null,
-        uploaded: Attachment.uploaded(uploaded, size: bytes.length),
+        uploaded: Attachment.uploaded(
+          uploaded,
+          size: bytes.length,
+          // Settings > Interface > Using entire document.
+          fullContext:
+              !isImage &&
+              (ref.read(userSettingsProvider).value?['ui']
+                      as Map?)?['defaultUploadContext'] ==
+                  'full',
+        ),
         warning: warning,
       );
     } catch (e) {

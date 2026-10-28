@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -90,7 +91,11 @@ class AttachButton extends ConsumerWidget {
       }
       final controller = ref.read(chatControllerProvider.notifier);
       try {
-        await _pick(choice, controller);
+        await _pick(
+          choice,
+          controller,
+          ref.read(userSettingsProvider).value?['ui'] as Map?,
+        );
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context)
@@ -100,10 +105,10 @@ class AttachButton extends ConsumerWidget {
     },
   );
 
-  Future<void> _pick(String choice, ChatController controller) async {
+  Future<void> _pick(String choice, ChatController controller, Map? ui) async {
     // Photos are scaled down like the web UI's compression, so they upload
     // quickly over mobile data and stay within what models accept.
-    const maxSide = 2048.0;
+    final (maxW, maxH) = imageLimits(ui);
     const quality = 85;
     if (choice == 'files') {
       for (final f in await FilePicker.pickFiles()) {
@@ -116,16 +121,16 @@ class AttachButton extends ConsumerWidget {
       'camera' => [
         ?await picker.pickImage(
           source: ImageSource.camera,
-          maxWidth: maxSide,
-          maxHeight: maxSide,
+          maxWidth: maxW,
+          maxHeight: maxH,
           imageQuality: quality,
         ),
       ],
       'video' => [?await picker.pickVideo(source: ImageSource.camera)],
       // Size limits only touch the photos; videos come as they are.
       _ => await picker.pickMultipleMedia(
-        maxWidth: maxSide,
-        maxHeight: maxSide,
+        maxWidth: maxW,
+        maxHeight: maxH,
         imageQuality: quality,
       ),
     };
@@ -641,4 +646,22 @@ class _PhotoView extends StatelessWidget {
       child: InteractiveViewer(maxScale: 5, child: Image(image: image)),
     ),
   );
+}
+
+/// The largest a photo is sent: 2048 on a side, or smaller when Settings >
+/// Interface > Image compression sets a size (in [channels] only when that
+/// setting says so too).
+(double, double) imageLimits(Map? ui, {bool channels = false}) {
+  const most = 2048.0;
+  if (ui?['imageCompression'] != true) return (most, most);
+  if (channels && ui?['imageCompressionInChannels'] == false) {
+    return (most, most);
+  }
+  final size = (ui?['imageCompressionSize'] as Map?) ?? const {};
+  double side(Object? v) {
+    final n = double.tryParse('${v ?? ''}');
+    return n == null || n <= 0 ? most : math.min(n, most);
+  }
+
+  return (side(size['width']), side(size['height']));
 }

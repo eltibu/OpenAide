@@ -11,6 +11,7 @@ import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
 import 'data_controls.dart';
+import 'interface_settings.dart';
 import 'notification_settings.dart';
 import 'settings_api.dart';
 import 'usage_screen.dart';
@@ -152,6 +153,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const Text('Chats'),
             subtitle: const Text('Titles, tags, suggestions, temporary chats'),
             onTap: () => open(const ChatSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.view_quilt_outlined),
+            title: const Text('Interface'),
+            subtitle: const Text('Message box, images, embeds and more'),
+            onTap: () => open(const InterfaceSettings()),
           ),
           ListTile(
             leading: const Icon(Icons.graphic_eq),

@@ -465,7 +465,11 @@ class Attachment {
 
   /// Builds the entry for a file the server just stored ([uploaded] is the
   /// upload response), exactly as the web UI adds it to a message.
-  factory Attachment.uploaded(Map<String, dynamic> uploaded, {int? size}) {
+  factory Attachment.uploaded(
+    Map<String, dynamic> uploaded, {
+    int? size,
+    bool fullContext = false,
+  }) {
     final meta = (uploaded['meta'] as Map?) ?? const {};
     final id = uploaded['id'] as String;
     final name = '${meta['name'] ?? uploaded['filename'] ?? 'file'}';
@@ -484,6 +488,7 @@ class Attachment {
       'size': size ?? meta['size'],
       'error': '',
       'content_type': ?contentType,
+      if (fullContext) 'context': 'full',
     };
     return Attachment.fromJson(json);
   }

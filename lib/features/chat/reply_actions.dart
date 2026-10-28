@@ -126,6 +126,16 @@ class RegenerateButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final controller = ref.read(chatControllerProvider.notifier);
+    // Settings > Interface > Regenerate menu off: one tap tries again.
+    final ui = ref.watch(userSettingsProvider).value?['ui'] as Map?;
+    if (ui?['regenerateMenu'] == false) {
+      return IconButton(
+        tooltip: 'Regenerate',
+        visualDensity: VisualDensity.compact,
+        icon: Icon(Icons.refresh, size: 18, color: color),
+        onPressed: () => controller.regenerate(reply),
+      );
+    }
     return PopupMenuButton<String>(
       tooltip: 'Regenerate',
       icon: Icon(Icons.refresh, size: 18, color: color),
