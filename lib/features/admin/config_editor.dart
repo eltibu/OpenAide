@@ -965,7 +965,7 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
       ),
     );
     if (saved == true) setState(() => _set(m, key, c.text));
-    c.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
   }
 
   Future<void> _editJson(Map<String, dynamic> m, String key) async {
@@ -1011,7 +1011,7 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
       ),
     );
     if (saved is List) setState(() => _set(m, key, saved.first));
-    c.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
   }
 }
 

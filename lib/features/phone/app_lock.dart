@@ -59,7 +59,8 @@ Future<bool> phoneCanLock() async {
 Future<bool> phoneUnlock() async {
   try {
     return await phoneChannel.invokeMethod<bool>('unlock', {
-          'reason': 'Use your fingerprint, face or screen lock to open OpenAide.',
+          'reason':
+              'Use your fingerprint, face or screen lock to open OpenAide.',
         }) ??
         false;
   } on MissingPluginException {

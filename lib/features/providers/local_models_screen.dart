@@ -148,7 +148,7 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
         ],
       ),
     );
-    input.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (link == null || link.trim().isEmpty) return;
     final m = modelFromLink(link);
     if (m == null) {

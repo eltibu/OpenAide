@@ -328,8 +328,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
     );
     final n = name.text.trim();
     final a = about.text.trim();
-    name.dispose();
-    about.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true || n.isEmpty) return;
     try {
       final made = await ref

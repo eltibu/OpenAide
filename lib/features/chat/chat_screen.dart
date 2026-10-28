@@ -1182,7 +1182,7 @@ class _MessageActions extends ConsumerWidget {
         ],
       ),
     );
-    text.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (edited != null &&
         (edited.trim().isNotEmpty || message.attachments.isNotEmpty)) {
       await ref

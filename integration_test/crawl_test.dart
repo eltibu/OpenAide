@@ -85,7 +85,8 @@ final _skip = RegExp(
 /// Text that means something failed.
 final _errorText = RegExp(
   r"\berror\b|exception|failed|couldn.?t|could not|went wrong|not found|"
-  r'unauthori[sz]ed|forbidden|\b(4\d\d|5\d\d)\b|null check|'
+  r'unauthori[sz]ed|forbidden|\b(http|status|code)\s*(4\d\d|5\d\d)\b|'
+  r'null check|'
   r"isn't a subtype|type '.*' is not",
   caseSensitive: false,
 );
@@ -93,6 +94,12 @@ final _errorText = RegExp(
 final _iconGlyphs = RegExp(
   r'[\u{E000}-\u{F8FF}\u{F0000}-\u{FFFFD}]',
   unicode: true,
+);
+
+/// Failures that come from running on a desktop, not from the app: the
+/// phone has these (its own plugins, the file picker, a web view).
+final _needsPhone = RegExp(
+  r'MissingPluginException|platform implementation|org\.freedesktop\.portal',
 );
 
 class _Problem {
@@ -120,7 +127,23 @@ class _Crawler {
 
   /// Rows of a list that open the same kind of page (files, chats, notes):
   /// a couple are opened, the rest are the same page with other data.
-  final _rowPages = <String, int>{};
+  final _rowPages = <String, Map<String, int>>{};
+
+  /// Whether rows shaped like [shape] all open the same kind of page,
+  /// already seen twice. A menu's rows open different pages and never are.
+  bool _sameAsBefore(String shape) {
+    final kinds = _rowPages[shape];
+    return kinds != null && kinds.length == 1 && kinds.values.single >= 2;
+  }
+
+  String _pageKind(Route<dynamic> route) {
+    if (route is MaterialPageRoute) {
+      try {
+        return route.builder(route.navigator!.context).runtimeType.toString();
+      } catch (_) {}
+    }
+    return route.runtimeType.toString();
+  }
 
   String _shape(Element e) {
     final types = <String>[];
@@ -329,7 +352,7 @@ class _Crawler {
 
   void _note(String where, String control, Set<String> before) {
     for (final c in _caught) {
-      final kind = c.contains('MissingPluginException')
+      final kind = _needsPhone.hasMatch(c)
           ? 'needs the phone'
           : c.contains('overflowed')
           ? 'layout overflow'
@@ -337,10 +360,16 @@ class _Crawler {
       problems.add(_Problem(kind, where, control, _short(c)));
     }
     _caught.clear();
+    // In a list to pick from, "Error" or "MFA failed" is a choice, not a
+    // failure; a failure says what went wrong after a colon.
+    final picking = routes.top is PopupRoute;
     for (final t in _texts().difference(before)) {
-      if (t.length < 400 && _errorText.hasMatch(t)) {
-        problems.add(_Problem('error on screen', where, control, t));
-      }
+      if (t.length >= 400 || !_errorText.hasMatch(t)) continue;
+      if (picking && t.length < 40 && !t.contains(':')) continue;
+      final kind = _needsPhone.hasMatch(t)
+          ? 'needs the phone'
+          : 'error on screen';
+      problems.add(_Problem(kind, where, control, t));
     }
   }
 
@@ -390,12 +419,14 @@ class _Crawler {
       }
       final (element, label) = next;
       done.add(label);
-      if (_skip.hasMatch(label)) {
+      // The name decides, not the line under it: "Data controls" opens a
+      // page even though its line says "export".
+      if (_skip.hasMatch(label.split(' / ').first)) {
         skipped.add('$where: $label');
         continue;
       }
       final shape = _shape(element);
-      if ((_rowPages[shape] ?? 0) >= 2) {
+      if (_sameAsBefore(shape)) {
         skipped.add('$where: $label (same as rows above)');
         continue;
       }
@@ -420,7 +451,11 @@ class _Crawler {
       // A back or close button: this page is done.
       if (!routes.stack.contains(page)) return;
       if (now != null && now != page) {
-        if (now is PageRoute) _rowPages[shape] = (_rowPages[shape] ?? 0) + 1;
+        if (now is PageRoute) {
+          final kinds = _rowPages.putIfAbsent(shape, () => {});
+          final kind = _pageKind(now);
+          kinds[kind] = (kinds[kind] ?? 0) + 1;
+        }
         if (now is PageRoute && depth < maxDepth) {
           await crawl(where, depth: depth + 1, maxTaps: maxTaps ~/ 2 + 10);
         } else {
@@ -567,7 +602,7 @@ Future<void> _crawlMenus(_Crawler c, {required bool account}) async {
   await c.settle(400);
 
   Future<void> visit(String name, Future<void> Function() open) async {
-    if (_skip.hasMatch(name)) {
+    if (_skip.hasMatch(name.split(' / ').first)) {
       c.skipped.add('Menu: $name');
       return;
     }
@@ -647,7 +682,7 @@ void main() {
   final url = Platform.environment['OWUI_URL'];
   final email = Platform.environment['OWUI_EMAIL'];
   final password = Platform.environment['OWUI_PASSWORD'];
-  final depth = int.tryParse(Platform.environment['E2E_DEPTH'] ?? '') ?? 2;
+  final depth = int.tryParse(Platform.environment['E2E_DEPTH'] ?? '') ?? 3;
 
   testWidgets(
     'signed in: every page and button',

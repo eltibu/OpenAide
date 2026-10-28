@@ -159,7 +159,7 @@ Future<void> rateReply(
     ),
   );
   final text = comment.text.trim();
-  comment.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   if (sent == true && (reason != null || text.isNotEmpty || score != null)) {
     await controller.rate(
       reply,
@@ -422,7 +422,7 @@ Future<void> editReply(
     ),
   );
   final value = text.text;
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   if (choice == null || value.trim().isEmpty) return;
   await ref
       .read(chatControllerProvider.notifier)
@@ -708,7 +708,7 @@ Future<String?> askText(
       ],
     ),
   );
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   return value;
 }
 

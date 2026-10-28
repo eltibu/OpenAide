@@ -123,8 +123,7 @@ Future<({String name, String description})?> askChannelDetails(
     ),
   );
   final result = (name: n.text.trim(), description: d.text.trim());
-  n.dispose();
-  d.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   return ok == true && result.name.isNotEmpty ? result : null;
 }
 
@@ -521,7 +520,7 @@ class _ChannelWebhooksScreenState extends State<ChannelWebhooksScreen> {
       ),
     );
     final text = name.text.trim();
-    name.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true || text.isEmpty) return;
     try {
       final hook = await widget.api.createWebhook(widget.channel.id, text);

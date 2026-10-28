@@ -485,8 +485,7 @@ class _VoiceAvatarEditorState extends State<VoiceAvatarEditor> {
     );
     final n = name.text.trim();
     final d = description.text.trim();
-    name.dispose();
-    description.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true || n.isEmpty || _config == null) return;
     final id = await _upload(n, const ['.vrma']);
     if (id == null) return;

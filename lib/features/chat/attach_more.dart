@@ -43,7 +43,7 @@ Future<void> attachWebpage(BuildContext context, WidgetRef ref) async {
       ],
     ),
   );
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   var u = (url ?? '').trim();
   if (u.isEmpty) return;
   if (!u.startsWith(RegExp('https?://'))) u = 'https://$u';

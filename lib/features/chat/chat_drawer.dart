@@ -1152,7 +1152,7 @@ Future<String?> _askText(
       ],
     ),
   );
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   final trimmed = value?.trim();
   return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }
