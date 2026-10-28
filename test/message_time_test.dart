@@ -35,4 +35,18 @@ void main() {
       isFalse,
     );
   });
+
+  test('a background sub-agent result is a summary line', () {
+    final m = ChatMessage.fromJson({
+      'id': '2',
+      'role': 'user',
+      'content': '[subagent]\n\nFound three flights under 200.\nMore detail',
+      'meta': {'internal': true, 'type': 'subagent', 'delegation_id': 'd1'},
+    });
+    expect(internalType(m), 'subagent');
+    expect(subagentSummary(m), (
+      summary: 'Found three flights under 200.',
+      label: 'd1',
+    ));
+  });
 }

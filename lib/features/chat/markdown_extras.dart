@@ -31,10 +31,13 @@ MarkdownGenerator replyMarkdownGenerator() => MarkdownGenerator(
 /// [base] with code blocks that show their language and a copy button, and
 /// Mermaid blocks drawn as diagrams.
 /// With [collapse], code blocks start folded to one line.
+/// With [onSaveCode], a code block can be edited and saved back into its
+/// reply, as on the web.
 MarkdownConfig withReplyCode(
   MarkdownConfig base,
   bool dark, {
   bool collapse = false,
+  Future<void> Function(String oldCode, String newCode)? onSaveCode,
 }) {
   final pre = dark ? PreConfig.darkConfig : const PreConfig();
   return base.copy(
@@ -46,6 +49,7 @@ MarkdownConfig withReplyCode(
                 code: code,
                 language: language,
                 collapsed: collapse,
+                onSave: onSaveCode,
                 child: child,
               ),
       ),
@@ -118,11 +122,15 @@ class CodeFrame extends ConsumerStatefulWidget {
     required this.language,
     required this.child,
     this.collapsed = false,
+    this.onSave,
   });
   final String code;
   final String language;
   final Widget child;
   final bool collapsed;
+
+  /// Saves an edited copy of [code] into the reply.
+  final Future<void> Function(String oldCode, String newCode)? onSave;
 
   @override
   ConsumerState<CodeFrame> createState() => _CodeFrameState();
@@ -141,12 +149,16 @@ class _CodeFrameState extends ConsumerState<CodeFrame> {
           true &&
       isPythonBlock(widget.language, widget.code);
 
-  void _expand() => Navigator.push(
+  void _expand({bool edit = false}) => Navigator.push(
     context,
     MaterialPageRoute<void>(
       builder: (_) => _CodePage(
         code: widget.code,
         language: widget.language,
+        editing: edit,
+        onSave: widget.onSave == null
+            ? null
+            : (v) => widget.onSave!(widget.code, v),
         canRun: _canRun,
       ),
     ),
@@ -221,6 +233,12 @@ class _CodeFrameState extends ConsumerState<CodeFrame> {
                       Icons.play_arrow_rounded,
                       () => setState(() => _runs++),
                     ),
+                  if (widget.onSave != null)
+                    small(
+                      'Edit code',
+                      Icons.edit_outlined,
+                      () => _expand(edit: true),
+                    ),
                   small('Expand', Icons.open_in_full, _expand),
                   small('Copy code', Icons.copy_outlined, () {
                     Clipboard.setData(ClipboardData(text: code));
@@ -245,10 +263,14 @@ class _CodePage extends StatefulWidget {
     required this.code,
     required this.language,
     required this.canRun,
+    this.editing = false,
+    this.onSave,
   });
   final String code;
   final String language;
   final bool canRun;
+  final bool editing;
+  final Future<void> Function(String code)? onSave;
 
   @override
   State<_CodePage> createState() => _CodePageState();
@@ -256,37 +278,99 @@ class _CodePage extends StatefulWidget {
 
 class _CodePageState extends State<_CodePage> {
   int _runs = 0;
+  late bool _editing = widget.editing && widget.onSave != null;
+  late final _text = TextEditingController(text: widget.code);
+  bool _saving = false;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: Text(widget.language.isEmpty ? 'Code' : widget.language),
-      actions: [
-        if (widget.canRun)
+  void dispose() {
+    _text.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    try {
+      await widget.onSave!(_text.text);
+      messenger.showSnackBar(const SnackBar(content: Text('Saved')));
+      navigator.pop();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Not saved: $e')));
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const mono = TextStyle(fontFamily: 'monospace', fontSize: 13);
+    final code = _editing ? _text.text : widget.code;
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.language.isEmpty ? 'Code' : widget.language),
+        actions: [
+          if (widget.canRun)
+            IconButton(
+              tooltip: 'Run',
+              icon: const Icon(Icons.play_arrow_rounded),
+              onPressed: () => setState(() => _runs++),
+            ),
+          if (widget.onSave != null && !_editing)
+            IconButton(
+              tooltip: 'Edit code',
+              icon: const Icon(Icons.edit_outlined),
+              onPressed: () => setState(() => _editing = true),
+            ),
           IconButton(
-            tooltip: 'Run',
-            icon: const Icon(Icons.play_arrow_rounded),
-            onPressed: () => setState(() => _runs++),
+            tooltip: 'Copy code',
+            icon: const Icon(Icons.copy_outlined),
+            onPressed: () => Clipboard.setData(ClipboardData(text: code)),
           ),
-        IconButton(
-          tooltip: 'Copy code',
-          icon: const Icon(Icons.copy_outlined),
-          onPressed: () => Clipboard.setData(ClipboardData(text: widget.code)),
-        ),
-      ],
-    ),
-    body: ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        SelectableText(
-          widget.code,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-        ),
-        const SizedBox(height: 12),
-        if (_runs > 0) CodeRunPanel(key: ValueKey(_runs), code: widget.code),
-      ],
-    ),
-  );
+          if (_editing)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilledButton(
+                onPressed: _saving ? null : _save,
+                child: const Text('Save'),
+              ),
+            ),
+        ],
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          if (_editing)
+            TextField(
+              controller: _text,
+              autofocus: true,
+              maxLines: null,
+              style: mono,
+              keyboardType: TextInputType.multiline,
+              decoration: const InputDecoration(border: OutlineInputBorder()),
+            )
+          else
+            SelectableText(widget.code, style: mono),
+          const SizedBox(height: 12),
+          if (_runs > 0) CodeRunPanel(key: ValueKey(_runs), code: code),
+        ],
+      ),
+    );
+  }
+}
+
+/// [content] with one code block's text changed, as the web's Save does:
+/// the first place [oldCode] appears (trailing blank lines aside). Null
+/// when it isn't there.
+String? replaceCode(String content, String oldCode, String newCode) {
+  if (oldCode.isNotEmpty && content.contains(oldCode)) {
+    return content.replaceFirst(oldCode, newCode);
+  }
+  final old = oldCode.trimRight();
+  if (old.isNotEmpty && content.contains(old)) {
+    return content.replaceFirst(old, newCode.trimRight());
+  }
+  return null;
 }
 
 /// The page that draws one Mermaid diagram, as the web UI does with

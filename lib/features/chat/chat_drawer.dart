@@ -1229,6 +1229,26 @@ final _menuItem = MenuItemButton.styleFrom(
   visualDensity: VisualDensity.compact,
 );
 
+/// Who is using the server now, and the models running, as the web's
+/// account menu shows them (admins, or everyone when the server allows).
+final activeUsageProvider = FutureProvider.autoDispose<Map<String, dynamic>>(
+  (ref) async =>
+      ((await ref.watch(clientProvider).send('GET', '/api/usage')) as Map)
+          .cast<String, dynamic>(),
+);
+
+/// "2 active users", and "Running: a, b" when models are answering.
+String activeUsersText(Map<String, dynamic> usage) {
+  final n = (usage['user_count'] as num?)?.toInt() ?? 0;
+  final running = [
+    for (final m in (usage['model_ids'] as List? ?? const [])) '$m',
+  ];
+  return [
+    '$n active ${n == 1 ? 'user' : 'users'}',
+    if (running.isNotEmpty) 'Running: ${running.join(', ')}',
+  ].join(' · ');
+}
+
 /// You, at the bottom of the sidebar. Tap for the web UI's menu: the
 /// server's other sections, Settings and Sign out.
 class _Account extends ConsumerWidget {
@@ -1253,8 +1273,13 @@ class _Account extends ConsumerWidget {
           child: Text(label),
         );
 
+    final showActive =
+        admin || features['enable_public_active_users_count'] == true;
+    final usage = showActive ? ref.watch(activeUsageProvider).value : null;
+
     return MenuAnchor(
       alignmentOffset: const Offset(12, 0),
+      onOpen: showActive ? () => ref.invalidate(activeUsageProvider) : null,
       style: MenuStyle(
         shape: WidgetStatePropertyAll(
           RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
@@ -1264,6 +1289,22 @@ class _Account extends ConsumerWidget {
         ),
       ),
       menuChildren: [
+        if (usage != null && ((usage['user_count'] as num?) ?? 0) > 0) ...[
+          MenuItemButton(
+            style: _menuItem,
+            leadingIcon: const Icon(
+              Icons.circle,
+              size: 10,
+              color: Colors.green,
+            ),
+            onPressed: null,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 240),
+              child: Text(activeUsersText(usage)),
+            ),
+          ),
+          const Divider(height: 8),
+        ],
         item(Icons.grid_view, 'Workspace', (_) => workspaceScreen()),
         if (features['enable_notes'] == true)
           item(

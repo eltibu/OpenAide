@@ -544,6 +544,23 @@ class _MessageList extends ConsumerWidget {
         ),
         dark,
         collapse: ui['collapseCodeBlocks'] == true,
+        onSaveCode: (oldCode, newCode) async {
+          // The newest reply of yours holding that code, as the web saves
+          // into the message the block is in.
+          final me = ref.read(sessionProvider).value?.user?['id'];
+          for (final m in messages.reversed) {
+            if (m.role != 'assistant' || !m.done) continue;
+            final owner = m.extra['user_id'];
+            if (owner != null && owner != me) continue;
+            final text = replaceCode(m.content, oldCode, newCode);
+            if (text == null) continue;
+            await ref.read(chatControllerProvider.notifier).editReply(m, text);
+            final error = ref.read(chatControllerProvider).error;
+            if (error != null) throw error;
+            return;
+          }
+          throw "Couldn't find that code in a reply";
+        },
       ),
       openFile,
     );
@@ -561,6 +578,9 @@ class _MessageList extends ConsumerWidget {
         final m = messages[messages.length - 1 - i];
         final live = streaming && i == 0;
         if (m.role == 'user' && isTimerMessage(m)) return _TimerLine(m);
+        if (m.role == 'user' && internalType(m) == 'subagent') {
+          return _TimerLine(m, subagent: true);
+        }
         if (m.role == 'user') {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -803,14 +823,41 @@ class _Sources extends StatelessWidget {
 /// Copy, edit or regenerate, and switching between versions of a message.
 /// A timer the model set going off: the server adds it as an internal
 /// message, which the web shows as a small "Timer" line, not your bubble.
-bool isTimerMessage(ChatMessage m) {
+bool isTimerMessage(ChatMessage m) => internalType(m) == 'timer';
+
+/// The kind of a message the server added itself ('timer', 'subagent'),
+/// or null for one you wrote.
+String? internalType(ChatMessage m) {
   final meta = m.extra['meta'];
-  return meta is Map && meta['internal'] == true && meta['type'] == 'timer';
+  return meta is Map && meta['internal'] == true ? '${meta['type']}' : null;
+}
+
+/// A background sub-agent's result, as the web's one-line summary: the
+/// first line that isn't a [tag], else which task it was.
+({String summary, String label}) subagentSummary(ChatMessage m) {
+  final meta = (m.extra['meta'] as Map?) ?? const {};
+  final ids = meta['delegation_ids'];
+  final label =
+      meta['delegation_id']?.toString() ??
+      (ids is List && ids.length > 1 ? '${ids.length} tasks' : '');
+  final line = m.content
+      .split('\n')
+      .map((l) => l.trim())
+      .where((l) => l.isNotEmpty && !l.startsWith('['))
+      .firstOrNull;
+  if (line == null) return (summary: label, label: label);
+  return (
+    summary: line.length > 96 ? '${line.substring(0, 96)}...' : line,
+    label: label,
+  );
 }
 
 class _TimerLine extends StatefulWidget {
-  const _TimerLine(this.message);
+  const _TimerLine(this.message, {this.subagent = false});
   final ChatMessage message;
+
+  /// A background sub-agent's result instead of a timer.
+  final bool subagent;
 
   @override
   State<_TimerLine> createState() => _TimerLineState();
@@ -830,13 +877,24 @@ class _TimerLineState extends State<_TimerLine> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.timer_outlined, size: 16, color: muted),
+            Icon(
+              widget.subagent
+                  ? Icons.account_tree_outlined
+                  : Icons.timer_outlined,
+              size: 16,
+              color: muted,
+            ),
             const SizedBox(width: 6),
-            Text('Timer', style: small?.copyWith(fontWeight: FontWeight.w600)),
+            Text(
+              widget.subagent ? 'Background sub-agent finished' : 'Timer',
+              style: small?.copyWith(fontWeight: FontWeight.w600),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                widget.message.content,
+                widget.subagent && !_open
+                    ? subagentSummary(widget.message).summary
+                    : widget.message.content,
                 style: small,
                 maxLines: _open ? null : 1,
                 overflow: _open ? null : TextOverflow.ellipsis,
