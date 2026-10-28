@@ -56,6 +56,7 @@ final emailAgentProvider = FutureProvider<MailSource>((ref) async {
 
   return EmailAgent(
     ref.watch(clientProvider),
+    socket: ref.watch(chatSocketProvider),
     model: model,
     options: requestOptions(
       models.where((m) => m.id == model).firstOrNull,
@@ -672,6 +673,9 @@ class _EmailViewState extends ConsumerState<EmailView> {
   OpenedEmail? _o;
   Object? _error;
 
+  /// Still being read: [_o] is what has come so far.
+  bool _reading = false;
+
   @override
   void initState() {
     super.initState();
@@ -687,15 +691,26 @@ class _EmailViewState extends ConsumerState<EmailView> {
   Future<void> _load({bool fresh = false}) async {
     setState(() {
       _error = null;
+      _reading = true;
       if (fresh) _o = null;
     });
     try {
       final box = await ref.read(emailAgentProvider.future);
       final kept = fresh ? null : await box.keptOpen(_email);
-      final o = kept ?? await box.openAndKeep(_email);
+      final o =
+          kept ??
+          await box.openAndKeep(
+            _email,
+            // What OpenAide has read so far shows while it reads on.
+            onProgress: (partial) {
+              if (mounted) setState(() => _o = partial);
+            },
+          );
       if (mounted) setState(() => _o = o);
     } catch (e) {
       if (mounted) setState(() => _error = e);
+    } finally {
+      if (mounted) setState(() => _reading = false);
     }
   }
 
@@ -787,7 +802,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
           ),
         ],
       ),
-      bottomNavigationBar: o == null
+      bottomNavigationBar: o == null || _reading
           ? null
           : SafeArea(
               child: Padding(
@@ -831,8 +846,9 @@ class _EmailViewState extends ConsumerState<EmailView> {
               ),
               children: [
                 _EmailHeader(email: e, message: first, onStar: _star),
-                if (o == null && _error == null) ...[
+                if (_reading && _error == null)
                   const LinearProgressIndicator(minHeight: 2),
+                if (o == null && _error == null) ...[
                   if (e.snippet.isNotEmpty)
                     Padding(
                       padding: const EdgeInsets.all(16),
