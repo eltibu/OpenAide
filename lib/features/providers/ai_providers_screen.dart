@@ -25,7 +25,7 @@ class AiProvidersScreen extends StatelessWidget {
 }
 
 /// The providers with their sign-in and key fields; also the first screen
-/// of using Nexus without a server.
+/// of using the app without a server.
 class AiProviderList extends ConsumerWidget {
   const AiProviderList({super.key, this.intro});
 
@@ -233,7 +233,9 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
             Text(_blurb, style: TextStyle(color: context.nexus.muted)),
             const SizedBox(height: 12),
             if (_signIn != null) ...[
-              const Text('Approve OpenAide in the browser, then come back here.'),
+              const Text(
+                'Approve OpenAide in the browser, then come back here.',
+              ),
               const SizedBox(height: 8),
               Row(
                 children: [

@@ -15,6 +15,7 @@ import '../studio/studio_doc.dart' show cleanAiText;
 import '../accounts/accounts_screen.dart';
 import '../accounts/mail_accounts.dart';
 import 'direct_mail.dart';
+import 'email_html.dart';
 import 'email_agent.dart';
 
 /// Said when there is neither an account on the phone nor a server.
@@ -154,6 +155,28 @@ class EmailFolderNotifier extends Notifier<EmailFolder> {
     }
   }
 
+  /// Takes [id] off the list right away (archived, deleted, spam).
+  void drop(String id) {
+    state = state.copyWith(
+      emails: [
+        for (final e in state.emails)
+          if (e.id != id) e,
+      ],
+      error: state.error,
+    );
+  }
+
+  /// Shows [id] starred or not right away.
+  void showStar(String id, bool starred) {
+    state = state.copyWith(
+      emails: [
+        for (final e in state.emails)
+          e.id == id ? e.copyWith(starred: starred) : e,
+      ],
+      error: state.error,
+    );
+  }
+
   /// Shows [id] as read or unread right away.
   void showRead(String id, bool read) {
     state = state.copyWith(
@@ -170,6 +193,70 @@ final emailFolderProvider =
     NotifierProvider.family<EmailFolderNotifier, EmailFolder, String>(
       EmailFolderNotifier.new,
     );
+
+enum EmailAct { archive, trash, spam }
+
+/// Archives, deletes or reports [e]: it leaves the lists at once and the
+/// mail service is told in the background; if that fails it says so and
+/// the list is checked again. Takes the [container] (not a widget's ref),
+/// since the email's page is usually closed by then.
+Future<void> actOn(
+  ProviderContainer container,
+  ScaffoldMessengerState messenger,
+  Email e,
+  EmailAct what,
+) async {
+  for (final folder in ['inbox', 'sent']) {
+    if (container.exists(emailFolderProvider(folder))) {
+      container.read(emailFolderProvider(folder).notifier).drop(e.id);
+    }
+  }
+  final (doing, done) = switch (what) {
+    EmailAct.archive => ('archive', 'Archived'),
+    EmailAct.trash => ('delete', 'Deleted'),
+    EmailAct.spam => ('report', 'Reported as spam'),
+  };
+  messenger.showSnackBar(SnackBar(content: Text(done)));
+  try {
+    final box = await container.read(emailAgentProvider.future);
+    await switch (what) {
+      EmailAct.archive => box.archive(e),
+      EmailAct.trash => box.trash(e),
+      EmailAct.spam => box.spam(e),
+    };
+  } catch (err) {
+    messenger.showSnackBar(
+      SnackBar(content: Text('Couldn\'t $doing "${e.subject}": $err')),
+    );
+    for (final folder in ['inbox', 'sent']) {
+      if (container.exists(emailFolderProvider(folder))) {
+        unawaited(container.read(emailFolderProvider(folder).notifier).check());
+      }
+    }
+  }
+}
+
+/// Stars or unstars [e] everywhere it shows.
+Future<void> starOn(
+  ProviderContainer container,
+  ScaffoldMessengerState messenger,
+  Email e,
+  bool starred,
+) async {
+  for (final folder in ['inbox', 'sent']) {
+    if (container.exists(emailFolderProvider(folder))) {
+      container
+          .read(emailFolderProvider(folder).notifier)
+          .showStar(e.id, starred);
+    }
+  }
+  try {
+    await (await container.read(emailAgentProvider.future))
+        .setStarred(e, starred);
+  } catch (err) {
+    messenger.showSnackBar(SnackBar(content: Text('Couldn\'t star it: $err')));
+  }
+}
 
 /// Marks [e] read (or unread) in every list and keeps it on the server.
 Future<void> markRead(WidgetRef ref, Email e, {bool read = true}) async {
@@ -374,7 +461,28 @@ class _EmailList extends ConsumerWidget {
             ),
           for (final (i, e) in emails.indexed) ...[
             if (i > 0) const Divider(height: 1),
-            EmailTile(email: e, sent: folder == 'sent'),
+            Dismissible(
+              key: ValueKey(e.id),
+              background: const _SwipeBack(
+                icon: Icons.archive_outlined,
+                label: 'Archive',
+                start: true,
+              ),
+              secondaryBackground: const _SwipeBack(
+                icon: Icons.delete_outline,
+                label: 'Delete',
+                start: false,
+              ),
+              onDismissed: (d) => actOn(
+                ProviderScope.containerOf(context, listen: false),
+                ScaffoldMessenger.of(context),
+                e,
+                d == DismissDirection.startToEnd
+                    ? EmailAct.archive
+                    : EmailAct.trash,
+              ),
+              child: EmailTile(email: e, sent: folder == 'sent'),
+            ),
           ],
         ],
       ),
@@ -422,6 +530,15 @@ class EmailTile extends ConsumerWidget {
                     style: TextStyle(fontWeight: bold),
                   ),
                 ),
+                if (email.starred)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Icon(
+                      Icons.star,
+                      size: 16,
+                      color: Colors.amber.shade700,
+                    ),
+                  ),
                 Text(
                   _when(context, email.date),
                   style: TextStyle(color: muted, fontSize: 12),
@@ -548,32 +665,49 @@ class EmailView extends ConsumerStatefulWidget {
 }
 
 class _EmailViewState extends ConsumerState<EmailView> {
-  late Future<OpenedEmail> _opened = _open();
+  late Email _email = widget.email;
+  OpenedEmail? _o;
+  Object? _error;
 
   @override
   void initState() {
     super.initState();
-    // Opening it reads it; kept on the server so it stays read everywhere.
+    _load();
+    // Opening it reads it, everywhere it shows.
     if (widget.email.unread) {
       Future.microtask(() => markRead(ref, widget.email));
     }
   }
 
-  /// Shows what Nexus said when it was opened before; [fresh] asks again.
-  Future<OpenedEmail> _open({bool fresh = false}) async {
-    final agent = await ref.read(emailAgentProvider.future);
-    if (!fresh) {
-      final kept = await agent.keptOpen(widget.email);
-      if (kept != null) return kept;
+  /// Shows the copy kept when it was opened (or listed) before at once;
+  /// [fresh] fetches it again.
+  Future<void> _load({bool fresh = false}) async {
+    setState(() {
+      _error = null;
+      if (fresh) _o = null;
+    });
+    try {
+      final box = await ref.read(emailAgentProvider.future);
+      final kept = fresh ? null : await box.keptOpen(_email);
+      final o = kept ?? await box.openAndKeep(_email);
+      if (mounted) setState(() => _o = o);
+    } catch (e) {
+      if (mounted) setState(() => _error = e);
     }
-    return agent.openAndKeep(widget.email);
   }
 
-  Future<void> _reply(OpenedEmail o, {String text = ''}) async {
+  Future<void> _write({
+    bool all = false,
+    bool forward = false,
+    String text = '',
+  }) async {
+    final o = _o;
+    if (o == null) return;
     final sent = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => ReplyEditor(replyTo: o, text: text),
+        builder: (_) =>
+            ReplyEditor(replyTo: o, text: text, all: all, forward: forward),
       ),
     );
     if (sent == true && mounted) {
@@ -581,19 +715,48 @@ class _EmailViewState extends ConsumerState<EmailView> {
     }
   }
 
+  void _act(EmailAct what) {
+    final container = ProviderScope.containerOf(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    Navigator.pop(context);
+    unawaited(actOn(container, messenger, _email, what));
+  }
+
+  void _star() {
+    final starred = !_email.starred;
+    setState(() => _email = _email.copyWith(starred: starred));
+    unawaited(
+      starOn(
+        ProviderScope.containerOf(context, listen: false),
+        ScaffoldMessenger.of(context),
+        _email,
+        starred,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final muted = context.nexus.muted;
-    final e = widget.email;
+    final e = _email;
+    final o = _o;
+    final first = o?.messages.firstOrNull;
+    // One message with its own layout: shown whole, like Gmail does.
+    final html = o != null && o.messages.length == 1 && first!.html.isNotEmpty
+        ? first.html
+        : null;
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          e.subject.isEmpty ? '(no subject)' : e.subject,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
         actions: [
+          IconButton(
+            tooltip: 'Archive',
+            icon: const Icon(Icons.archive_outlined),
+            onPressed: () => _act(EmailAct.archive),
+          ),
+          IconButton(
+            tooltip: 'Delete',
+            icon: const Icon(Icons.delete_outline),
+            onPressed: () => _act(EmailAct.trash),
+          ),
           IconButton(
             tooltip: 'Mark as unread',
             icon: const Icon(Icons.mark_email_unread_outlined),
@@ -602,146 +765,291 @@ class _EmailViewState extends ConsumerState<EmailView> {
               Navigator.pop(context);
             },
           ),
-          IconButton(
-            tooltip: 'Open it again',
-            icon: const Icon(Icons.refresh),
-            onPressed: () => setState(() => _opened = _open(fresh: true)),
+          PopupMenuButton<String>(
+            onSelected: (v) => switch (v) {
+              'star' => _star(),
+              'spam' => _act(EmailAct.spam),
+              'forward' => _write(forward: true),
+              _ => _load(fresh: true),
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'star',
+                child: Text(e.starred ? 'Remove star' : 'Star'),
+              ),
+              const PopupMenuItem(value: 'forward', child: Text('Forward')),
+              const PopupMenuItem(value: 'spam', child: Text('Report spam')),
+              const PopupMenuItem(value: 'again', child: Text('Load again')),
+            ],
           ),
         ],
       ),
-      body: FutureBuilder<OpenedEmail>(
-        future: _opened,
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const _Waiting('Opening it…');
-          }
-          if (snap.hasError) {
-            return ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                Text('Couldn\'t open it.\n\n${snap.error}'),
-                const SizedBox(height: 12),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton(
-                    onPressed: () => setState(() => _opened = _open()),
-                    child: const Text('Try again'),
-                  ),
+      bottomNavigationBar: o == null
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                child: Row(
+                  children: [
+                    for (final (icon, label, all, forward) in const [
+                      (Icons.reply, 'Reply', false, false),
+                      (Icons.reply_all, 'Reply all', true, false),
+                      (Icons.forward, 'Forward', false, true),
+                    ]) ...[
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () => _write(all: all, forward: forward),
+                          icon: Icon(icon, size: 18),
+                          label: Text(label, maxLines: 1),
+                        ),
+                      ),
+                      if (!forward) const SizedBox(width: 8),
+                    ],
+                  ],
                 ),
-              ],
-            );
-          }
-          final o = snap.data!;
-          return ListView(
-            padding: EdgeInsets.fromLTRB(
-              readingInset(context, 12),
-              8,
-              readingInset(context, 12),
-              32,
+              ),
             ),
-            children: [
-              Text(
-                e.subject.isEmpty ? '(no subject)' : e.subject,
+      body: html != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _EmailHeader(email: e, message: first, onStar: _star),
+                if (first!.attachments.isNotEmpty)
+                  _Attachments(first.attachments),
+                Expanded(child: EmailHtml(html, key: ValueKey(e.id))),
+              ],
+            )
+          : ListView(
+              padding: EdgeInsets.fromLTRB(
+                readingInset(context, 0),
+                0,
+                readingInset(context, 0),
+                24,
+              ),
+              children: [
+                _EmailHeader(email: e, message: first, onStar: _star),
+                if (o == null && _error == null) ...[
+                  const LinearProgressIndicator(minHeight: 2),
+                  if (e.snippet.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        e.snippet,
+                        style: TextStyle(color: context.nexus.muted),
+                      ),
+                    ),
+                ],
+                if (_error != null)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Couldn\'t open it.\n\n$_error'),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: _load,
+                          child: const Text('Try again'),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (o != null) ..._plain(context, o),
+              ],
+            ),
+    );
+  }
+
+  /// A thread as text: what OpenAide read (or a mail without HTML).
+  List<Widget> _plain(BuildContext context, OpenedEmail o) {
+    final scheme = Theme.of(context).colorScheme;
+    final muted = context.nexus.muted;
+    return [
+      if (o.summary.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Card(
+            elevation: 0,
+            color: scheme.primaryContainer.withValues(alpha: 0.4),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.auto_awesome, size: 18, color: scheme.primary),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(o.summary)),
+                ],
+              ),
+            ),
+          ),
+        ),
+      for (final (i, m) in o.messages.indexed) ...[
+        if (i > 0) ...[const Divider(height: 24), _Sender(message: m)],
+        if (m.attachments.isNotEmpty) _Attachments(m.attachments),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: SelectableText(
+            m.body,
+            style: const TextStyle(fontSize: 15, height: 1.45),
+          ),
+        ),
+      ],
+      if (o.suggestedReply.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Card(
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              side: BorderSide(color: scheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'OpenAide would reply',
+                    style: Theme.of(context).textTheme.labelLarge
+                        ?.copyWith(color: muted),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(o.suggestedReply),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.tonal(
+                      onPressed: () => _write(text: o.suggestedReply),
+                      child: const Text('Use this reply'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+    ];
+  }
+}
+
+/// The subject with its star, and who sent it.
+class _EmailHeader extends StatelessWidget {
+  const _EmailHeader({required this.email, this.message, required this.onStar});
+  final Email email;
+  final EmailMessage? message;
+  final VoidCallback onStar;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 4, 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                email.subject.isEmpty ? '(no subject)' : email.subject,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 12),
-              if (o.summary.isNotEmpty)
-                Card(
-                  elevation: 0,
-                  color: scheme.primaryContainer.withValues(alpha: 0.4),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.auto_awesome,
-                          size: 18,
-                          color: scheme.primary,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(child: Text(o.summary)),
-                      ],
-                    ),
-                  ),
-                ),
-              for (final m in o.messages)
-                Card(
-                  elevation: 0,
-                  color: scheme.surfaceContainerLow,
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                m.from,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            Text(
-                              _when(context, m.date),
-                              style: TextStyle(color: muted, fontSize: 12),
-                            ),
-                          ],
-                        ),
-                        if (m.to.isNotEmpty)
-                          Text(
-                            'To: ${m.to}',
-                            style: TextStyle(color: muted, fontSize: 12),
-                          ),
-                        const SizedBox(height: 8),
-                        SelectableText(m.body),
-                      ],
-                    ),
-                  ),
-                ),
-              if (o.suggestedReply.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'OpenAide would reply',
-                  style: Theme.of(context).textTheme.labelLarge
-                      ?.copyWith(color: muted),
-                ),
-                Card(
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(color: scheme.outlineVariant),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(o.suggestedReply),
-                        const SizedBox(height: 8),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: FilledButton.tonal(
-                            onPressed: () => _reply(o, text: o.suggestedReply),
-                            child: const Text('Use this reply'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => _reply(o),
-                icon: const Icon(Icons.reply),
-                label: const Text('Reply'),
+            ),
+            IconButton(
+              tooltip: email.starred ? 'Remove star' : 'Star',
+              onPressed: onStar,
+              icon: Icon(
+                email.starred ? Icons.star : Icons.star_border,
+                color: email.starred ? Colors.amber.shade700 : null,
               ),
-            ],
-          );
-        },
+            ),
+          ],
+        ),
+      ),
+      _Sender(
+        message:
+            message ??
+            EmailMessage(from: email.from, to: email.to, date: email.date),
+      ),
+    ],
+  );
+}
+
+/// Who sent a message, to whom, and when.
+class _Sender extends StatelessWidget {
+  const _Sender({required this.message});
+  final EmailMessage message;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.nexus.muted;
+    final name = Email(id: '', from: message.from).fromName;
+    return ListTile(
+      dense: true,
+      leading: CircleAvatar(
+        child: Text(name.isEmpty ? '?' : name.characters.first.toUpperCase()),
+      ),
+      title: Text(
+        name,
+        style: const TextStyle(fontWeight: FontWeight.w600),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        message.to.isEmpty ? message.from : 'to ${message.to}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: muted),
+      ),
+      trailing: Text(
+        _when(context, message.date),
+        style: TextStyle(color: muted, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class _Attachments extends StatelessWidget {
+  const _Attachments(this.names);
+  final List<String> names;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    child: Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final n in names)
+          Chip(
+            avatar: const Icon(Icons.attach_file, size: 16),
+            label: Text(n, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+    ),
+  );
+}
+
+class _SwipeBack extends StatelessWidget {
+  const _SwipeBack({
+    required this.icon,
+    required this.label,
+    required this.start,
+  });
+  final IconData icon;
+  final String label;
+  final bool start;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      color: start ? scheme.primaryContainer : scheme.errorContainer,
+      alignment: start ? Alignment.centerLeft : Alignment.centerRight,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [Icon(icon), const SizedBox(width: 8), Text(label)],
       ),
     );
   }
@@ -760,11 +1068,23 @@ const _replySuggestions = [
 
 /// Writes a reply (or a new email) with AI help, then has Nexus send it.
 class ReplyEditor extends ConsumerStatefulWidget {
-  const ReplyEditor({super.key, this.replyTo, this.text = ''});
+  const ReplyEditor({
+    super.key,
+    this.replyTo,
+    this.text = '',
+    this.all = false,
+    this.forward = false,
+  });
 
   /// Null for a new email.
   final OpenedEmail? replyTo;
   final String text;
+
+  /// Starts as a reply to everyone on it.
+  final bool all;
+
+  /// Sends [replyTo] on to someone, instead of answering it.
+  final bool forward;
 
   @override
   ConsumerState<ReplyEditor> createState() => _ReplyEditorState();
@@ -774,10 +1094,11 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
   late final _body = TextEditingController(text: widget.text);
   final _to = TextEditingController();
   final _subject = TextEditingController();
-  bool _all = false;
+  late bool _all = widget.all;
   bool _sending = false;
 
-  bool get _isReply => widget.replyTo != null;
+  bool get _isReply => widget.replyTo != null && !widget.forward;
+  bool get _isForward => widget.replyTo != null && widget.forward;
 
   String get _context {
     final o = widget.replyTo;
@@ -850,13 +1171,20 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
 
   Future<void> _send() async {
     final text = _body.text.trim();
-    if (text.isEmpty) return _say(context, 'Write something first');
+    if (_isForward) {
+      if (_to.text.trim().isEmpty) {
+        return _say(context, 'Add who it goes to');
+      }
+    } else if (text.isEmpty) {
+      return _say(context, 'Write something first');
+    }
     if (!_isReply &&
+        !_isForward &&
         (_to.text.trim().isEmpty || _subject.text.trim().isEmpty)) {
       return _say(context, 'Add who it is to and a subject');
     }
     final o = widget.replyTo;
-    final to = o == null
+    final to = o == null || _isForward
         ? _to.text.trim()
         : (_all ? 'everyone on the thread' : o.email.from);
     final source = await ref.read(mailSourceProvider.future);
@@ -886,7 +1214,9 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
     setState(() => _sending = true);
     try {
       final agent = await ref.read(emailAgentProvider.future);
-      if (o != null) {
+      if (o != null && _isForward) {
+        await agent.forward(o.email, to: _to.text.trim(), text: text);
+      } else if (o != null) {
         await agent.reply(o.email, text, all: _all);
       } else {
         await agent.compose(
@@ -913,7 +1243,13 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
       canPop: !_sending,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(o == null ? 'New email' : 'Reply'),
+          title: Text(
+            o == null
+                ? 'New email'
+                : _isForward
+                ? 'Forward'
+                : 'Reply',
+          ),
           actions: [
             IconButton(
               tooltip: 'Copy',
@@ -944,7 +1280,21 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
             32,
           ),
           children: [
-            if (o != null) ...[
+            if (o != null && _isForward) ...[
+              TextField(
+                controller: _to,
+                keyboardType: TextInputType.emailAddress,
+                autofocus: true,
+                decoration: const InputDecoration(labelText: 'To'),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'Fwd: ${o.email.subject}',
+                  style: TextStyle(color: context.nexus.muted),
+                ),
+              ),
+            ] else if (o != null) ...[
               Text(
                 'To: ${o.email.from}',
                 style: TextStyle(color: context.nexus.muted),
