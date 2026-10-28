@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
@@ -6,8 +7,10 @@ import '../../core/theme.dart';
 import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
 import 'knowledge_screen.dart' show knowledgeListProvider;
-import 'access_editor.dart' show ItemMenu;
+import 'access_editor.dart' show ItemMenu, readGrants, writeGrants;
 import 'models_api.dart';
+import '../chat/model_pins.dart'
+    show modelLink, pinnedModelsProvider, togglePinnedModel;
 
 final modelsApiProvider = Provider<ModelsApi>(
   (ref) => ModelsApi(ref.watch(clientProvider)),
@@ -83,19 +86,27 @@ class ModelsScreen extends ConsumerWidget {
                     style: TextStyle(color: muted),
                   ),
                   onTap: () => edit(m),
-                  trailing: Switch(
-                    value: m.active,
-                    onChanged: m.writable
-                        ? (_) async {
-                            try {
-                              await ref.read(modelsApiProvider).toggle(m.id);
-                            } catch (e) {
-                              if (context.mounted) _say(context, '$e');
-                            }
-                            ref.invalidate(workspaceModelsProvider);
-                            ref.invalidate(modelsProvider);
-                          }
-                        : null,
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _WorkspaceModelMenu(model: m),
+                      Switch(
+                        value: m.active,
+                        onChanged: m.writable
+                            ? (_) async {
+                                try {
+                                  await ref
+                                      .read(modelsApiProvider)
+                                      .toggle(m.id);
+                                } catch (e) {
+                                  if (context.mounted) _say(context, '$e');
+                                }
+                                ref.invalidate(workspaceModelsProvider);
+                                ref.invalidate(modelsProvider);
+                              }
+                            : null,
+                      ),
+                    ],
                   ),
                 ),
             ],
@@ -472,6 +483,64 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                 ),
               ],
             ),
+    );
+  }
+}
+
+/// Keep in sidebar, copy link and hide or show, as the web's model menu.
+class _WorkspaceModelMenu extends ConsumerWidget {
+  const _WorkspaceModelMenu({required this.model});
+  final WorkspaceModel model;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final pinned = ref.watch(pinnedModelsProvider).contains(model.id);
+    final hidden = model.meta['hidden'] == true;
+    return PopupMenuButton<String>(
+      tooltip: 'More',
+      onSelected: (v) async {
+        try {
+          switch (v) {
+            case 'pin':
+              await togglePinnedModel(ref, model.id);
+            case 'link':
+              await Clipboard.setData(
+                ClipboardData(
+                  text: modelLink(
+                    ref.read(sessionProvider).value?.serverUrl ?? '',
+                    model.id,
+                  ),
+                ),
+              );
+              if (context.mounted) _say(context, 'Link copied');
+            case 'hide':
+              await ref.read(modelsApiProvider).save({
+                ...model.json,
+                'meta': {...model.meta, 'hidden': !hidden},
+                if (model.json['access_grants'] is List)
+                  'access_grants': writeGrants(
+                    readGrants(model.json['access_grants']),
+                  ),
+              }, create: false);
+              ref.invalidate(workspaceModelsProvider);
+              ref.invalidate(modelsProvider);
+          }
+        } catch (e) {
+          if (context.mounted) _say(context, '$e');
+        }
+      },
+      itemBuilder: (_) => [
+        if (model.writable)
+          PopupMenuItem(
+            value: 'hide',
+            child: Text(hidden ? 'Show Model' : 'Hide Model'),
+          ),
+        PopupMenuItem(
+          value: 'pin',
+          child: Text(pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'),
+        ),
+        const PopupMenuItem(value: 'link', child: Text('Copy Link')),
+      ],
     );
   }
 }

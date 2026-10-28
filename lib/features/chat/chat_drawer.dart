@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import '../../core/models/model_info.dart';
+import 'model_pins.dart';
 import '../admin/admin_screen.dart';
 import '../automations/automations_screen.dart';
 import '../calendar/calendar_screen.dart';
@@ -190,6 +192,7 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
                   children: _query.isNotEmpty
                       ? _results(ref.watch(chatSearchProvider(_query)))
                       : [
+                          ..._pinnedModels(),
                           if (features['enable_channels'] == true)
                             ..._channels(),
                           ..._folders(),
@@ -256,6 +259,46 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
             },
           ),
     ];
+  }
+
+  /// Models kept in the sidebar: tap for a new chat with one, hold to
+  /// take it off.
+  List<Widget> _pinnedModels() {
+    final models = ref.watch(visiblePinnedModelsProvider);
+    if (models.isEmpty) return const [];
+    return [
+      _section('Models'),
+      if (_open('Models'))
+        for (final m in models)
+          GestureDetector(
+            onLongPress: () => _unpinModel(m),
+            child: _SmallTile(
+              icon: Icons.auto_awesome_outlined,
+              label: m.name,
+              onTap: () {
+                ref.read(chatControllerProvider.notifier)
+                  ..newChat()
+                  ..selectModel(m.id);
+                closeDrawer(context);
+              },
+            ),
+          ),
+    ];
+  }
+
+  Future<void> _unpinModel(ModelInfo m) async {
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: ListTile(
+          leading: const Icon(Icons.push_pin_outlined),
+          title: Text('Hide ${m.name} from Sidebar'),
+          onTap: () => Navigator.pop(c, true),
+        ),
+      ),
+    );
+    if (ok == true) await togglePinnedModel(ref, m.id);
   }
 
   List<Widget> _pinned() {

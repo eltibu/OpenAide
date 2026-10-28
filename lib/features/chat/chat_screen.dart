@@ -41,6 +41,9 @@ import 'request_options.dart';
 import 'tool_approval.dart';
 import 'voice_note.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
+import '../admin/connections_screen.dart' show ConnectionsScreen;
+import '../../core/models/model_info.dart';
+import 'model_pins.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -1621,86 +1624,7 @@ class _ModelChip extends ConsumerWidget {
               context: context,
               showDragHandle: true,
               isScrollControlled: true,
-              builder: (context) => SafeArea(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: MediaQuery.sizeOf(context).height * 0.7,
-                  ),
-                  child: Consumer(
-                    builder: (context, ref, _) {
-                      final state = ref.watch(chatControllerProvider);
-                      final selected = state.modelId;
-                      final compare = state.compareIds;
-                      final chat = ref.read(chatControllerProvider.notifier);
-                      return ListView(
-                        shrinkWrap: true,
-                        children: [
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                            child: Text(
-                              'Tap a model to use it. Tap + to have it answer '
-                              'too, so you can compare.',
-                            ),
-                          ),
-                          for (final m in list)
-                            ListTile(
-                              title: Text(m.name),
-                              subtitle: m.description == null
-                                  ? null
-                                  : Text(
-                                      m.description!,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (m.id == selected)
-                                    const Icon(
-                                      Icons.check,
-                                      color: NexusColors.accent,
-                                    )
-                                  else
-                                    IconButton(
-                                      tooltip: compare.contains(m.id)
-                                          ? 'Stop comparing'
-                                          : 'Compare: have it answer too',
-                                      icon: Icon(
-                                        compare.contains(m.id)
-                                            ? Icons.remove_circle
-                                            : Icons.add_circle_outline,
-                                        color: compare.contains(m.id)
-                                            ? NexusColors.accent
-                                            : null,
-                                      ),
-                                      onPressed: () => chat.setCompare(
-                                        compare.contains(m.id)
-                                            ? [
-                                                for (final c in compare)
-                                                  if (c != m.id) c,
-                                              ]
-                                            : [...compare, m.id],
-                                      ),
-                                    ),
-                                  _DefaultStar(id: m.id),
-                                ],
-                              ),
-                              onTap: () {
-                                chat
-                                  ..selectModel(m.id)
-                                  ..setCompare([
-                                    for (final c in compare)
-                                      if (c != m.id) c,
-                                  ]);
-                                Navigator.pop(context);
-                              },
-                            ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              ),
+              builder: (context) => const _ModelPickerSheet(),
             ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -1708,6 +1632,187 @@ class _ModelChip extends ConsumerWidget {
           Flexible(child: Text(name, overflow: TextOverflow.ellipsis)),
           const Icon(Icons.expand_more, size: 18),
         ],
+      ),
+    );
+  }
+}
+
+/// The model picker: search, filter by tag or connection, pick, compare,
+/// star as default and the More menu, as the web's selector.
+class _ModelPickerSheet extends ConsumerStatefulWidget {
+  const _ModelPickerSheet();
+
+  @override
+  ConsumerState<_ModelPickerSheet> createState() => _ModelPickerSheetState();
+}
+
+class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
+  String _query = '';
+  String _filter = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final all = ref.watch(modelsProvider).value ?? const <ModelInfo>[];
+    final state = ref.watch(chatControllerProvider);
+    final selected = state.modelId;
+    final compare = state.compareIds;
+    final chat = ref.read(chatControllerProvider.notifier);
+    final admin = ref.watch(meProvider).value?['role'] == 'admin';
+    final tags = modelTags(all);
+    final kinds = {for (final m in all) modelConnection(m)}..remove('');
+    final q = _query.trim().toLowerCase();
+    final list = [
+      for (final m in all)
+        if ((q.isEmpty ||
+                '${m.id} ${m.name} ${modelTagNames(m).join(' ')}'
+                    .toLowerCase()
+                    .contains(q)) &&
+            (_filter.isEmpty ||
+                (_filter.startsWith('tag:')
+                    ? modelTagNames(m)
+                          .map((t) => t.toLowerCase())
+                          .contains(_filter.substring(4).toLowerCase())
+                    : modelConnection(m) == _filter.substring(11))))
+          m,
+    ];
+    Widget chip(String value, String label) => Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: _filter == value,
+        onSelected: (_) => setState(() => _filter = value),
+      ),
+    );
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: TextField(
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search),
+                  hintText: 'Search a model',
+                  isDense: true,
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            if (tags.isNotEmpty || kinds.length > 1)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    chip('', 'All'),
+                    if (kinds.length > 1)
+                      for (final k in ['local', 'external', 'direct'])
+                        if (kinds.contains(k))
+                          chip('connection:$k', switch (k) {
+                            'local' => 'Local',
+                            'external' => 'External',
+                            _ => 'Direct',
+                          }),
+                    for (final t in tags) chip('tag:$t', t),
+                  ],
+                ),
+              ),
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: Text(
+                      'Tap a model to use it. Tap + to have it answer too, '
+                      'so you can compare.',
+                      style: TextStyle(color: context.nexus.muted),
+                    ),
+                  ),
+                  if (list.isEmpty)
+                    ListTile(
+                      title: Text(
+                        all.isEmpty
+                            ? 'No models available'
+                            : 'No results found',
+                      ),
+                      subtitle: all.isEmpty
+                          ? const Text(
+                              'Connect to an AI provider to start chatting',
+                            )
+                          : null,
+                    ),
+                  for (final m in list)
+                    ListTile(
+                      title: Text(m.name),
+                      subtitle: m.description == null
+                          ? null
+                          : Text(
+                              m.description!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (m.id == selected)
+                            const Icon(Icons.check, color: NexusColors.accent)
+                          else
+                            IconButton(
+                              tooltip: compare.contains(m.id)
+                                  ? 'Stop comparing'
+                                  : 'Compare: have it answer too',
+                              icon: Icon(
+                                compare.contains(m.id)
+                                    ? Icons.remove_circle
+                                    : Icons.add_circle_outline,
+                                color: compare.contains(m.id)
+                                    ? NexusColors.accent
+                                    : null,
+                              ),
+                              onPressed: () => chat.setCompare(
+                                compare.contains(m.id)
+                                    ? [
+                                        for (final c in compare)
+                                          if (c != m.id) c,
+                                      ]
+                                    : [...compare, m.id],
+                              ),
+                            ),
+                          _DefaultStar(id: m.id),
+                          ModelMoreMenu(model: m),
+                        ],
+                      ),
+                      onTap: () {
+                        chat
+                          ..selectModel(m.id)
+                          ..setCompare([
+                            for (final c in compare)
+                              if (c != m.id) c,
+                          ]);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  if (admin && list.isEmpty)
+                    ListTile(
+                      leading: const Icon(Icons.hub_outlined),
+                      title: const Text('Manage Connections'),
+                      onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ConnectionsScreen(),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
