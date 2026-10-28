@@ -92,6 +92,53 @@ void main() {
     await client.send('POST', tasks.save, body: before);
   }, skip: skip);
 
+  test('a subgroup\'s members show in its parent, with a preview', () async {
+    final client = OpenWebUiClient(baseUrl: url!);
+    await client.signIn(email!, password!);
+    final parent = await client.send(
+      'POST',
+      '/api/v1/groups/create',
+      body: {'name': 'nexus parent', 'description': ''},
+    );
+    final child = await client.send(
+      'POST',
+      '/api/v1/groups/create',
+      body: {
+        'name': 'nexus child',
+        'description': '',
+        'parent_group_id': parent['id'],
+      },
+    );
+    addTearDown(() async {
+      await client.send('DELETE', '/api/v1/groups/id/${child['id']}/delete');
+      await client.send('DELETE', '/api/v1/groups/id/${parent['id']}/delete');
+    });
+    final me = await client.send('GET', '/api/v1/auths/');
+    await client.send(
+      'POST',
+      '/api/v1/groups/id/${child['id']}/users/add',
+      body: {
+        'user_ids': [me['id']],
+      },
+    );
+    final inherited = await client.send(
+      'GET',
+      '/api/v1/groups/id/${parent['id']}/members',
+      query: {'membership': 'inherited'},
+    );
+    expect([for (final u in inherited['items']) u['id']], contains(me['id']));
+    final all = [
+      for (final g in await client.send('GET', '/api/v1/groups/') as List)
+        (g as Map).cast<String, dynamic>(),
+    ];
+    expect(groupAndBelow(all, '${parent['id']}'), contains(child['id']));
+    final preview = await client.send(
+      'GET',
+      '/api/v1/groups/id/${parent['id']}/preview',
+    );
+    expect(preview['models'], contains('items'));
+  }, skip: skip);
+
   test('groups give permissions to their members', () async {
     final client = OpenWebUiClient(baseUrl: url!);
     await client.signIn(email!, password!);
