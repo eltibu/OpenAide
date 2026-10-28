@@ -10,6 +10,7 @@ import 'package:xterm/xterm.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../chat/file_details.dart' show PdfViewScreen;
 import '../server/server_page.dart';
 import 'file_tools.dart';
 import 'sqlite_view.dart';
@@ -1153,6 +1154,7 @@ class _FileViewerState extends State<FileViewer> {
 
   bool get _image => _imageTypes.contains(_ext(widget.name));
   bool get _notebook => _ext(widget.name) == 'ipynb';
+  bool get _pdf => _ext(widget.name) == 'pdf';
   bool get _sqlite =>
       const {'db', 'sqlite', 'sqlite3', 'db3'}.contains(_ext(widget.name));
 
@@ -1332,6 +1334,22 @@ class _FileViewerState extends State<FileViewer> {
                 transformationController: _zoom,
                 maxScale: 8,
                 child: Center(child: Image.memory(Uint8List.fromList(bytes))),
+              )
+            : _pdf
+            ? Center(
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.picture_as_pdf_outlined),
+                  label: Text('Open PDF (${_size(bytes.length)})'),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => PdfViewScreen(
+                        name: widget.name,
+                        bytes: Uint8List.fromList(bytes),
+                      ),
+                    ),
+                  ),
+                ),
               )
             : _text == null
             ? Center(

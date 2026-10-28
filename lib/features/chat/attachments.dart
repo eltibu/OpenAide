@@ -13,6 +13,7 @@ import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import 'attach_more.dart';
 import 'chat_controller.dart';
+import 'file_details.dart';
 import 'side_panel.dart';
 import 'voice_note.dart';
 
@@ -204,11 +205,30 @@ class PendingAttachments extends ConsumerWidget {
                   error: a.error != null,
                   type: a.uploaded?.type,
                 );
+          final up = a.uploaded;
           return Tooltip(
             message: a.error ?? a.warning ?? a.name,
             child: Stack(
               children: [
-                tile,
+                // A file: its details, and whether the model reads it all.
+                if (up != null && !a.isImage && up.fileId != null)
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => FileDetailsScreen(
+                          fileId: up.fileId!,
+                          name: a.name,
+                          fullContext: up.raw['context'] == 'full',
+                          onFullContext: (on) =>
+                              controller.setAttachmentContext(a.key, full: on),
+                        ),
+                      ),
+                    ),
+                    child: tile,
+                  )
+                else
+                  tile,
                 if (a.uploading)
                   const Positioned.fill(
                     child: Center(
@@ -356,6 +376,17 @@ class MessageAttachments extends ConsumerWidget {
                 uri: attachmentUri(a, client)!,
                 headers: client.authHeaders,
                 name: a.name,
+              )
+            else if (a.type == 'file' && a.fileId != null)
+              GestureDetector(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) =>
+                        FileDetailsScreen(fileId: a.fileId!, name: a.name),
+                  ),
+                ),
+                child: _FileTile(name: a.name, type: a.type),
               )
             else
               _FileTile(name: a.name, type: a.type),

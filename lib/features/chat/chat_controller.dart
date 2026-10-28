@@ -676,6 +676,31 @@ class ChatController extends Notifier<ChatState> {
     );
   }
 
+  /// Whether the model reads a waiting file whole (`context: full`) or
+  /// only the parts relevant to the message.
+  void setAttachmentContext(String key, {required bool full}) {
+    state = state.copyWith(
+      attachments: [
+        for (final p in state.attachments)
+          if (p.key == key && p.uploaded != null)
+            PendingAttachment(
+              key: p.key,
+              name: p.name,
+              isImage: p.isImage,
+              bytes: p.bytes,
+              warning: p.warning,
+              uploaded: Attachment.fromJson({
+                for (final e in p.uploaded!.raw.entries)
+                  if (e.key != 'context') e.key: e.value,
+                if (full) 'context': 'full',
+              }),
+            )
+          else
+            p,
+      ],
+    );
+  }
+
   void removeAttachment(String key) => state = state.copyWith(
     attachments: [
       for (final a in state.attachments)
