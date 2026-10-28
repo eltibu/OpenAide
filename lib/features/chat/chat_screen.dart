@@ -47,6 +47,7 @@ import 'request_options.dart';
 import 'tool_approval.dart';
 import 'voice_note.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
+import '../admin/ollama_pulls.dart';
 import '../admin/connections_screen.dart' show ConnectionsScreen;
 import '../../core/models/model_info.dart';
 import 'model_pins.dart';
@@ -1918,6 +1919,22 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
   String _query = '';
   String _filter = '';
 
+  /// Pulls [tag] from Ollama.com, as the web's picker; it keeps going if
+  /// the picker closes, and the model shows in the list once it's ready.
+  Future<void> _download(String tag) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final (end, error) = await ref.read(ollamaPullsProvider.notifier).pull(tag);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(switch (end) {
+          PullEnd.ready => 'Model $tag is ready',
+          PullEnd.cancelled => 'Download of $tag cancelled',
+          PullEnd.failed => "Couldn't download $tag: $error",
+        }),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final all = ref.watch(modelsProvider).value ?? const <ModelInfo>[];
@@ -1926,6 +1943,7 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
     final compare = state.compareIds;
     final chat = ref.read(chatControllerProvider.notifier);
     final admin = ref.watch(meProvider).value?['role'] == 'admin';
+    final pulls = ref.watch(ollamaPullsProvider);
     final tags = modelTags(all);
     final kinds = {for (final m in all) modelConnection(m)}..remove('');
     final q = _query.trim().toLowerCase();
@@ -2064,6 +2082,48 @@ class _ModelPickerSheetState extends ConsumerState<_ModelPickerSheet> {
                           ]);
                         Navigator.pop(context);
                       },
+                    ),
+                  if (admin &&
+                      q.isNotEmpty &&
+                      !pulls.containsKey(_query.trim()) &&
+                      !all.any((m) => m.id.toLowerCase() == q))
+                    ListTile(
+                      leading: const Icon(Icons.download),
+                      title: Text('Download "${_query.trim()}"'),
+                      subtitle: const Text(
+                        'Pull it onto Ollama from Ollama.com',
+                      ),
+                      onTap: () => _download(_query.trim()),
+                    ),
+                  for (final p in pulls.entries)
+                    ListTile(
+                      leading: const Icon(Icons.downloading),
+                      title: Text(p.key),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          LinearProgressIndicator(
+                            value: p.value.$2 == null
+                                ? null
+                                : p.value.$2! / 100,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            p.value.$2 == null
+                                ? p.value.$1
+                                : '${p.value.$1} · ${p.value.$2!.toStringAsFixed(1)}%',
+                            style: TextStyle(color: context.nexus.muted),
+                          ),
+                        ],
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'Cancel download of ${p.key}',
+                        icon: const Icon(Icons.close),
+                        onPressed: () => ref
+                            .read(ollamaPullsProvider.notifier)
+                            .cancel(p.key),
+                      ),
                     ),
                   if (admin && list.isEmpty)
                     ListTile(

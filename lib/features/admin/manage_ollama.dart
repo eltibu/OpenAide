@@ -13,14 +13,9 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
 import '../chat/file_details.dart' show fileSize;
+import 'ollama_pulls.dart';
 
-/// Pull progress as Ollama reports it, in percent; null when it doesn't say.
-double? pullPercent(Map<String, dynamic> p) {
-  final total = (p['total'] as num?)?.toDouble();
-  final done = (p['completed'] as num?)?.toDouble();
-  if (total == null || total <= 0 || done == null) return null;
-  return (done / total * 100).clamp(0, 100).toDouble();
-}
+export 'ollama_pulls.dart' show pullPercent;
 
 class ManageOllamaScreen extends ConsumerStatefulWidget {
   const ManageOllamaScreen({super.key});
@@ -39,10 +34,6 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
   final _tag = TextEditingController();
   final _link = TextEditingController();
 
-  /// Running pulls: model → (status, percent), and how to stop each.
-  final _pulls = <String, (String, double?)>{};
-  final _subs = <String, StreamSubscription>{};
-  final _dones = <String, Completer<void>>{};
   String? _uploading;
 
   String get _at => '/$_idx';
@@ -55,9 +46,6 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
 
   @override
   void dispose() {
-    for (final s in _subs.values) {
-      s.cancel();
-    }
     _tag.dispose();
     _link.dispose();
     super.dispose();
@@ -95,52 +83,28 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
     _load();
   }
 
+  /// Pulls keep going after this screen closes; see [ollamaPullsProvider].
   Future<void> _pull(String tag) async {
     tag = tag.trim();
-    if (tag.isEmpty || _pulls.containsKey(tag)) return;
-    setState(() => _pulls[tag] = ('Starting', null));
-    final done = _dones[tag] = Completer<void>();
-    _subs[tag] = ref
-        .read(clientProvider)
-        .streamJson('POST', '/ollama/api/pull$_at', {'name': tag})
-        .listen(
-          (p) {
-            if (p['error'] != null) {
-              _say('$tag: ${p['error']}');
-              return;
-            }
-            if (mounted) {
-              setState(
-                () => _pulls[tag] = ('${p['status'] ?? ''}', pullPercent(p)),
-              );
-            }
-          },
-          onError: (Object e) {
-            _say('$tag: $e');
-            if (!done.isCompleted) done.complete();
-          },
-          onDone: () {
-            if (!done.isCompleted) done.complete();
-          },
-          cancelOnError: true,
-        );
-    await done.future;
-    _subs.remove(tag);
-    _dones.remove(tag);
-    if (!mounted) return;
-    final finished = _pulls.remove(tag)?.$1 == 'success';
-    setState(() {});
-    if (finished) _say('Model $tag is ready');
-    _refreshEverywhere();
+    if (tag.isEmpty) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final (end, error) = await ref
+        .read(ollamaPullsProvider.notifier)
+        .pull(tag, server: _idx);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(switch (end) {
+          PullEnd.ready => 'Model $tag is ready',
+          PullEnd.cancelled => 'Download of $tag cancelled',
+          PullEnd.failed => '$tag: $error',
+        }),
+      ),
+    );
+    if (mounted) _load();
   }
 
-  void _cancel(String tag) {
-    _subs.remove(tag)?.cancel();
-    final done = _dones.remove(tag);
-    if (done != null && !done.isCompleted) done.complete();
-    setState(() => _pulls.remove(tag));
-    _say('Download of $tag cancelled');
-  }
+  void _cancel(String tag) =>
+      ref.read(ollamaPullsProvider.notifier).cancel(tag);
 
   Future<void> _updateAll() async {
     for (final m in [..._models]) {
@@ -364,7 +328,7 @@ class _ManageOllamaState extends ConsumerState<ManageOllamaScreen> {
                     },
                   ),
                 ),
-                for (final p in _pulls.entries)
+                for (final p in ref.watch(ollamaPullsProvider).entries)
                   ListTile(
                     title: Text(p.key),
                     subtitle: Column(
