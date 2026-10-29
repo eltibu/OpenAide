@@ -29,6 +29,7 @@ import '../workspace/prompts_screen.dart';
 import '../workspace/tools_skills.dart';
 import '../../core/theme.dart';
 import '../../core/widgets/nexus_logo.dart';
+import '../settings/keyboard_shortcuts.dart' show KeyboardShortcutsScreen;
 import '../settings/settings_screen.dart';
 import 'chat_controller.dart';
 import 'chat_extras.dart';
@@ -1388,6 +1389,12 @@ class _Account extends ConsumerWidget {
           'Settings',
           (_) => const SettingsScreen(),
         ),
+        // The web's Keyboard shortcuts, for a Bluetooth or USB keyboard.
+        item(
+          Icons.keyboard_outlined,
+          'Keyboard shortcuts',
+          (_) => const KeyboardShortcutsScreen(),
+        ),
         MenuItemButton(
           style: _menuItem,
           leadingIcon: const Icon(Icons.logout, size: 20),
@@ -1449,15 +1456,24 @@ void closeDrawer(BuildContext context) {
 
 
 /// The last few messages of a chat, for a quick look before opening it.
-class ChatPreview extends ConsumerWidget {
+class ChatPreview extends ConsumerStatefulWidget {
   const ChatPreview({super.key, required this.id});
   final String id;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final muted = context.nexus.muted;
+  ConsumerState<ChatPreview> createState() => _ChatPreviewState();
+}
+
+class _ChatPreviewState extends ConsumerState<ChatPreview> {
+  late final Future<Chat> _chat = Future(
+    () => ref.read(clientProvider).chat(widget.id),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     return FutureBuilder(
-      future: ref.read(clientProvider).chat(id),
+      future: _chat,
       builder: (context, snap) {
         final thread = snap.data?.thread ?? const [];
         final last = thread.length > 3

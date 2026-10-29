@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/phone_voice.dart';
 import '../../core/auth/session.dart';
 import '../chat/chat_controller.dart';
 import '../chat/read_aloud.dart';
@@ -98,6 +99,7 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
             _language.text = speechLanguage(settings) ?? '';
           }
           final tts = ((ui['audio'] as Map?)?['tts'] as Map?) ?? const {};
+          final onPhone = phoneSpeechOn(config);
           final voice = '${tts['voice'] ?? ''}';
           final rate = _rate ?? speechRate(settings);
           // Section names in the accent colour, as on every settings page.
@@ -155,7 +157,9 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
                 title: const T('Voice'),
                 subtitle: Text(
                   voice.isEmpty
-                      ? 'The server\'s voice${serverVoice.isEmpty ? '' : ' ($serverVoice)'}'
+                      ? onPhone
+                            ? tr("The phone's voice")
+                            : 'The server\'s voice${serverVoice.isEmpty ? '' : ' ($serverVoice)'}'
                       : voice,
                 ),
                 trailing: const Icon(Icons.chevron_right),
@@ -164,7 +168,12 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
                     context: context,
                     isScrollControlled: true,
                     showDragHandle: true,
-                    builder: (_) => _VoicePicker(current: voice),
+                    builder: (_) => onPhone
+                        ? _PhoneVoicePicker(
+                            current: voice,
+                            nonLocal: tts['nonLocalVoices'] == true,
+                          )
+                        : _VoicePicker(current: voice),
                   );
                   if (picked == null) return;
                   await _saveAudio(ui, 'tts', {
@@ -173,6 +182,18 @@ class _AudioSettingsState extends ConsumerState<AudioSettings> {
                   });
                 },
               ),
+              // The server leaves speaking to the device: the phone's
+              // voices, and the web's switch for the online ones.
+              if (onPhone)
+                SwitchListTile(
+                  title: const T('Allow non-local voices'),
+                  subtitle: const T(
+                    'Also offer voices that need the internet.',
+                  ),
+                  value: tts['nonLocalVoices'] == true,
+                  onChanged: (on) =>
+                      _saveAudio(ui, 'tts', {'nonLocalVoices': on}),
+                ),
               ListTile(
                 title: const T('Speed'),
                 subtitle: Slider(
@@ -238,4 +259,62 @@ class _VoicePicker extends ConsumerWidget {
         subtitle: sub == null ? null : Text(sub),
         onTap: () => Navigator.pop(context, id),
       );
+}
+
+
+/// The phone's own voices, grouped by language; the online ones only with
+/// Allow non-local voices on.
+class _PhoneVoicePicker extends StatelessWidget {
+  const _PhoneVoicePicker({required this.current, required this.nonLocal});
+  final String current;
+  final bool nonLocal;
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.7,
+      ),
+      child: FutureBuilder(
+        future: phoneVoices(),
+        builder: (context, snap) {
+          if (snap.hasError) {
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text("Couldn't load the voices.\n${snap.error}"),
+            );
+          }
+          final all = snap.data;
+          if (all == null) {
+            return const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          Widget pick(String id, String name, String? sub) => ListTile(
+            leading: Icon(
+              id == current
+                  ? Icons.radio_button_checked
+                  : Icons.radio_button_off,
+            ),
+            title: Text(name),
+            subtitle: sub == null ? null : Text(sub),
+            onTap: () => Navigator.pop(context, id),
+          );
+          return ListView(
+            shrinkWrap: true,
+            children: [
+              pick('', tr('Default'), tr("The phone's voice")),
+              for (final v in voicesToOffer(all, nonLocal: nonLocal))
+                pick(
+                  v.name,
+                  v.name,
+                  v.network ? '${v.locale} · ${tr('online')}' : v.locale,
+                ),
+            ],
+          );
+        },
+      ),
+    ),
+  );
 }

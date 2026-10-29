@@ -2154,10 +2154,21 @@ class _ComposerState extends ConsumerState<_Composer> {
             tooltip: tr('Voice call'),
             icon: const Icon(Icons.graphic_eq),
             onPressed: ready
-                ? () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(builder: (_) => const CallScreen()),
-                  )
+                ? () {
+                    // A call talks to one model, as on the web.
+                    if (ref.read(chatControllerProvider).compareIds.isNotEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: T('Select only one model to call')),
+                      );
+                      return;
+                    }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute<void>(
+                        builder: (_) => const CallScreen(),
+                      ),
+                    );
+                  }
                 : null,
           ),
         ],

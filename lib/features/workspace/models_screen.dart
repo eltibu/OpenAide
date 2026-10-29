@@ -637,23 +637,47 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
         if (_locale.isNotEmpty) ...[
           TextField(
             controller: _locName,
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               labelText: tr('Name in this language'),
               hintText: _name.text,
             ),
           ),
+          _defaultButtons(_locName, _name),
           TextField(
             controller: _locDescription,
             maxLines: null,
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               labelText: tr('Description in this language'),
               hintText: _description.text,
             ),
           ),
+          _defaultButtons(_locDescription, _description),
         ],
       ],
     );
   }
+
+  /// As the web: Use default clears the translation; Copy default starts
+  /// it from the default text.
+  Widget _defaultButtons(
+    TextEditingController translated,
+    TextEditingController fallback,
+  ) => Align(
+    alignment: Alignment.centerLeft,
+    child: translated.text.isNotEmpty
+        ? TextButton(
+            onPressed: () => setState(translated.clear),
+            child: const T('Use default'),
+          )
+        : fallback.text.trim().isEmpty
+        ? const SizedBox(height: 8)
+        : TextButton(
+            onPressed: () => setState(() => translated.text = fallback.text),
+            child: const T('Copy default'),
+          ),
+  );
 
   /// The 3D avatar its voice calls show, as the web's Voice avatar.
   Widget _avatarSetting() => ListTile(

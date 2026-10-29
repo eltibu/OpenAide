@@ -22,6 +22,7 @@ open class MainActivity : FlutterActivity() {
     private var actions: PhoneActions? = null
     private var localLlm: LocalLlm? = null
     private var folders: FolderPicker? = null
+    private var phoneVoice: PhoneVoice? = null
     private var speech: MediaPlayer? = null
     private var speechDone: MethodChannel.Result? = null
 
@@ -99,6 +100,10 @@ open class MainActivity : FlutterActivity() {
         // Upload Folder, see FolderPicker.
         val picker = folders ?: FolderPicker(this).also { folders = it }
         MethodChannel(messenger, "nexus/folders").setMethodCallHandler(picker)
+
+        // The phone's own voices, see PhoneVoice.
+        val speaker = phoneVoice ?: PhoneVoice(applicationContext).also { phoneVoice = it }
+        MethodChannel(messenger, "nexus/phone_voice").setMethodCallHandler(speaker)
 
         // Copy formatted text: the reply as HTML, with its plain text.
         MethodChannel(messenger, "nexus/clipboard")
@@ -250,6 +255,7 @@ open class MainActivity : FlutterActivity() {
     }
 
     override fun onDestroy() {
+        phoneVoice?.close()
         stopSpeech()
         voice?.stop()
         super.onDestroy()

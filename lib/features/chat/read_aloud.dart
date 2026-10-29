@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
+import '../../core/phone_voice.dart';
 import '../../core/theme.dart';
 import 'chat_controller.dart';
 
@@ -63,9 +64,13 @@ int readyUpTo(String text, int from) {
 /// Says text, piece after piece, getting the next piece ready while one
 /// plays.
 class ReadAloud {
-  ReadAloud(this.client);
+  ReadAloud(this.client, {this.onPhone});
 
   final OpenWebUiClient client;
+
+  /// True when the server leaves speaking to the device: the phone's own
+  /// voices say it, as the browser's do on the web.
+  final bool Function()? onPhone;
 
   /// The voice to ask for; the server's own when null.
   String? voice;
@@ -117,6 +122,29 @@ class ReadAloud {
     } on MissingPluginException {
       // Not on a phone.
     }
+    await phoneStopSpeaking();
+  }
+
+  /// Settings > Audio's phone voice says each piece in turn.
+  Future<void> _runOnPhone(int gen) async {
+    _running = true;
+    speaking.value = true;
+    try {
+      while (_queue.isNotEmpty && gen == _gen) {
+        final text = _take();
+        saying.value = text;
+        await phoneSpeak(text, voice: voice, rate: rate);
+      }
+    } on MissingPluginException {
+      // Not on a phone.
+    } catch (e) {
+      if (gen == _gen) errors.add('$e');
+    } finally {
+      if (gen == _gen) {
+        _running = false;
+        speaking.value = false;
+      }
+    }
   }
 
   String _take() {
@@ -144,6 +172,7 @@ class ReadAloud {
   }
 
   Future<void> _run(int gen) async {
+    if (onPhone?.call() ?? false) return _runOnPhone(gen);
     _running = true;
     speaking.value = true;
     try {
@@ -195,7 +224,10 @@ class ReadAloud {
 }
 
 final readAloudProvider = Provider<ReadAloud>((ref) {
-  final r = ReadAloud(ref.watch(clientProvider));
+  final r = ReadAloud(
+    ref.watch(clientProvider),
+    onPhone: () => phoneSpeechOn(ref.read(serverConfigProvider).value),
+  );
   ref.onDispose(() {
     unawaited(r.stop());
     unawaited(r.errors.close());

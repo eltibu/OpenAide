@@ -5,6 +5,8 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../server/community_share.dart' show communitySharingOn;
+import 'usage_sync.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
@@ -61,7 +63,23 @@ class _UsageScreenState extends ConsumerState<UsageScreen> {
         models.where((m) => m.id == id).firstOrNull?.name ?? id;
 
     return Scaffold(
-      appBar: AppBar(title: const T('Usage')),
+      appBar: AppBar(
+        title: const T('Usage'),
+        actions: [
+          // As the web, when the server has community sharing on.
+          if (communitySharingOn(ref.watch(serverConfigProvider).value))
+            IconButton(
+              tooltip: tr('Sync Usage Stats'),
+              icon: const Icon(Icons.cloud_sync_outlined),
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => const UsageSyncScreen(),
+                ),
+              ),
+            ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(usageProvider.future),
         child: usage.when(

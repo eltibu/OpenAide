@@ -11,6 +11,34 @@ import '../../core/i18n/app_strings.dart';
 /// One of the server's own pages (Notes, Workspace, Admin...) inside the
 /// app, signed in as the user. A stand-in until each section is native:
 /// it always matches the server, including features added later.
+/// Hides cookies and the server's storage from a page's scripts: they get
+/// empty ones of their own, as a sandboxed frame without same origin.
+const isolatePage = '''
+(function () {
+  if (window.__openaideIsolated) return;
+  window.__openaideIsolated = true;
+  function store() {
+    var d = {};
+    return {
+      getItem: function (k) { return k in d ? d[k] : null; },
+      setItem: function (k, v) { d[k] = String(v); },
+      removeItem: function (k) { delete d[k]; },
+      clear: function () { d = {}; },
+      key: function (i) { return Object.keys(d)[i] || null; },
+      get length() { return Object.keys(d).length; }
+    };
+  }
+  try {
+    Object.defineProperty(document, 'cookie', {
+      configurable: true, get: function () { return ''; }, set: function () {}
+    });
+  } catch (e) {}
+  try { Object.defineProperty(window, 'localStorage', { configurable: true, value: store() }); } catch (e) {}
+  try { Object.defineProperty(window, 'sessionStorage', { configurable: true, value: store() }); } catch (e) {}
+  try { Object.defineProperty(window, 'indexedDB', { configurable: true, value: undefined }); } catch (e) {}
+})();
+''';
+
 class ServerPage extends ConsumerStatefulWidget {
   const ServerPage({
     super.key,
@@ -19,8 +47,14 @@ class ServerPage extends ConsumerStatefulWidget {
     this.url,
     this.signIn = false,
     this.browse = false,
+    this.isolated = false,
   });
   final String title;
+
+  /// A terminal's port preview with Settings > Interface > Terminal
+  /// previews: same origin off: the page's scripts can't see your sign-in
+  /// or the server's stored data, as the web's sandboxed frame.
+  final bool isolated;
 
   /// A web app of your own (a terminal's port): Back and Forward buttons,
   /// as the web's port preview.
@@ -72,7 +106,11 @@ class _ServerPageState extends ConsumerState<ServerPage> {
           onProgress: (p) {
             if (mounted) setState(() => _progress = p);
           },
+          onPageStarted: (_) {
+            if (widget.isolated) _web.runJavaScript(isolatePage).ignore();
+          },
           onPageFinished: (url) {
+            if (widget.isolated) _web.runJavaScript(isolatePage).ignore();
             if (_start == null && Uri.tryParse(url)?.host == base.host) {
               _start = url;
             }

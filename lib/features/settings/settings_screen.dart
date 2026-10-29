@@ -17,6 +17,7 @@ import '../chat/chat_controller.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
 import 'account_extras.dart';
+import 'keyboard_shortcuts.dart';
 import 'data_controls.dart';
 import 'direct_connections.dart';
 import 'tool_servers.dart';
@@ -169,6 +170,12 @@ class SettingsScreen extends ConsumerWidget {
             title: const T('Interface'),
             subtitle: const T('Message box, images, embeds and more'),
             onTap: () => open(const InterfaceSettings()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.keyboard_outlined),
+            title: const T('Keyboard'),
+            subtitle: const T('Shortcuts for a Bluetooth or USB keyboard'),
+            onTap: () => open(const KeyboardShortcutsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.graphic_eq),

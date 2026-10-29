@@ -948,6 +948,14 @@ class _FileBrowserState extends State<FileBrowser>
                           builder: (_) => ServerPage(
                             title: 'Port ${p.port}',
                             browse: true,
+                            // Settings > Interface > Terminal previews:
+                            // same origin (off, as on the web).
+                            isolated:
+                                (ProviderScope.containerOf(this.context)
+                                        .read(userSettingsProvider)
+                                        .value?['ui']
+                                    as Map?)?['terminalPreviewAllowSameOrigin'] !=
+                                true,
                             // Your own terminal: at its own address.
                             path: widget.api.server.direct
                                 ? ''
