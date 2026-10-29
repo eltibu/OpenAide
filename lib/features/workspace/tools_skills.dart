@@ -548,19 +548,27 @@ class SkillsScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const T('Skills'),
         actions: [
-          IconButton(
+          PopupMenuButton<bool>(
             tooltip: tr('Import'),
             icon: const Icon(Icons.file_download_outlined),
-            onPressed: () async {
+            onSelected: (fromLink) async {
               final done = await Navigator.push<bool>(
                 context,
-                MaterialPageRoute(builder: (_) => const SkillImportScreen()),
+                MaterialPageRoute(
+                  builder: (_) => SkillImportScreen(fromLink: fromLink),
+                ),
               );
               if (done == true) {
                 ref.invalidate(_skillsListProvider);
                 ref.invalidate(skillsProvider);
               }
             },
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: false, child: T('Import from files')),
+              // The server lets only admins fetch from a link.
+              if (ref.read(sessionProvider).value?.user?['role'] == 'admin')
+                const PopupMenuItem(value: true, child: T('Import from link')),
+            ],
           ),
           const OwnerFilterButton(),
         ],

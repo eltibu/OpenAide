@@ -401,7 +401,10 @@ class ImportChoice {
 
 /// Import skills from .skill, .zip, .json or SKILL.md files.
 class SkillImportScreen extends ConsumerStatefulWidget {
-  const SkillImportScreen({super.key});
+  /// [fromLink] asks for a link instead of files, as the web's Import
+  /// from link: the server fetches the skills there.
+  const SkillImportScreen({super.key, this.fromLink = false});
+  final bool fromLink;
 
   @override
   ConsumerState<SkillImportScreen> createState() => _SkillImportState();
@@ -415,7 +418,9 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _pick());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => widget.fromLink ? _link() : _pick(),
+    );
   }
 
   Future<void> _pick() async {
@@ -425,8 +430,35 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
       return;
     }
     setState(() => _busy = true);
+    await _preview([
+      for (final f in picked) (await f.readAsBytes(), f.name),
+    ]);
+  }
+
+  /// As the web: the server reads the link, and what it found is looked
+  /// over like a skills.json file.
+  Future<void> _link() async {
+    final url = await askSkillLink(context);
+    if (url == null) {
+      if (mounted && _picked == null) Navigator.pop(context);
+      return;
+    }
+    setState(() => _busy = true);
     try {
-      final files = [for (final f in picked) (await f.readAsBytes(), f.name)];
+      final packages = await ref
+          .read(clientProvider)
+          .send('POST', '/api/v1/skills/load/url', body: {'url': url});
+      await _preview([(utf8.encode(jsonEncode(packages)), 'skills.json')]);
+    } catch (e) {
+      if (mounted) {
+        _say(context, '$e');
+        setState(() => _busy = false);
+      }
+    }
+  }
+
+  Future<void> _preview(List<(List<int>, String)> files) async {
+    try {
       final res = await ref
           .read(clientProvider)
           .sendFiles('/api/v1/skills/import/preview', files);
@@ -502,8 +534,10 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
               child: _busy
                   ? const CircularProgressIndicator()
                   : TextButton(
-                      onPressed: _pick,
-                      child: const T('Choose files'),
+                      onPressed: widget.fromLink ? _link : _pick,
+                      child: widget.fromLink
+                          ? const T('Import from link')
+                          : const T('Choose files'),
                     ),
             )
           : ListView(
@@ -573,4 +607,37 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
             ),
     );
   }
+}
+
+/// Asks for a link to skills (a GitHub folder, a .zip or a SKILL.md).
+Future<String?> askSkillLink(BuildContext context) async {
+  final url = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (d) => AlertDialog(
+      title: const T('Import from link'),
+      content: TextField(
+        controller: url,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        decoration: InputDecoration(
+          labelText: tr('URL'),
+          hintText: tr('https://github.com/…/skills'),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(d, false),
+          child: const T('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(d, true),
+          child: const T('Import'),
+        ),
+      ],
+    ),
+  );
+  // Not disposed here: the dialog still shows it while it closes.
+  final text = url.text.trim();
+  return ok == true && text.isNotEmpty ? text : null;
 }
