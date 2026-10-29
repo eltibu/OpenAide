@@ -1,53 +1,78 @@
-# OpenAide
-
-An open-source AI assistant for Android. Use it with your own [Open WebUI](https://github.com/open-webui/open-webui) server for full feature parity with the web UI, or on its own with an AI provider (OpenRouter, Claude, OpenAI) or a model that runs entirely on your phone. It can replace the default Android assistant.
-
-Status: early (0.1.x). Things change quickly and some screens are still rough.
-
-<!-- Screenshots: add phone screenshots to docs/screenshots/ and list them here.
-<p>
-  <img src="docs/screenshots/chat.png" width="200">
-  <img src="docs/screenshots/voice.png" width="200">
-  <img src="docs/screenshots/studio.png" width="200">
-  <img src="docs/screenshots/settings.png" width="200">
+<p align="center">
+  <img src="docs/images/banner.png" alt="OpenAide: your open-source AI assistant for Android" width="100%">
 </p>
--->
+
+<p align="center">
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/eltibu/Nexus-assistant?label=download&color=7c4dff" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/Android-9%2B-3ddc84?logo=android&logoColor=white" alt="Android 9+">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  <a href="https://github.com/open-webui/open-webui"><img src="https://img.shields.io/badge/works%20with-Open%20WebUI-black" alt="Works with Open WebUI"></a>
+</p>
+
+<p align="center">
+  <b><a href="../../releases/latest">Download the latest APK</a></b> ·
+  <a href="#install">Install guide</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#features">Features</a>
+</p>
+
+**OpenAide** is a free, open-source AI assistant for Android. Connect it to your own [Open WebUI](https://github.com/open-webui/open-webui) server for full feature parity with the web UI, or use it on its own with an AI provider (OpenRouter, Claude, OpenAI) or a model that runs entirely on your phone. It can even replace the default Android assistant.
+
+> **Status:** early (0.1.x). New versions come out often, and some screens are still rough. Bug reports are very welcome.
+
+<!-- SCREENSHOTS -->
 
 ## Features
 
-- **Open WebUI, fully synced.** Chats, models, tools, knowledge, memory, notes, channels and settings all live on your server, so the phone and the web UI always match. New models or tools you add on the server show up in the app without an app update.
-- **Works without a server too.** Sign in to OpenRouter, or add a Claude or OpenAI API key, and chat straight from the phone. Built-in tools, skills and MCP servers work with these models.
-- **Models on the phone.** Download a small model (llama.cpp, from Hugging Face) and chat offline.
-- **Voice.** Hands-free voice calls, dictation and spoken replies.
-- **Default assistant.** Set OpenAide as the Android assistant: long-press the power button or swipe from the corner to ask.
-- **Studio.** Write and edit documents, spreadsheets and slides with AI help, and open or save Word, Excel and PowerPoint files.
-- **Notes and recordings.** Quick notes, meeting minutes from a recording, and dictation.
-- **Email.** Read, sort and answer mail through your Open WebUI server or straight over IMAP/SMTP.
-- **More from Open WebUI:** terminal, files, artifacts, calendar, automations, channels, workspace, playground and the admin panel.
+| | |
+|---|---|
+| 🔄 **Open WebUI, fully synced** | Chats, models, tools, knowledge, memory, notes, channels and settings live on your server, so the phone and the web UI always match. New models or tools you add on the server appear in the app without an update. |
+| 🧠 **Works without a server** | Sign in to OpenRouter, or add a Claude or OpenAI key, and chat straight from the phone, with built-in tools, skills and MCP servers. |
+| 📴 **Models on your phone** | Download a small model (llama.cpp, from Hugging Face) and chat completely offline. |
+| 🎙️ **Voice** | Hands-free voice calls, dictation and spoken replies. |
+| 🤖 **Default assistant** | Set OpenAide as your Android assistant: long-press the power button and ask. |
+| 📝 **Studio** | Write and edit documents, spreadsheets and slides with AI help. Opens and saves Word, Excel and PowerPoint files. |
+| 🗒️ **Notes and recordings** | Quick notes, meeting minutes from a recording, and dictation. |
+| ✉️ **Email** | Read, sort and answer mail through your server or straight over IMAP, and link Google, Microsoft or GitHub accounts. |
+| 🧰 **Everything else** | Terminal, files, artifacts, calendar, automations, channels, workspace, playground and the admin panel. |
+| 🔒 **Private by design** | No ads, no tracking. Anything that leaves your home network is encrypted. |
 
 ## Install
 
-OpenAide is not on Google Play yet. Install the APK from GitHub:
+OpenAide isn't on Google Play yet, so you install it straight from GitHub. It takes about a minute.
 
-1. On your phone, open the [latest release](../../releases/latest) and download `OpenAide-<version>.apk`.
-2. Open the downloaded file. If Android asks, allow your browser or file manager to **install unknown apps**.
-3. If Play Protect warns about an app from an unknown developer, tap **More details → Install anyway**. The full source is in this repo, and every release is built by the [Build workflow](.github/workflows/build.yml).
-4. Open OpenAide and choose how to connect: your Open WebUI server, an AI provider, or a model on the phone.
+1. **Download.** On your phone, open the [latest release](../../releases/latest) and tap `OpenAide-<version>.apk` under **Assets**.
+2. **Open the file.** Tap the download notification, or find the file in your **Downloads**.
+3. **Allow the install.** Android asks the first time: tap **Settings**, turn on **Allow from this source** for your browser, then go back and tap **Install**.
+4. **If Play Protect warns you,** tap **More details → Install anyway**. It does this for any app that isn't from the Play Store. The full source code is right here, and every release is built automatically by the [Build workflow](.github/workflows/build.yml).
+5. **Open OpenAide.**
 
-Requires Android 9 or newer.
+Needs Android 9 or newer.
+
+## Getting started
+
+The first screen asks how you want to use OpenAide. Pick one, and you can add the others later in **Settings**.
+
+- **I have an Open WebUI server:** enter its address (for example `https://chat.example.com`, or `http://192.168.1.20:3000` at home) and sign in with your email and password, an API key, or your server's sign-on page. Replies run on your server, so its tools, pipelines, filters and knowledge work exactly as on the web.
+- **Use an AI provider:** sign in to OpenRouter, or paste a Claude or OpenAI API key.
+- **Run a model on the phone:** choose one of the recommended small models and download it once. After that it works with no internet.
+
+**Make it your assistant:** in **Settings → Phone and assistant**, tap **Make OpenAide your phone's assistant**, choose **Digital assistant app → OpenAide**, then long-press the power or home button to talk to OpenAide from anywhere.
 
 ### Updates
 
-OpenAide checks GitHub for new releases on start and offers to install them over the top; your chats and settings stay. In **Settings → App updates** you can pick a channel:
+OpenAide checks for new versions when it starts and offers to install them over the top. Your chats and settings stay. In **Settings → App updates** you can pick a channel:
 
-- **Stable**: public releases only (recommended).
-- **Dev builds**: every new build, often several a day. Newest features, less tested.
+- **Stable:** public releases only (recommended).
+- **Dev builds:** every new build, often several a day. Newest features, less tested.
 
-No GitHub account or token is needed.
+No GitHub account is needed.
 
-## Connecting to Open WebUI
+### Troubleshooting
 
-Enter your server's address (for example `https://chat.example.com` or `http://192.168.1.20:3000`) and sign in with your email and password, an API key, or your server's single sign-on page. Everything the app does runs through the server, so its tools, pipelines, filters and knowledge apply exactly as on the web.
+- **"App not installed":** a copy signed by someone else (for example one you built yourself) is already on the phone. Uninstall it first.
+- **Can't reach my server:** check the address opens in the phone's browser. Away from home, use your server's `https://` address. Plain `http://` is only allowed on your home network.
+- **Something else:** [open an issue](../../issues/new) and say what you tapped and what happened.
 
 ## Build from source
 
