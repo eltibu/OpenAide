@@ -17,10 +17,16 @@ const _microsoftFromBuild = String.fromEnvironment('NEXUS_MICROSOFT_CLIENT_ID');
 
 /// Google Cloud "Desktop app" client, for Gmail. Sign-in comes back to a
 /// listener on the phone (127.0.0.1).
-const googleClientId = String.fromEnvironment('NEXUS_GOOGLE_CLIENT_ID');
+/// OpenAide's own client unless a build names another.
+const googleClientId = _googleFromBuild == ''
+    ? '887606475907-3qt8l8v3tugub3hvgb61abujj6oivpun.apps.googleusercontent.com'
+    : _googleFromBuild;
+const _googleFromBuild = String.fromEnvironment('NEXUS_GOOGLE_CLIENT_ID');
 
-/// That client's secret. Google treats it as public for installed apps
-/// (it ships inside every copy), but its token endpoint still wants it.
+/// That client's secret, from the NEXUS_GOOGLE_CLIENT_SECRET repo variable.
+/// Google treats it as public for installed apps (it ships inside every
+/// copy), but its token endpoint still wants it. Kept out of the source so
+/// secret scanners don't flag it. Without it, Google sign-in stays hidden.
 const googleClientSecret = String.fromEnvironment('NEXUS_GOOGLE_CLIENT_SECRET');
 
 /// Where browser sign-ins come back to the app.

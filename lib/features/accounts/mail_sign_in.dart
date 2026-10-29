@@ -32,7 +32,7 @@ enum MailSignIn {
       MailSignIn.values.where((s) => s.id == id).firstOrNull;
 
   bool get available => switch (this) {
-    google => googleClientId.isNotEmpty,
+    google => googleClientId.isNotEmpty && googleClientSecret.isNotEmpty,
     microsoft => microsoftClientId.isNotEmpty,
   };
 }
