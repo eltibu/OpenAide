@@ -28,7 +28,8 @@ final wakeModelUrl = Uri.parse(
 /// The SHA-256 of that zip: a download that differs (a changed or tampered
 /// file) is refused, since the phone runs what's in it. Checked by the
 /// build ("Check the wake-phrase model").
-const wakeModelSha256 = '';
+const wakeModelSha256 =
+    '30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498';
 
 /// The model's folder in [into], downloading and unpacking it the first
 /// time. [progress] gets 0 to 1 while it downloads.

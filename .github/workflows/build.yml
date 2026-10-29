@@ -99,7 +99,7 @@ jobs:
         continue-on-error: true
         run: |
           URL=$(grep -oE "https://alphacephei.com/vosk/models/" lib/features/phone/wake_phrase.dart)$(grep -oE "vosk-model-[a-z0-9.-]+" lib/features/phone/wake_phrase.dart | head -1).zip
-          WANT=$(grep -oE "wakeModelSha256 = '[0-9a-f]*'" lib/features/phone/wake_phrase.dart | grep -oE "[0-9a-f]{64}" || true)
+          WANT=$(grep -A1 "^const wakeModelSha256" lib/features/phone/wake_phrase.dart | grep -oE "[0-9a-f]{64}" || true)
           GOT=$(curl -sfL "$URL" | sha256sum | cut -d' ' -f1)
           if [ "$GOT" = "$WANT" ]; then echo "::notice::Wake-phrase model OK ($GOT)"
           else echo "::warning::Wake-phrase model $URL has SHA-256 $GOT, the app expects ${WANT:-none}"; fi
