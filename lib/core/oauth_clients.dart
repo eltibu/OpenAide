@@ -8,7 +8,12 @@ const githubClientId = String.fromEnvironment('NEXUS_GITHUB_CLIENT_ID');
 
 /// Microsoft Entra app (personal and work accounts, public client flows
 /// on), used with a device code for Outlook mail.
-const microsoftClientId = String.fromEnvironment('NEXUS_MICROSOFT_CLIENT_ID');
+/// OpenAide's own registration, unless a build names another; the build
+/// passes an empty value when its variable isn't set.
+const microsoftClientId = _microsoftFromBuild == ''
+    ? 'c14faf7c-b57d-43cb-9688-01f1fbf3f13b'
+    : _microsoftFromBuild;
+const _microsoftFromBuild = String.fromEnvironment('NEXUS_MICROSOFT_CLIENT_ID');
 
 /// Google Cloud "Desktop app" client, for Gmail. Sign-in comes back to a
 /// listener on the phone (127.0.0.1).
