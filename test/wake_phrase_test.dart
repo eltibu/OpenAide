@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:archive/archive.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -46,6 +47,7 @@ void main() {
       final path = await downloadWakeModel(
         dir,
         from: url(),
+        sha256Hex: '${sha256.convert(body)}',
         progress: seen.add,
       );
       expect(path, '${dir.path}/$wakeModelName');
@@ -56,6 +58,18 @@ void main() {
       // Kept on the phone: not downloaded again.
       await downloadWakeModel(dir, from: url());
       expect(asked, 1);
+    });
+
+    test('a download that is not the expected file is refused', () async {
+      body = ZipEncoder().encode(
+        Archive()..add(ArchiveFile.bytes('$wakeModelName/am/final.mdl', [9])),
+      );
+      await expectLater(
+        downloadWakeModel(dir, from: url(), sha256Hex: '0' * 64),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(Directory('${dir.path}/$wakeModelName').existsSync(), isFalse);
+      expect(File('${dir.path}/$wakeModelName.zip').existsSync(), isFalse);
     });
 
     test('a download without the model is refused', () async {
