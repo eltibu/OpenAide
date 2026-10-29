@@ -284,9 +284,7 @@ class InterfaceSettings extends ConsumerWidget {
                     ),
                     TextButton(
                       onPressed: () => setScale(scale == null ? 1.0 : null),
-                      child: Text(
-                        scale == null ? tr('Default') : '${scale}x',
-                      ),
+                      child: Text(scale == null ? tr('Default') : '${scale}x'),
                     ),
                     IconButton(
                       tooltip: tr('Increase UI Scale'),

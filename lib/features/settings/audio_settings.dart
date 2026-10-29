@@ -261,7 +261,6 @@ class _VoicePicker extends ConsumerWidget {
       );
 }
 
-
 /// The phone's own voices, grouped by language; the online ones only with
 /// Allow non-local voices on.
 class _PhoneVoicePicker extends StatelessWidget {

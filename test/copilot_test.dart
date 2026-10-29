@@ -108,10 +108,9 @@ void main() {
     expect(models.single.capabilities['vision'], isTrue);
   });
 
-  test('sign-in stays hidden until the build has a client id', () {
+  test("sign-in uses OpenAide's own GitHub app by default", () {
     // Tests run without --dart-define=NEXUS_GITHUB_CLIENT_ID.
-    expect(copilotSignInAvailable, isFalse);
-    expect(startGitHubDeviceSignIn(), throwsA(isA<AiException>()));
+    expect(copilotSignInAvailable, isTrue);
   });
 
   test('only sends the token to https Copilot hosts', () {

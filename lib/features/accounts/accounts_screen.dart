@@ -96,6 +96,18 @@ class AccountsScreen extends ConsumerWidget {
                 ],
               ),
             ),
+          for (final p in MailSignIn.values)
+            if (p.available)
+              ListTile(
+                leading: const Icon(Icons.login),
+                title: Text('Sign in with ${p.label}'),
+                subtitle: T(
+                  p == MailSignIn.google
+                      ? 'Gmail, no app password needed'
+                      : 'Outlook, Hotmail and work email',
+                ),
+                onTap: () => open(AddMailAccount(signInWith: p)),
+              ),
           ListTile(
             leading: const Icon(Icons.add),
             title: const T('Add an email account'),
@@ -106,7 +118,7 @@ class AccountsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.hub_outlined),
             title: const T('AI providers'),
-            subtitle: const T('OpenRouter, Claude and OpenAI'),
+            subtitle: const T('OpenRouter, Claude, OpenAI and GitHub Copilot'),
             onTap: () => open(const AiProvidersScreen()),
           ),
         ],
@@ -119,8 +131,11 @@ class AccountsScreen extends ConsumerWidget {
 /// password are enough for known services; others find their servers
 /// themselves or take them by hand.
 class AddMailAccount extends ConsumerStatefulWidget {
-  const AddMailAccount({super.key, this.editing});
+  const AddMailAccount({super.key, this.editing, this.signInWith});
   final MailAccountConfig? editing;
+
+  /// Starts that provider's sign-in as soon as the screen opens.
+  final MailSignIn? signInWith;
 
   @override
   ConsumerState<AddMailAccount> createState() => _AddMailAccountState();
@@ -144,6 +159,17 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
   bool _busy = false;
   bool _hide = true;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    final p = widget.signInWith;
+    if (p != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _signIn(p);
+      });
+    }
+  }
 
   @override
   void dispose() {

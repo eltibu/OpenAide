@@ -341,10 +341,9 @@ class _ChangePasswordState extends ConsumerState<ChangePassword> {
     final client = ref.read(clientProvider);
     final email = '${ref.read(meProvider).value?['email'] ?? ''}';
     try {
-      await ref.read(settingsApiProvider).updatePassword(
-        _current.text,
-        _next.text,
-      );
+      await ref
+          .read(settingsApiProvider)
+          .updatePassword(_current.text, _next.text);
     } catch (e) {
       if (mounted) {
         _say(context, '$e');
