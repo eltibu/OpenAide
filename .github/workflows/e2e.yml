@@ -1,0 +1,111 @@
+name: Feature tests
+
+# Checks the app's features end to end against a throwaway Open WebUI with
+# a fake AI provider (tool/e2e). Separate from Build, so a failing check
+# never holds back an update; the results show in the run's summary.
+#
+# The runner is one PC that also builds every update, so this runs when
+# the shared branches move, once a night, by hand, and on pull requests
+# that change the tests themselves, not on every pull request.
+on:
+  push:
+    branches: [Main-Repository, claude/project-thread-io206b]
+  pull_request:
+    paths:
+      - tool/e2e/**
+      - integration_test/**
+      - test/integration/**
+      - .github/workflows/e2e.yml
+  schedule:
+    - cron: '30 7 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    # Joel's PC, like Build. Never for pull requests from forks: the runner
+    # is his own computer.
+    runs-on: [self-hosted, nexus-build]
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    timeout-minutes: 40
+    env:
+      # Its own ports, away from anything else on the PC.
+      OWUI_PORT: '18080'
+      FAKE_PORT: '11500'
+      TERM_PORT: '18100'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The nightly run starts from the default branch's copy of this
+          # file but tests the shared branch, where the app work lands.
+          ref: ${{ github.event_name == 'schedule' && 'claude/project-thread-io206b' || '' }}
+      # Pinned to a commit (v2.23.0), as in Build.
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - name: Install uv
+        run: |
+          if ! command -v uv >/dev/null; then
+            curl -LsSf https://astral.sh/uv/install.sh | sh
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          fi
+      - run: flutter pub get
+      # For the encrypted chat tests; skipped by them when it can't build.
+      - name: Build the encrypted chat library
+        continue-on-error: true
+        run: echo "OPENAIDE_ENCRYPTION_LIB=$(tool/build_encryption.sh host)" >> "$GITHUB_ENV"
+      - name: Start the test server
+        run: |
+          export PATH="$HOME/.local/bin:$PATH"
+          # The Open WebUI venv is kept between runs (about 2 GB, made once).
+          E2E_WORKDIR="$HOME/.cache/openaide-e2e" tool/e2e/start_server.sh \
+            > "$RUNNER_TEMP/e2e.env"
+          cat "$RUNNER_TEMP/e2e.env"
+          sed 's/^export //' "$RUNNER_TEMP/e2e.env" >> "$GITHUB_ENV"
+          echo "OLLAMA_URL=http://127.0.0.1:$FAKE_PORT" >> "$GITHUB_ENV"
+          echo "FAKE_OPENAI_URL=http://127.0.0.1:$FAKE_PORT/v1" >> "$GITHUB_ENV"
+      - name: Server tests
+        run: |
+          flutter test test/integration --concurrency=1 \
+            --file-reporter "json:$RUNNER_TEMP/e2e.json" --reporter expanded
+      - name: Screen crawl (every page and button)
+        # Needs the Linux desktop libraries (GTK 3) and a virtual display.
+        # Installs them once when the runner may use sudo without a
+        # password; otherwise skipped with a note saying what to install.
+        if: ${{ !cancelled() }}
+        run: |
+          PKGS="libgtk-3-dev libsecret-1-dev xvfb gnome-keyring dbus-x11 ninja-build clang cmake pkg-config"
+          if ! pkg-config --exists gtk+-3.0 || ! command -v xvfb-run >/dev/null; then
+            sudo -n true 2>/dev/null \
+              && { sudo -n apt-get install -y -q $PKGS || { sudo -n apt-get update -q && sudo -n apt-get install -y -q $PKGS; }; } \
+              || true
+          fi
+          if ! pkg-config --exists gtk+-3.0 || ! command -v xvfb-run >/dev/null; then
+            echo "::notice::Screen crawl skipped: run once on the runner: sudo apt-get install -y $PKGS"
+            exit 0
+          fi
+          tool/e2e/crawl.sh
+      - name: Summary
+        if: ${{ !cancelled() }}
+        run: |
+          python3 tool/e2e/summary.py "$RUNNER_TEMP/e2e.json" build/e2e \
+            >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: feature-test-results
+          path: |
+            ${{ runner.temp }}/e2e.json
+            build/e2e/
+          if-no-files-found: ignore
+      - name: Stop the test server
+        if: ${{ always() }}
+        run: |
+          for p in owui fake_ai terminal; do
+            f="$HOME/.cache/openaide-e2e/$p.pid"
+            [ -f "$f" ] && kill "$(cat "$f")" 2>/dev/null || true
+          done
