@@ -9,6 +9,8 @@ import 'package:enough_mail/enough_mail.dart' as mail;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
+import 'mail_sign_in.dart';
+
 /// One email account: where its mail is and how to sign in.
 class MailAccountConfig {
   const MailAccountConfig({
@@ -21,6 +23,7 @@ class MailAccountConfig {
     this.imapPort = 993,
     this.smtpPort = 465,
     this.smtpStartTls = false,
+    this.signIn = '',
   });
 
   factory MailAccountConfig.fromJson(Map j) => MailAccountConfig(
@@ -33,6 +36,7 @@ class MailAccountConfig {
     smtpHost: '${j['smtpHost'] ?? ''}',
     smtpPort: (j['smtpPort'] as num?)?.toInt() ?? 465,
     smtpStartTls: j['smtpStartTls'] == true,
+    signIn: '${j['signIn'] ?? ''}',
   );
 
   Map<String, dynamic> toJson() => {
@@ -45,11 +49,14 @@ class MailAccountConfig {
     'smtpHost': smtpHost,
     'smtpPort': smtpPort,
     'smtpStartTls': smtpStartTls,
+    if (signIn.isNotEmpty) 'signIn': signIn,
   };
 
   final String email;
 
   /// For Gmail, iCloud and Yahoo an app password, not the account's own.
+  /// For an account signed in with Google or Microsoft ([signIn]), the
+  /// sign-in's refresh token.
   final String password;
 
   /// The name shown on mail sent from it.
@@ -66,12 +73,51 @@ class MailAccountConfig {
   /// the start (465).
   final bool smtpStartTls;
 
+  /// `google` or `microsoft` when the account signed in with that
+  /// provider (OAuth) instead of a password; empty otherwise.
+  final String signIn;
+
+  MailSignIn? get oauth => MailSignIn.byId(signIn);
+
   /// Gmail keeps a copy of what is sent over SMTP itself, so the app must
   /// not add a second one to Sent.
   bool get keepsSentCopy =>
       imapHost.endsWith('gmail.com') || imapHost.endsWith('googlemail.com');
 
-  mail.MailAccount toMailAccount() => mail.MailAccount.fromManualSettings(
+  /// The account for enough_mail, with a fresh access token when it
+  /// signed in with Google or Microsoft.
+  Future<mail.MailAccount> toMailAccount() async {
+    final provider = oauth;
+    if (provider == null) return _withPassword();
+    final token = await mailAccessToken(provider, email, password);
+    final auth = mail.OauthAuthentication(
+      email,
+      mail.OauthToken(
+        accessToken: token,
+        expiresIn: 3600,
+        refreshToken: '',
+        scope: '',
+        tokenType: 'Bearer',
+        created: DateTime.now().toUtc(),
+      ),
+    );
+    return mail.MailAccount.fromManualSettingsWithAuth(
+      name: email,
+      email: email,
+      userName: name,
+      auth: auth,
+      incomingHost: imapHost,
+      incomingPort: imapPort,
+      outgoingHost: smtpHost,
+      outgoingPort: smtpPort,
+      outgoingSocketType: smtpStartTls
+          ? mail.SocketType.starttls
+          : mail.SocketType.ssl,
+      outgoingClientDomain: 'nexus-assistant.app',
+    );
+  }
+
+  mail.MailAccount _withPassword() => mail.MailAccount.fromManualSettings(
     name: email,
     email: email,
     userName: name,
@@ -98,6 +144,7 @@ class MailAccountConfig {
         smtpHost: smtpHost,
         smtpPort: smtpPort,
         smtpStartTls: smtpStartTls,
+        signIn: signIn,
       );
 }
 
@@ -112,6 +159,7 @@ class MailPreset {
     this.appPasswordUrl,
     this.help = '',
     this.signInOnly = false,
+    this.signIn,
   });
 
   final String label;
@@ -125,6 +173,9 @@ class MailPreset {
   /// The service no longer takes passwords over IMAP; it needs its own
   /// sign-in (OAuth).
   final bool signInOnly;
+
+  /// The provider sign-in this service takes, if any.
+  final MailSignIn? signIn;
 }
 
 const _gmail = MailPreset(
@@ -136,6 +187,7 @@ const _gmail = MailPreset(
       'Gmail needs an app password, not your Google password. Turn on '
       '2-Step Verification, then make one at Google Account > App '
       'passwords and paste the 16 letters here.',
+  signIn: MailSignIn.google,
 );
 
 const _outlook = MailPreset(
@@ -145,9 +197,10 @@ const _outlook = MailPreset(
   smtpPort: 587,
   smtpStartTls: true,
   signInOnly: true,
+  signIn: MailSignIn.microsoft,
   help:
       'Outlook.com and Hotmail no longer accept passwords from mail apps. '
-      'They need a Microsoft sign-in, which is coming to Accounts.',
+      'They need a Microsoft sign-in: Sign in with Microsoft.',
 );
 
 const mailPresets = <String, MailPreset>{
@@ -299,6 +352,10 @@ String _login(String template, String email) {
 /// Signs in to both servers, so a wrong password or server shows when the
 /// account is added, not later. Throws with what went wrong.
 Future<void> testMailAccount(MailAccountConfig a) async {
+  final provider = a.oauth;
+  final token = provider == null
+      ? null
+      : await mailAccessToken(provider, a.email, a.password);
   final imap = mail.ImapClient();
   try {
     await imap.connectToServer(
@@ -306,7 +363,11 @@ Future<void> testMailAccount(MailAccountConfig a) async {
       a.imapPort,
       timeout: const Duration(seconds: 20),
     );
-    await imap.login(a.login.isEmpty ? a.email : a.login, a.password);
+    if (token != null) {
+      await imap.authenticateWithOAuth2(a.email, token);
+    } else {
+      await imap.login(a.login.isEmpty ? a.email : a.login, a.password);
+    }
   } on mail.ImapException catch (e) {
     throw MailAccountError(
       'Couldn\'t sign in to ${a.imapHost}: ${e.message ?? e}',
@@ -331,9 +392,11 @@ Future<void> testMailAccount(MailAccountConfig a) async {
     final login = a.login.isEmpty ? a.email : a.login;
     final info = smtp.serverInfo;
     await smtp.authenticate(
-      login,
-      a.password,
-      info.supportsAuth(mail.AuthMechanism.plain)
+      token == null ? login : a.email,
+      token ?? a.password,
+      token != null
+          ? mail.AuthMechanism.xoauth2
+          : info.supportsAuth(mail.AuthMechanism.plain)
           ? mail.AuthMechanism.plain
           : info.supportsAuth(mail.AuthMechanism.login)
           ? mail.AuthMechanism.login
@@ -431,6 +494,7 @@ class MailAccountsNotifier extends AsyncNotifier<MailAccounts> {
 
   Future<void> remove(String email) async {
     final now = await future;
+    await forgetMailSignIn(email);
     await _write(
       MailAccounts(
         accounts: [
