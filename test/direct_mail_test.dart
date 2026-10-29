@@ -146,7 +146,7 @@ void main() {
       expect(copy.length, after.length);
 
       // An HTML email with an inline picture shows as sent, picture in.
-      final client = mail.MailClient(account.toMailAccount());
+      final client = mail.MailClient(await account.toMailAccount());
       await client.connect();
       for (final name in ['Trash', 'Archive']) {
         try {

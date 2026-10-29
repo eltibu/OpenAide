@@ -255,6 +255,9 @@ jobs:
           NEXUS_GITHUB_CLIENT_ID: ${{ vars.NEXUS_GITHUB_CLIENT_ID }}
           NEXUS_MICROSOFT_CLIENT_ID: ${{ vars.NEXUS_MICROSOFT_CLIENT_ID }}
           NEXUS_GOOGLE_CLIENT_ID: ${{ vars.NEXUS_GOOGLE_CLIENT_ID }}
+          # A desktop client's secret is public by Google's own rules for
+          # installed apps; it may be kept as a variable or a secret.
+          NEXUS_GOOGLE_CLIENT_SECRET: ${{ vars.NEXUS_GOOGLE_CLIENT_SECRET || secrets.NEXUS_GOOGLE_CLIENT_SECRET }}
         run: |
           set -o pipefail
           flutter build apk --release \
@@ -263,7 +266,8 @@ jobs:
             --dart-define=NEXUS_UPDATE_TOKEN="$NEXUS_UPDATE_TOKEN" \
             --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID" \
             --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
-            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" 2>&1 | tee build.log || {
+            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET" 2>&1 | tee build.log || {
             grep -E "^e: |error:|What went wrong|Exception|FAILURE" -A4 build.log \
               | head -40 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1

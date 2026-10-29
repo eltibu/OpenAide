@@ -217,7 +217,7 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
       await showDialog<void>(
         context: context,
         barrierDismissible: false,
-        builder: (context) => _DeviceCodeDialog(
+        builder: (context) => DeviceCodeDialog(
           code: code,
           onCancel: () {
             if (!cancel.isCompleted) cancel.complete();
@@ -384,19 +384,26 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
   }
 }
 
-/// Shows the code to type on GitHub, with a button that opens the page.
-class _DeviceCodeDialog extends StatelessWidget {
-  const _DeviceCodeDialog({required this.code, required this.onCancel});
+/// Shows the code to type on the provider's site (GitHub, Microsoft),
+/// with a button that opens the page.
+class DeviceCodeDialog extends StatelessWidget {
+  const DeviceCodeDialog({
+    super.key,
+    required this.code,
+    required this.onCancel,
+    this.site = 'GitHub',
+  });
   final DeviceCode code;
   final VoidCallback onCancel;
+  final String site;
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const T('Sign in with GitHub'),
+    title: T('Sign in with $site'),
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const T('Open GitHub and enter this code:'),
+        T('Open $site and enter this code:'),
         const SizedBox(height: 16),
         SelectableText(
           code.userCode,
@@ -420,7 +427,7 @@ class _DeviceCodeDialog extends StatelessWidget {
             const SizedBox(width: 12),
             Expanded(
               child: T(
-                'Waiting for GitHub…',
+                'Waiting for $site…',
                 style: TextStyle(color: context.nexus.muted),
               ),
             ),
@@ -438,7 +445,7 @@ class _DeviceCodeDialog extends StatelessWidget {
             mode: LaunchMode.externalApplication,
           );
         },
-        child: const T('Open GitHub'),
+        child: T('Open $site'),
       ),
     ],
   );

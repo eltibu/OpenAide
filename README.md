@@ -72,6 +72,10 @@ Issues and pull requests are welcome. Please describe what you changed and how y
 
 See [PRIVACY.md](PRIVACY.md) for what the app stores and sends, and [SECURITY.md](SECURITY.md) to report a vulnerability.
 
+## Support
+
+OpenAide is free, with no ads and no tracking. If it helps you, you can [buy me a coffee](https://buymeacoffee.com/eltibu).
+
 ## License
 
 [MIT](LICENSE). Third-party licenses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

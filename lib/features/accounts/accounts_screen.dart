@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +8,7 @@ import '../../core/theme.dart';
 import '../email/direct_mail.dart' show DirectMailStore;
 import '../providers/ai_providers_screen.dart';
 import 'mail_accounts.dart';
+import 'mail_sign_in.dart';
 import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
@@ -96,7 +99,7 @@ class AccountsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.add),
             title: const T('Add an email account'),
-            subtitle: const T('Gmail, iCloud, Yahoo, Fastmail or any IMAP'),
+            subtitle: const T('Gmail, Outlook, iCloud, Yahoo or any IMAP'),
             onTap: () => open(const AddMailAccount()),
           ),
           const Divider(),
@@ -180,7 +183,7 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
       return setState(() => _error = 'Enter the app password.');
     }
     final preset = presetFor(email);
-    if (preset?.signInOnly == true) {
+    if (preset?.signInOnly == true && widget.editing?.oauth == null) {
       return setState(() => _error = preset!.help);
     }
     setState(() {
@@ -235,19 +238,155 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
     Navigator.pop(context);
   }
 
+  GoogleSignIn? _google;
+
+  @override
+  void deactivate() {
+    _google?.cancel();
+    super.deactivate();
+  }
+
+  /// Signs in with Google or Microsoft instead of an app password, then
+  /// adds the account it opened.
+  Future<void> _signIn(MailSignIn provider) async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    final cancel = Completer<void>();
+    try {
+      final MailGrant grant;
+      if (provider == MailSignIn.microsoft) {
+        final code = await startMicrosoftSignIn();
+        if (!mounted) return;
+        final waiting = waitForMicrosoftSignIn(code, cancelled: cancel.future);
+        var open = true;
+        void close() {
+          if (open && mounted) Navigator.of(context, rootNavigator: true).pop();
+        }
+
+        unawaited(waiting.then((_) => close(), onError: (_) => close()));
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (d) => DeviceCodeDialog(
+            code: code,
+            site: 'Microsoft',
+            onCancel: () {
+              if (!cancel.isCompleted) cancel.complete();
+              Navigator.pop(d);
+            },
+          ),
+        );
+        open = false;
+        grant = await waiting;
+      } else {
+        final sign = _google = await GoogleSignIn.start(
+          loginHint: _email.text.trim(),
+        );
+        if (mounted) setState(() {});
+        grant = await sign.grant;
+      }
+      final editing = widget.editing;
+      if (editing != null &&
+          editing.email.toLowerCase() != grant.email.toLowerCase()) {
+        throw MailSignInError(
+          'That signed in as ${grant.email}, not ${editing.email}.',
+        );
+      }
+      await forgetMailSignIn(grant.email);
+      rememberAccessToken(grant);
+      final consumer = presetFor(grant.email) != null;
+      final account = MailAccountConfig(
+        email: grant.email,
+        password: grant.refreshToken,
+        name: _name.text.trim().isNotEmpty ? _name.text.trim() : grant.name,
+        signIn: provider.id,
+        imapHost: provider == MailSignIn.google
+            ? 'imap.gmail.com'
+            : 'outlook.office365.com',
+        smtpHost: provider == MailSignIn.google
+            ? 'smtp.gmail.com'
+            : consumer
+            ? 'smtp-mail.outlook.com'
+            : 'smtp.office365.com',
+        smtpPort: provider == MailSignIn.google ? 465 : 587,
+        smtpStartTls: provider == MailSignIn.microsoft,
+      );
+      await testMailAccount(account);
+      await ref.read(mailAccountsProvider.notifier).save(account);
+      if (!mounted) return;
+      _say(context, '${account.email} added');
+      Navigator.pop(context);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    } finally {
+      if (!cancel.isCompleted) cancel.complete();
+      _google = null;
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  List<Widget> _signInButtons(MailAccountConfig? editing) {
+    final providers = [
+      for (final p in MailSignIn.values)
+        if (p.available && (editing == null || editing.oauth == p)) p,
+    ];
+    if (providers.isEmpty) return const [];
+    return [
+      for (final p in providers) ...[
+        OutlinedButton.icon(
+          onPressed: _busy ? null : () => _signIn(p),
+          icon: const Icon(Icons.login),
+          label: Text(
+            editing == null ? 'Sign in with ${p.label}' : 'Sign in again',
+          ),
+        ),
+        const SizedBox(height: 8),
+      ],
+      if (_google != null)
+        Row(
+          children: [
+            const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: T('Approve OpenAide in the browser, then come back.'),
+            ),
+            TextButton(
+              onPressed: () => _google?.cancel(),
+              child: const T('Cancel'),
+            ),
+          ],
+        ),
+      if (editing == null) ...[
+        const SizedBox(height: 4),
+        T(
+          'Or add any account with its app password:',
+          style: TextStyle(color: context.nexus.muted, fontSize: 13),
+        ),
+        const SizedBox(height: 12),
+      ],
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
     final preset = presetFor(_email.text.trim());
+    final signedIn = widget.editing?.oauth;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.editing == null ? 'Add email' : 'Email account'),
       ),
       body: AbsorbPointer(
-        absorbing: _busy,
+        absorbing: _busy && _google == null,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            if (widget.editing == null) ..._signInButtons(null),
             TextField(
               controller: _email,
               enabled: widget.editing == null,
@@ -260,24 +399,34 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _password,
-              obscureText: _hide,
-              autocorrect: false,
-              enableSuggestions: false,
-              decoration: InputDecoration(
-                labelText: widget.editing == null
-                    ? 'App password'
-                    : 'App password (empty keeps the saved one)',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  tooltip: _hide ? 'Show' : 'Hide',
-                  icon: Icon(_hide ? Icons.visibility : Icons.visibility_off),
-                  onPressed: () => setState(() => _hide = !_hide),
+            if (signedIn != null) ...[
+              T(
+                'Signed in with ${signedIn.label}. No password is kept.',
+                style: TextStyle(color: muted, fontSize: 13),
+              ),
+              const SizedBox(height: 8),
+              ..._signInButtons(widget.editing),
+            ] else
+              TextField(
+                controller: _password,
+                obscureText: _hide,
+                autocorrect: false,
+                enableSuggestions: false,
+                decoration: InputDecoration(
+                  labelText: widget.editing == null
+                      ? 'App password'
+                      : 'App password (empty keeps the saved one)',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    tooltip: _hide ? 'Show' : 'Hide',
+                    icon: Icon(_hide ? Icons.visibility : Icons.visibility_off),
+                    onPressed: () => setState(() => _hide = !_hide),
+                  ),
                 ),
               ),
-            ),
-            if (preset != null && preset.help.isNotEmpty) ...[
+            if (signedIn == null &&
+                preset != null &&
+                preset.help.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(preset.help, style: TextStyle(color: muted, fontSize: 13)),
               if (preset.appPasswordUrl != null)

@@ -229,10 +229,15 @@ class DirectMail implements MailSource {
     Future<T> Function(mail.MailClient c) work, {
     int wholeUpTo = _wholeUpTo,
   }) async {
-    final c = mail.MailClient(
-      account.toMailAccount(),
-      downloadSizeLimit: wholeUpTo,
-    );
+    final mail.MailClient c;
+    try {
+      c = mail.MailClient(
+        await account.toMailAccount(),
+        downloadSizeLimit: wholeUpTo,
+      );
+    } catch (e) {
+      throw EmailAgentError('Couldn\'t sign in to ${account.email}: $e');
+    }
     try {
       await c.connect(timeout: const Duration(seconds: 25));
       return await work(c);
