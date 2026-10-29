@@ -155,12 +155,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.brightness_6_outlined),
             title: const T('Theme'),
-            subtitle: Text(switch ((ref.watch(userSettingsProvider).value?['ui']
-                as Map?)?['nexusTheme']) {
-              'light' => 'Light',
-              'dark' => 'Dark',
-              _ => 'Same as the phone',
-            }),
+            subtitle: T(themeName(ref)),
             onTap: () => _pickTheme(context, ref),
           ),
           ListTile(
@@ -293,6 +288,15 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
+String themeName(WidgetRef ref) =>
+    switch ((ref.watch(userSettingsProvider).value?['ui']
+        as Map?)?['nexusTheme']) {
+      'light' => 'Light',
+      'dark' => 'Dark',
+      'oled-dark' => 'OLED Dark',
+      _ => 'Same as the phone',
+    };
+
 Future<void> _pickTheme(BuildContext context, WidgetRef ref) async {
   final now =
       (ref.read(userSettingsProvider).value?['ui'] as Map?)?['nexusTheme'] ??
@@ -308,12 +312,13 @@ Future<void> _pickTheme(BuildContext context, WidgetRef ref) async {
             ('system', 'Same as the phone'),
             ('light', 'Light'),
             ('dark', 'Dark'),
+            ('oled-dark', 'OLED Dark'),
           ])
             ListTile(
               leading: Icon(
                 id == now ? Icons.radio_button_checked : Icons.radio_button_off,
               ),
-              title: Text(label),
+              title: T(label),
               onTap: () => Navigator.pop(context, id),
             ),
         ],
@@ -609,6 +614,18 @@ class _GeneralSettingsState extends ConsumerState<GeneralSettings> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
               children: [
+                // The web's WebUI Settings: Theme and Language.
+                T(
+                  'WebUI Settings',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.brightness_6_outlined),
+                  title: const T('Theme'),
+                  subtitle: T(themeName(ref)),
+                  onTap: () => _pickTheme(context, ref),
+                ),
                 // Settings > General > Language, kept on this phone as on
                 // the web.
                 ListenableBuilder(

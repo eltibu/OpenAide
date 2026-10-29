@@ -46,10 +46,20 @@ extension NexusTheme on BuildContext {
   NexusColors get nexus => Theme.of(this).extension<NexusColors>()!;
 }
 
-ThemeData nexusTheme(Brightness brightness) {
+/// [oled] is the web's OLED Dark: true black behind everything, so the
+/// screen's pixels are off.
+ThemeData nexusTheme(Brightness brightness, {bool oled = false}) {
   final dark = brightness == Brightness.dark;
-  final background = dark ? const Color(0xFF262624) : const Color(0xFFFAF9F5);
-  final surface = dark ? const Color(0xFF30302E) : Colors.white;
+  final background = oled
+      ? Colors.black
+      : dark
+      ? const Color(0xFF262624)
+      : const Color(0xFFFAF9F5);
+  final surface = oled
+      ? const Color(0xFF161616)
+      : dark
+      ? const Color(0xFF30302E)
+      : Colors.white;
   final text = dark ? const Color(0xFFF5F4EE) : const Color(0xFF1F1E1D);
   final muted = dark ? const Color(0xFFA6A39A) : const Color(0xFF73726C);
   final scheme =

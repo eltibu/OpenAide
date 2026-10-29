@@ -58,6 +58,8 @@ class NexusApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
+    final theme =
+        (ref.watch(userSettingsProvider).value?['ui'] as Map?)?['nexusTheme'];
     // The server's own wording (Admin > UI translations), as on the web.
     final i18n = ref.watch(serverConfigProvider).value?['i18n'];
     WidgetsBinding.instance.addPostFrameCallback(
@@ -82,12 +84,11 @@ class NexusApp extends ConsumerWidget {
         ],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         theme: nexusTheme(Brightness.light),
-        darkTheme: nexusTheme(Brightness.dark),
+        darkTheme: nexusTheme(Brightness.dark, oled: theme == 'oled-dark'),
         // Settings > Theme, kept on the server with the rest.
-        themeMode: switch ((ref.watch(userSettingsProvider).value?['ui']
-            as Map?)?['nexusTheme']) {
+        themeMode: switch (theme) {
           'light' => ThemeMode.light,
-          'dark' => ThemeMode.dark,
+          'dark' || 'oled-dark' => ThemeMode.dark,
           _ => ThemeMode.system,
         },
         home: switch (session) {
