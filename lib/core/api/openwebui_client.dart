@@ -1,8 +1,12 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import '../models/chat.dart';
+import '../net/local_network.dart';
+import '../offline/offline_cache.dart';
 import '../models/model_info.dart';
 import 'sse.dart';
 
@@ -15,8 +19,44 @@ class ApiException implements Exception {
   final Uri? redirectTo;
 
   @override
+  String toString() => friendlyApiError(statusCode, message);
+}
+
+/// The server answers only over plain http and is on the internet, so a
+/// sign-in would cross the internet unencrypted: it's refused.
+class InsecureServer implements Exception {
+  const InsecureServer(this.host);
+  final String host;
+
+  @override
   String toString() =>
-      statusCode >= 400 ? 'Open WebUI error $statusCode: $message' : message;
+      '$host only answers over plain http, so your password and chats would '
+      'cross the internet unencrypted. Use its https:// address if it has '
+      'one.';
+}
+
+/// What an error from the server says to a person: the server's own
+/// sentence when it gave one, else a plain line for the status code.
+String friendlyApiError(int statusCode, String message) {
+  final text = message.trim();
+  final readable =
+      text.isNotEmpty &&
+      text.length <= 300 &&
+      !text.startsWith('<') &&
+      !text.startsWith('{') &&
+      text != 'null';
+  if (statusCode < 400) return text;
+  if (readable) return text;
+  return switch (statusCode) {
+    401 => 'You were signed out of the server. Sign in again.',
+    403 => "Your account isn't allowed to do that on this server.",
+    404 => "The server doesn't have that, or it was deleted.",
+    408 || 504 => 'The server took too long to answer. Try again.',
+    413 => 'That is too big for the server to take.',
+    429 => 'The server is busy. Wait a moment and try again.',
+    >= 500 => 'The server ran into a problem ($statusCode). Try again.',
+    _ => 'The server said no ($statusCode).',
+  };
 }
 
 /// Thin client over the Open WebUI REST API.
@@ -30,7 +70,8 @@ class OpenWebUiClient {
     this.cookie,
     http.Client? httpClient,
   }) : baseUrl = _normalize(baseUrl),
-       _http = httpClient ?? http.Client();
+       // Never plain http across the internet, whatever was saved before.
+       _http = httpClient ?? EncryptedOnlyClient(null, true);
 
   final String baseUrl;
   String? token;
@@ -39,6 +80,9 @@ class OpenWebUiClient {
   /// pass a login gate (reverse-proxy portal) in front of Open WebUI.
   final String? cookie;
   final http.Client _http;
+
+  /// The connection underneath, for a client that shares it.
+  http.Client get httpClient => _http;
 
   /// Normalizes a typed address the same way the client does.
   static String normalizeUrl(String url) => _normalize(url);
@@ -62,7 +106,37 @@ class OpenWebUiClient {
   Uri _uri(String path, [Map<String, String>? query]) =>
       Uri.parse('$baseUrl$path').replace(queryParameters: query);
 
+  /// Saved copies of reads, for when the server can't be reached; set
+  /// once at start (null keeps nothing).
+  static OfflineStore? offline;
+
   Future<dynamic> _send(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) async {
+    final store = offline;
+    if (method != 'GET' || store == null || !offlineCacheable(path)) {
+      return _sendLive(method, path, body: body, query: query);
+    }
+    final key = '$baseUrl ${offlineKey(path, query)}';
+    try {
+      final res = await _sendLive(method, path, query: query);
+      offlineNotice.value = false;
+      unawaited(store.put(key, jsonEncode(res)));
+      return res;
+    } on ApiException catch (e) {
+      // Only when the server can't be reached at all.
+      if (e.statusCode != 0) rethrow;
+      final saved = await store.get(key);
+      if (saved == null) rethrow;
+      offlineNotice.value = true;
+      return jsonDecode(saved);
+    }
+  }
+
+  Future<dynamic> _sendLive(
     String method,
     String path, {
     Object? body,
@@ -90,7 +164,9 @@ class OpenWebUiClient {
       var message = text;
       try {
         final j = jsonDecode(text);
-        if (j is Map && j['detail'] != null) message = '${j['detail']}';
+        if (j is Map && (j['detail'] ?? j['error']) != null) {
+          message = '${j['detail'] ?? j['error']}';
+        }
       } on FormatException {
         // Non-JSON error body; use as-is.
       }
@@ -146,7 +222,8 @@ class OpenWebUiClient {
 
   /// Finds the Open WebUI base URL for what the user typed: tries it as
   /// given, then without any path (people often paste a chat or /auth link),
-  /// and https before http when no scheme was typed.
+  /// and https before http when no scheme was typed. Plain http is used
+  /// only on the home network, never across the internet.
   static Future<String> discover(
     String input, {
     http.Client? httpClient,
@@ -157,15 +234,15 @@ class OpenWebUiClient {
     final schemes = hasScheme ? [''] : ['https://', 'http://'];
     final candidates = <String>[];
     for (final scheme in schemes) {
-      final full = _normalize('$scheme$typed');
-      final uri = Uri.parse(full);
-      candidates.add(full);
-      final origin = uri
-          .replace(path: '', query: null, fragment: null)
-          .toString();
-      candidates.add(_normalize(origin.replaceAll(RegExp(r'[?#]$'), '')));
+      // A pasted chat link can carry ?query or #fragment: drop them, then
+      // try the address as given and the bare site.
+      final uri = Uri.parse(_normalize('$scheme$typed'));
+      candidates
+        ..add(_normalize('${uri.origin}${uri.path}'))
+        ..add(uri.origin);
     }
     Object? lastError;
+    String? refused;
     final tried = <String>{};
     while (candidates.isNotEmpty && tried.length < 8) {
       final base = candidates.removeAt(0);
@@ -176,6 +253,13 @@ class OpenWebUiClient {
           httpClient: httpClient,
         ).config();
         if (config.containsKey('version') || config.containsKey('name')) {
+          // Only the public config was read so far: nothing secret has
+          // gone over plain http yet.
+          final host = Uri.parse(base).host.toLowerCase();
+          if (isInsecureRemote(Uri.parse(base))) {
+            refused ??= host;
+            continue;
+          }
           return base;
         }
       } on ApiException catch (e) {
@@ -201,6 +285,7 @@ class OpenWebUiClient {
         lastError = e;
       }
     }
+    if (refused != null) throw InsecureServer(refused);
     if (lastError is ApiException) throw lastError;
     throw ApiException(
       0,
@@ -215,18 +300,37 @@ class OpenWebUiClient {
   Future<Map<String, dynamic>> config() async =>
       (await _send('GET', '/api/config') as Map).cast<String, dynamic>();
 
-  /// Email/password sign-in. Stores and returns the JWT.
-  Future<String> signIn(String email, String password) async {
-    final res = await _send(
-      'POST',
-      '/api/v1/auths/signin',
-      body: {'email': email, 'password': password},
-    ) as Map;
-    token = res['token'] as String;
-    return token!;
+  /// Email/password sign-in. Stores and returns the JWT; throws
+  /// [SignInStep] when the server wants a code or an admin's approval first.
+  Future<String> signIn(String email, String password) async =>
+      (await authStep('/api/v1/auths/signin', {
+            'email': email,
+            'password': password,
+          }))['token']
+          as String;
+
+  /// Posts one sign-in form (sign in, LDAP, sign up, a two-step code) and
+  /// stores the token it returns, or throws [SignInStep] for what's next.
+  Future<Map<String, dynamic>> authStep(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final res = ((await _send('POST', path, body: body)) as Map)
+        .cast<String, dynamic>();
+    final t = res['token'];
+    if (t is String && t.isNotEmpty) {
+      token = t;
+      return res;
+    }
+    throw SignInStep(this, res);
   }
 
   /// The signed-in user; also validates a stored token or API key.
+  /// The person's settings, merged with the server's interface defaults.
+  Future<Map<String, dynamic>> userSettings() async =>
+      ((await _send('GET', '/api/v1/users/user/settings') as Map?) ?? {})
+          .cast<String, dynamic>();
+
   Future<Map<String, dynamic>> me() async =>
       (await _send('GET', '/api/v1/auths/') as Map).cast<String, dynamic>();
 
@@ -269,7 +373,184 @@ class OpenWebUiClient {
     body: {'chat': chat.toServerBody()},
   );
 
+  /// A chat's answers to its model's Chat Variables.
+  Future<void> saveChatVariables(String id, Map<String, dynamic> values) =>
+      _send(
+        'POST',
+        '/api/v1/chats/$id',
+        body: {'chat': <String, dynamic>{}, 'variables': values},
+      );
+
   Future<void> deleteChat(String id) => _send('DELETE', '/api/v1/chats/$id');
+
+  /// Saves a chat's own system prompt and model settings (its Controls).
+  Future<void> saveChatParams(String id, Map<String, dynamic> params) =>
+      _send('PATCH', '/api/v1/chats/$id/params', body: params);
+
+  /// Changes only the given top-level parts of a chat; `history` is merged
+  /// on the server, so messages saved meanwhile stay.
+  Future<void> patchChat(String id, Map<String, dynamic> chat) =>
+      _send('POST', '/api/v1/chats/$id', body: {'chat': chat});
+
+  /// Changes one message's text (editing a reply in place, as on the web).
+  Future<void> saveMessageText(String chatId, String messageId, String text) =>
+      _send(
+        'POST',
+        '/api/v1/chats/$chatId/messages/$messageId',
+        body: {'content': text},
+      );
+
+  /// Deletes a message and its direct answers; their answers move up a
+  /// level. Returns the chat as the server now has it.
+  Future<Chat> deleteMessage(String chatId, String messageId) async {
+    final res = await _send(
+      'DELETE',
+      '/api/v1/chats/$chatId/messages/$messageId',
+    );
+    return Chat.fromServer((res as Map).cast<String, dynamic>());
+  }
+
+  /// Answers a reply that is waiting on the person: [action] is `approve` or
+  /// `reject` for a tool call, `answer` (with [answers]) for the model's
+  /// questions. The server carries on with the reply itself; returns the
+  /// ids of the tasks now writing it.
+  Future<List<String>> resolveToolCall(
+    String chatId,
+    String messageId,
+    String callId,
+    String action, {
+    Map<String, dynamic>? answers,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/v1/chats/$chatId/messages/$messageId/resolve',
+      body: {
+        'call_id': callId,
+        'action': action,
+        'answers': ?answers,
+        if (action == 'answer') 'timed_out': false,
+      },
+    );
+    if (res is! Map) return const [];
+    return [
+      ...(res['task_ids'] as List? ?? const []).whereType<String>(),
+      if (res['task_id'] is String) res['task_id'] as String,
+    ];
+  }
+
+  /// Records a thumbs up/down (and its reason) for Admin > Evaluations, the
+  /// same record the web UI keeps. Returns the feedback id.
+  Future<String?> saveFeedback(
+    Map<String, dynamic> feedback, {
+    String? id,
+  }) async {
+    if (id != null) {
+      try {
+        final res = await _send(
+          'POST',
+          '/api/v1/evaluations/feedback/$id',
+          body: feedback,
+        );
+        if (res is Map && res['id'] is String) return res['id'] as String;
+      } on ApiException {
+        // Gone or not ours any more: make a new one.
+      }
+    }
+    final res = await _send(
+      'POST',
+      '/api/v1/evaluations/feedback',
+      body: feedback,
+    );
+    return res is Map ? res['id'] as String? : null;
+  }
+
+  /// Saves a message's voice-call details (`meta.voice`).
+  Future<void> saveMessageVoice(
+    String chatId,
+    String messageId,
+    Map<String, dynamic> voice,
+  ) => _send(
+    'POST',
+    '/api/v1/chats/$chatId/messages/$messageId',
+    body: {'voice': voice},
+  );
+
+  /// Pinned chats; the main list leaves them out, as on the web.
+  Future<List<ChatSummary>> pinnedChats() async =>
+      _summaries(await _send('GET', '/api/v1/chats/pinned'));
+
+  /// Chats whose title or messages match [text] (`tag:x` works too).
+  Future<List<ChatSummary>> searchChats(String text, {int page = 1}) async =>
+      _summaries(
+        await _send(
+          'GET',
+          '/api/v1/chats/search',
+          query: {'text': text, 'page': '$page'},
+        ),
+      );
+
+  /// Chats in a folder, ten per page like the web UI's sidebar.
+  Future<List<ChatSummary>> folderChats(
+    String folderId, {
+    int page = 1,
+  }) async => _summaries(
+    await _send(
+      'GET',
+      '/api/v1/chats/folder/$folderId/list',
+      query: {'page': '$page'},
+    ),
+  );
+
+  List<ChatSummary> _summaries(Object? res) => [
+    for (final c in (res as List? ?? const []).whereType<Map>())
+      ChatSummary.fromJson(c.cast<String, dynamic>()),
+  ];
+
+  /// Changes only the title; the server keeps the rest of the chat.
+  Future<void> renameChat(String id, String title) => _send(
+    'POST',
+    '/api/v1/chats/$id',
+    body: {
+      'chat': {'title': title},
+    },
+  );
+
+  /// Pins or unpins (the server toggles it).
+  Future<void> togglePin(String id) => _send('POST', '/api/v1/chats/$id/pin');
+
+  /// Archives or unarchives (the server toggles it).
+  Future<void> toggleArchive(String id) =>
+      _send('POST', '/api/v1/chats/$id/archive');
+
+  /// Moves a chat into [folderId], or out of any folder with null.
+  Future<void> moveChat(String id, String? folderId) =>
+      _send('POST', '/api/v1/chats/$id/folder', body: {'folder_id': folderId});
+
+  // ---- Folders ----
+
+  Future<List<Folder>> folders() async {
+    final res = await _send('GET', '/api/v1/folders/') as List? ?? const [];
+    return [
+      for (final f in res.whereType<Map>())
+        Folder.fromJson(f.cast<String, dynamic>()),
+    ];
+  }
+
+  Future<void> createFolder(String name, {String? parentId}) => _send(
+    'POST',
+    '/api/v1/folders/',
+    body: {'name': name, 'parent_id': ?parentId},
+  );
+
+  Future<void> renameFolder(String id, String name) =>
+      _send('POST', '/api/v1/folders/$id/update', body: {'name': name});
+
+  /// Deletes the folder; its chats move back to the main list.
+  Future<void> deleteFolder(String id) => _send(
+    'DELETE',
+    '/api/v1/folders/$id',
+    query: {'delete_contents': 'false'},
+  );
 
   // ---- Completions ----
 
@@ -279,16 +560,65 @@ class OpenWebUiClient {
     required String model,
     required List<Map<String, dynamic>> messages,
     Map<String, dynamic> extraParams = const {},
-  }) async* {
+  }) => _streamText('/api/chat/completions', {
+    'model': model,
+    'messages': messages,
+    'stream': true,
+    ...extraParams,
+  });
+
+  /// Streams one answer that merges several models' [responses] to [prompt]
+  /// (Merge Responses on the web), written by [model].
+  Stream<String> streamMerge({
+    required String model,
+    required String prompt,
+    required List<String> responses,
+  }) => _streamText('/api/v1/tasks/moa/completions', {
+    'model': model,
+    'prompt': prompt,
+    'responses': responses,
+    'stream': true,
+  });
+
+  /// A request whose answer comes as JSON lines (Ollama's pull progress),
+  /// or as `data:` lines; each object as it arrives.
+  Stream<Map<String, dynamic>> streamJson(
+    String method,
+    String path,
+    Map<String, dynamic> body,
+  ) async* {
     final res = await _open(
-      () => http.Request('POST', _uri('/api/chat/completions'))
+      () => http.Request(method, _uri(path))
+        ..headers.addAll(_headers)
+        ..body = jsonEncode(body),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(
+        res.statusCode,
+        _errorText(await res.stream.toBytes()),
+      );
+    }
+    final lines = res.stream
+        .transform(utf8.decoder)
+        .transform(const LineSplitter());
+    await for (var line in lines) {
+      line = line.trim();
+      if (line.startsWith('data:')) line = line.substring(5).trim();
+      if (line.isEmpty || line == '[DONE]') continue;
+      try {
+        final j = jsonDecode(line);
+        if (j is Map) yield j.cast<String, dynamic>();
+      } on FormatException {
+        // Not JSON: skip it.
+      }
+    }
+  }
+
+  Stream<String> _streamText(String path, Map<String, dynamic> body) async* {
+    final res = await _open(
+      () => http.Request('POST', _uri(path))
         ..headers.addAll({..._headers, 'Accept': 'text/event-stream'})
-        ..body = jsonEncode({
-          'model': model,
-          'messages': messages,
-          'stream': true,
-          ...extraParams,
-        }),
+        ..body = jsonEncode(body),
     );
     if (res.statusCode >= 300 && res.statusCode < 400) {
       throw ApiException(
@@ -318,7 +648,9 @@ class OpenWebUiClient {
   /// a background task with the chat's tools, memory and filters, saves the
   /// answer on the server, and pushes progress to socket [sessionId].
   ///
-  /// [chatId] null starts a new chat. Returns the chat id and the task ids.
+  /// [chatId] null starts a new chat. [options] carries what the web UI adds
+  /// (tool_ids, filter_ids, terminal_id, features, params). Returns the chat
+  /// id and the task ids.
   Future<({String chatId, List<String> taskIds})> startTurn({
     required String model,
     required String? chatId,
@@ -326,6 +658,7 @@ class OpenWebUiClient {
     required String replyId,
     required List<Map<String, dynamic>> messages,
     required String sessionId,
+    Map<String, dynamic> options = const {},
   }) async {
     final res = await _send(
       'POST',
@@ -343,6 +676,7 @@ class OpenWebUiClient {
         },
         'session_id': sessionId,
         'background_tasks': {'title_generation': true, 'tags_generation': true},
+        ...options,
       },
     );
     if (res is! Map || res['chat_id'] is! String) {
@@ -358,7 +692,235 @@ class OpenWebUiClient {
     );
   }
 
+  /// Uploads a file the way the web UI's attach button does and returns the
+  /// server's file record. [process] extracts the text for the model to read;
+  /// photos skip it, since the model looks at them directly.
+  Future<Map<String, dynamic>> uploadFile(
+    List<int> bytes,
+    String filename, {
+    String? contentType,
+    bool process = true,
+    Map<String, dynamic>? metadata,
+  }) async {
+    final url = _uri('/api/v1/files/', {'process': '$process'});
+    final res = await http.Response.fromStream(
+      await _open(() {
+        final req = http.MultipartRequest('POST', url)
+          ..headers.addAll(authHeaders)
+          ..headers['Accept'] = 'application/json'
+          ..fields.addAll({
+            if (metadata != null) 'metadata': jsonEncode(metadata),
+          })
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: filename,
+              contentType: contentType == null
+                  ? null
+                  : MediaType.parse(contentType),
+            ),
+          );
+        return req;
+      }),
+    );
+    final text = utf8.decode(res.bodyBytes);
+    if (res.statusCode >= 400) {
+      var message = text;
+      try {
+        final j = jsonDecode(text);
+        if (j is Map && j['detail'] != null) message = '${j['detail']}';
+      } on FormatException {
+        // Non-JSON error body; use as-is.
+      }
+      throw ApiException(res.statusCode, message);
+    }
+    final j = jsonDecode(text);
+    if (j is! Map || j['id'] is! String) {
+      throw ApiException(res.statusCode, _notOpenWebUi);
+    }
+    return j.cast<String, dynamic>();
+  }
+
+  /// Waits while the server reads an uploaded document, as the web UI does
+  /// before letting it be sent. Returns the server's problem with the file,
+  /// or null once it's ready.
+  Future<String?> waitForFile(
+    String id, {
+    Duration every = const Duration(seconds: 1),
+    Duration limit = const Duration(minutes: 5),
+  }) async {
+    final end = DateTime.now().add(limit);
+    while (DateTime.now().isBefore(end)) {
+      final res = await _send('GET', '/api/v1/files/$id/process/status');
+      final status = res is Map ? res['status'] : null;
+      if (status == 'completed' || status == null) return null;
+      if (status == 'failed') {
+        final file = await _send('GET', '/api/v1/files/$id');
+        final data = file is Map ? file['data'] : null;
+        return '${(data is Map ? data['error'] : null) ?? 'The server could not read this file.'}';
+      }
+      await Future<void>.delayed(every);
+    }
+    return 'The server is still reading this file.';
+  }
+
+  /// Where an uploaded file's bytes are served (needs [authHeaders]).
+  Uri fileContentUri(String id) => _uri('/api/v1/files/$id/content');
+
+  /// A path on the server (such as `/api/v1/files/<id>/content` or
+  /// `/static/...`) as a full address; full addresses are kept.
+  Uri serverUri(String pathOrUrl) => pathOrUrl.startsWith('http')
+      ? Uri.parse(pathOrUrl)
+      : Uri.parse('$baseUrl$pathOrUrl');
+
+  /// Sign-in headers alone, for images and uploads.
+  Map<String, String> get authHeaders => {
+    if (token != null) 'Authorization': 'Bearer $token',
+    if (cookie != null && cookie!.isNotEmpty) 'Cookie': cookie!,
+  };
+
+  /// Any JSON endpoint of the server, for features that wrap its APIs
+  /// directly (terminal servers, notes...).
+  Future<dynamic> send(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) => _send(method, path, body: body, query: query);
+
+  /// A full address on the server.
+  Uri uri(String path, [Map<String, String>? query]) => _uri(path, query);
+
+  /// The raw bytes an endpoint serves (file contents).
+  Future<List<int>> getBytes(String path, [Map<String, String>? query]) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () =>
+            http.Request('GET', _uri(path, query))..headers.addAll(authHeaders),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    return res.bodyBytes;
+  }
+
+  /// Posts JSON and returns the raw bytes served back (spoken audio).
+  Future<List<int>> postForBytes(String path, Object body) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () => http.Request('POST', _uri(path))
+          ..headers.addAll(authHeaders)
+          ..headers['Content-Type'] = 'application/json'
+          ..body = jsonEncode(body),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    return res.bodyBytes;
+  }
+
+  /// Posts one file as multipart form data to [path].
+  Future<dynamic> sendFile(
+    String path,
+    List<int> bytes,
+    String filename, {
+    Map<String, String>? query,
+    MediaType? contentType,
+    Map<String, String>? fields,
+  }) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () => http.MultipartRequest('POST', _uri(path, query))
+          ..headers.addAll(authHeaders)
+          ..headers['Accept'] = 'application/json'
+          ..fields.addAll(fields ?? const {})
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              bytes,
+              filename: filename,
+              contentType: contentType,
+            ),
+          ),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    final text = utf8.decode(res.bodyBytes);
+    return text.isEmpty ? null : jsonDecode(text);
+  }
+
+  /// Posts several files under one form [field], with plain [fields].
+  Future<dynamic> sendFiles(
+    String path,
+    List<(List<int>, String)> files, {
+    String field = 'files',
+    Map<String, String>? fields,
+  }) async {
+    final res = await http.Response.fromStream(
+      await _open(
+        () => http.MultipartRequest('POST', _uri(path))
+          ..headers.addAll(authHeaders)
+          ..headers['Accept'] = 'application/json'
+          ..fields.addAll(fields ?? const {})
+          ..files.addAll([
+            for (final (bytes, name) in files)
+              http.MultipartFile.fromBytes(field, bytes, filename: name),
+          ]),
+      ),
+    );
+    if (res.statusCode >= 400) {
+      throw ApiException(res.statusCode, _errorText(res.bodyBytes));
+    }
+    final text = utf8.decode(res.bodyBytes);
+    return text.isEmpty ? null : jsonDecode(text);
+  }
+
+  static String _errorText(List<int> body) {
+    final text = utf8.decode(body, allowMalformed: true);
+    try {
+      final j = jsonDecode(text);
+      if (j is Map && (j['detail'] ?? j['error']) != null) {
+        return '${j['detail'] ?? j['error']}';
+      }
+    } on FormatException {
+      // Not JSON; use as-is.
+    }
+    return text;
+  }
+
   /// Stops a running reply; what was written so far stays saved.
   Future<void> stopTask(String taskId) =>
       _send('POST', '/api/tasks/stop/$taskId');
+}
+
+/// The server answered a sign-in with something to do before it's done:
+/// a two-step code (enroll, verify, recover) or waiting for approval
+/// (pending). [reply] is what it said; [client] carries on from here.
+class SignInStep implements Exception {
+  SignInStep(this.client, this.reply);
+  final OpenWebUiClient client;
+  final Map<String, dynamic> reply;
+
+  String get next => '${reply['next_step'] ?? ''}';
+  String get challenge => '${reply['challenge_token'] ?? ''}';
+
+  /// Recovery codes to show once, when setting up two-step sign-in.
+  List<String> get recoveryCodes => [
+    for (final c in reply['recovery_codes'] as List? ?? const []) '$c',
+  ];
+
+  @override
+  String toString() => switch (next) {
+    'pending' => 'Your account is waiting for an admin to approve it.',
+    'enroll' => 'Set up two-step sign-in to continue.',
+    'verify' => 'Enter the code from your authenticator app.',
+    'recover' => 'Enter the reset token your admin gave you.',
+    'codes' => 'Save your recovery codes.',
+    _ => 'The server did not sign you in.',
+  };
 }

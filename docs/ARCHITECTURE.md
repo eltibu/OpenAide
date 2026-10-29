@@ -37,7 +37,17 @@ The app sends a reply the same way the web UI does (Open WebUI 0.12+), so the se
 2. `POST /api/chat/completions` carries the new user message, an id for the empty reply, the chat id (none for a new chat) and the socket's session id. The server saves both messages in the chat (creating the chat if needed) and answers at once with the chat id and task id.
 3. The server runs the reply as a background task with the model's tools, memory, knowledge and filters, and saves the answer, its tool results and the title in the chat.
 4. Progress arrives over the socket as `events` (`response:completion` text deltas, `status`, `chat:title`, `chat:completion` with `done`). If the socket is down, the app checks the saved chat every few seconds instead.
-5. When the reply is done, the app reloads the chat from the server, which stays the source of truth. Stop calls `POST /api/tasks/stop/{task_id}`; Retry asks again for the same user message, which adds a new reply next to the failed one, like Regenerate.
+5. Photos and files are uploaded first (`POST /api/v1/files/`; photos with `process=false`, documents read by the server, and the app waits for that as the web UI does). They go on the user message's `files` in the web UI's shape; documents are also sent as the request's `files` for retrieval. The server turns photos into image parts for the model itself.
+6. When the reply is done, the app reloads the chat from the server, which stays the source of truth. Stop calls `POST /api/tasks/stop/{task_id}`; Retry asks again for the same user message, which adds a new reply next to the failed one, like Regenerate.
+
+## Voice calls
+
+Calls use Open WebUI's Realtime bridge, as the web UI's call button does when Realtime calls are on (`features/voice/realtime_call.dart` is a port of the web UI's `src/lib/utils/realtime.ts`).
+
+1. The app opens `wss://<server>/api/v1/audio/realtime` and sends `{type: auth, token, chat_id, model_id}`. Open WebUI connects to the configured voice provider and answers `bridge.ready`.
+2. The microphone streams 24 kHz PCM16 as `input_audio_buffer.append` (`android/.../VoiceAudio.kt`, on Android's call audio path so the speaker's echo is cancelled). The provider detects speech and sends the transcript.
+3. Each transcript is saved in the chat as a user message (with `meta.voice`), then `bridge.respond` lets the voice model reply. For real requests it calls `generate_chat_completion`. The app then runs the chat model on that saved message the normal way (server task, tools, memory) and returns the answer with `bridge.result`, which the voice model speaks.
+4. Talking over the reply holds playback, and a confirmed new request (or a tap) cancels it. The app reports how much was heard (`conversation.item.truncate`). Spoken transcripts are saved on the reply (`POST /api/v1/chats/{id}/messages/{mid}` with `voice`).
 
 ## Open WebUI endpoints used so far
 
@@ -47,11 +57,17 @@ The app sends a reply the same way the web UI does (Open WebUI 0.12+), so the se
 | Sign in | `POST /api/v1/auths/signin` |
 | Current user (validates token or API key) | `GET /api/v1/auths/` |
 | Models | `GET /api/models` |
-| Chat list | `GET /api/v1/chats/?page=N` |
+| Chat list (not pinned, not in a folder) | `GET /api/v1/chats/?page=N` |
+| Pinned chats / search | `GET /api/v1/chats/pinned`, `GET /api/v1/chats/search?text=` |
+| Rename, pin, archive, move a chat | `POST /api/v1/chats/{id}` (title only), `/{id}/pin`, `/{id}/archive`, `/{id}/folder` |
+| Folders | `GET`, `POST /api/v1/folders/`, `POST /{id}/update`, `DELETE /{id}?delete_contents=false`, chats via `GET /api/v1/chats/folder/{id}/list` |
 | Read / create / update / delete chat | `GET`, `POST /api/v1/chats/new`, `POST`, `DELETE /api/v1/chats/{id}` |
 | Start a reply (server-run task) | `POST /api/chat/completions` |
 | Live reply progress | Socket.IO `/ws/socket.io`, `events` |
 | Stop a reply | `POST /api/tasks/stop/{task_id}` |
+| Upload a photo or file | `POST /api/v1/files/?process=…`, then `GET /api/v1/files/{id}/process/status` |
+| Voice call | WebSocket `/api/v1/audio/realtime`, message voice details `POST /api/v1/chats/{id}/messages/{mid}` |
+| Show an uploaded photo | `GET /api/v1/files/{id}/content` |
 
 ## Roadmap
 

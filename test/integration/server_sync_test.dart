@@ -94,12 +94,31 @@ void main() {
         final second = await savedReply(client, chatId, 'a-test-2');
         expect(second.content, isNotEmpty);
 
+        // Regenerate: the same user message again gets a second answer.
+        await client.startTurn(
+          model: model,
+          chatId: chatId,
+          userMessage: next,
+          replyId: 'a-test-3',
+          messages: [
+            {'role': 'user', 'content': 'ping'},
+            {'role': 'assistant', 'content': reply.content},
+            {'role': 'user', 'content': 'again'},
+          ],
+          sessionId: 'nexus-app-test',
+        );
+        await savedReply(client, chatId, 'a-test-3');
+
         final fetched = await client.chat(chatId);
         expect(fetched.thread.map((m) => m.id), [
           'u-test',
           'a-test',
           'u-test-2',
+          'a-test-3',
+        ]);
+        expect(fetched.siblingsOf(fetched.messages['a-test-3']!), [
           'a-test-2',
+          'a-test-3',
         ]);
         expect((await client.chats()).map((c) => c.id), contains(chatId));
       } finally {

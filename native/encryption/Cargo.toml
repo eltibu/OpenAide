@@ -1,0 +1,30 @@
+# Encrypted chats in channels, on the phone: the same MLS session as the
+# web's crypto/encryption crate (Open WebUI, MIT), with a C interface for
+# the app instead of WebAssembly, so both talk to each other.
+[package]
+name = "openaide_encryption"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+openmls = "=0.9.1"
+openmls_traits = "=0.6.0"
+openmls_rust_crypto = "=0.6.0"
+openmls_basic_credential = "=0.6.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tls_codec = "0.5"
+base64 = "0.22"
+sha2 = "0.10"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

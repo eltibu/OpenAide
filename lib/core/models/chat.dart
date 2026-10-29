@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 /// Chat data in the exact shape Open WebUI stores it, so chats created in the
 /// app open normally in the web UI and vice versa.
 ///
@@ -14,7 +16,9 @@ class ChatMessage {
     this.model,
     int? timestamp,
     Map<String, dynamic>? extra,
-  }) : childrenIds = childrenIds ?? [],
+    this.structuredContent,
+  }) : _loadedText = content,
+       childrenIds = childrenIds ?? [],
        timestamp = timestamp ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
        extra = extra ?? {};
 
@@ -39,6 +43,7 @@ class ChatMessage {
           (json['childrenIds'] as List?)?.whereType<String>().toList() ?? [],
       model: json['model'] as String?,
       timestamp: (json['timestamp'] as num?)?.toInt(),
+      structuredContent: json['content'] is String ? null : json['content'],
       extra: {
         for (final e in json.entries)
           if (!known.contains(e.key)) e.key: e.value,
@@ -49,10 +54,15 @@ class ChatMessage {
   final String id;
   final String role;
   String content;
-  final String? parentId;
+  String? parentId;
   final List<String> childrenIds;
   final String? model;
   final int timestamp;
+
+  /// The server's `content` when it isn't plain text (images, other parts).
+  /// Written back as it was, so saving never drops those parts.
+  final Object? structuredContent;
+  final String _loadedText;
 
   /// Fields we don't model yet (files, sources, usage, statusHistory...).
   /// Preserved verbatim so saving from the app never drops server data.
@@ -66,6 +76,181 @@ class ChatMessage {
     final e = extra['error'];
     if (e is Map) return '${e['content'] ?? e['message'] ?? e}';
     return e?.toString();
+  }
+
+  /// Tools the model called for this reply, with what each returned.
+  List<ToolCall> get toolCalls {
+    final output = extra['output'];
+    if (output is! List) return const [];
+    final results = <String, String>{
+      for (final item in output.whereType<Map>())
+        if (item['type'] == 'function_call_output')
+          '${item['call_id']}': [
+            for (final p
+                in (item['output'] is List
+                    ? item['output'] as List
+                    : [item['output']]))
+              if (p is Map && p['text'] is String)
+                p['text'] as String
+              else if (p is String)
+                p,
+          ].join('\n'),
+    };
+    return [
+      for (final item in output.whereType<Map>())
+        if (item['type'] == 'function_call')
+          ToolCall(
+            name: '${item['name']}',
+            arguments: '${item['arguments'] ?? ''}',
+            result: results['${item['call_id']}'],
+          ),
+    ];
+  }
+
+  /// Interactive results a tool showed in the reply (a video player, a
+  /// chart...): HTML to show, or an address to open, as the web's embeds.
+  List<String> get embeds {
+    final out = <String>[];
+    void add(Object? list) {
+      if (list is! List) return;
+      for (final e in list) {
+        if (e is String && e.trim().isNotEmpty && !out.contains(e)) out.add(e);
+      }
+    }
+
+    add(extra['embeds']);
+    final output = extra['output'];
+    if (output is List) {
+      for (final item in output.whereType<Map>()) {
+        add(item['embeds']);
+      }
+    }
+    return out;
+  }
+
+  /// Photos and files sent with this message, and those its tools showed:
+  /// pictures a tool returned, and files Nexus displayed from its terminal
+  /// (`display_file`).
+  List<Attachment> get attachments {
+    final out = <Attachment>[];
+    final seen = <String>{};
+    void add(Map f) {
+      final a = Attachment.fromJson(f.cast<String, dynamic>());
+      final key = a.url ?? a.id ?? '';
+      if (key.isNotEmpty && !seen.add(key)) return;
+      out.add(a);
+    }
+
+    for (final f in (extra['files'] as List? ?? const []).whereType<Map>()) {
+      add(f);
+    }
+    final output = extra['output'];
+    if (output is List) {
+      final calls = <String, String>{
+        for (final item in output.whereType<Map>())
+          if (item['type'] == 'function_call')
+            '${item['call_id']}': '${item['name']}',
+      };
+      for (final item in output.whereType<Map>()) {
+        if (item['type'] != 'function_call_output') continue;
+        for (final f in (item['files'] as List? ?? const []).whereType<Map>()) {
+          if (f['source'] == 'open_terminal') {
+            final shown = terminalFile(f);
+            if (shown != null) add(shown);
+          } else if (f['url'] != null || f['id'] != null) {
+            add(f);
+          }
+        }
+        if (calls['${item['call_id']}'] != 'display_file') continue;
+        for (final p
+            in (item['output'] is List
+                ? item['output'] as List
+                : [item['output']])) {
+          final text = p is Map ? p['text'] : p;
+          if (text is! String || !text.trimLeft().startsWith('{')) continue;
+          try {
+            final j = jsonDecode(text);
+            final shown = j is Map ? terminalFile(j) : null;
+            if (shown != null) add(shown);
+          } on FormatException {
+            // Not the file's details.
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  /// A file Nexus displayed from its terminal, as an attachment fetched
+  /// through the server (`/api/v1/terminals/<id>/files/view`).
+  static Map<String, dynamic>? terminalFile(Map f) {
+    if (f['type'] != 'file' ||
+        f['source'] != 'open_terminal' ||
+        f['exists'] == false) {
+      return null;
+    }
+    final terminal = f['terminal_id'] ?? f['terminal_selector'];
+    final path = f['full_path'] ?? f['path'];
+    if (terminal is! String ||
+        terminal.isEmpty ||
+        terminal.startsWith('http') ||
+        path is! String ||
+        path.isEmpty) {
+      return null;
+    }
+    final type = '${f['content_type'] ?? f['mime_type'] ?? ''}';
+    return {
+      'type': type.startsWith('image/') && !type.contains('svg')
+          ? 'image'
+          : 'file',
+      'name': '${f['name'] ?? path.split('/').last}',
+      'url':
+          '/api/v1/terminals/${Uri.encodeComponent(terminal)}/files/view'
+          '?path=${Uri.encodeQueryComponent(path)}',
+      if (type.isNotEmpty) 'content_type': type,
+    };
+  }
+
+  /// Web pages, files and knowledge the reply drew on.
+  List<Source> get sources {
+    final raw = extra['sources'];
+    if (raw is! List) return const [];
+    final out = <Source>[];
+    final seen = <String>{};
+    final byKey = <String, Source>{};
+    for (final s in raw.whereType<Map>()) {
+      final src = (s['source'] as Map?) ?? const {};
+      final metas = (s['metadata'] as List?)?.toList() ?? const [];
+      final docs = (s['document'] as List?)?.toList() ?? const [];
+      final scores = (s['distances'] as List?)?.toList() ?? const [];
+      final count = metas.isEmpty ? 1 : metas.length;
+      for (var i = 0; i < count; i++) {
+        final m = metas.isEmpty ? src : (metas[i] as Map? ?? const {});
+        final url = '${m['source'] ?? src['url'] ?? ''}';
+        final name = '${m['name'] ?? m['title'] ?? src['name'] ?? url}';
+        if (name.isEmpty) continue;
+        final key = '$name|$url';
+        final fileId =
+            m['file_id'] ?? (src['type'] == 'file' ? src['id'] : null);
+        final source = byKey[key] ??= Source(
+          name: name,
+          url: url.startsWith('http') ? url : null,
+          fileId: fileId == null ? null : '$fileId',
+        );
+        if (seen.add(key)) out.add(source);
+        final text = i < docs.length ? '${docs[i] ?? ''}'.trim() : '';
+        if (text.isNotEmpty) {
+          final score = i < scores.length ? scores[i] : null;
+          source.passages.add((
+            text: text,
+            relevance: score is num && score >= 0 && score <= 1
+                ? score.toDouble()
+                : null,
+          ));
+        }
+      }
+    }
+    return out;
   }
 
   /// Text from an Open WebUI `output` list (Responses-style items), which
@@ -84,7 +269,9 @@ class ChatMessage {
     ...extra,
     'id': id,
     'role': role,
-    'content': content,
+    'content': structuredContent != null && content == _loadedText
+        ? structuredContent
+        : content,
     'parentId': parentId,
     'childrenIds': childrenIds,
     'timestamp': timestamp,
@@ -113,8 +300,10 @@ class Chat {
     this.currentId,
     List<String>? models,
     Map<String, dynamic>? extra,
+    Map<String, dynamic>? variables,
   }) : models = models ?? [],
-       extra = extra ?? {};
+       extra = extra ?? {},
+       variables = variables ?? {};
 
   /// Builds from a `/api/v1/chats/{id}` response.
   factory Chat.fromServer(Map<String, dynamic> json) {
@@ -132,6 +321,7 @@ class Chat {
       },
       currentId: history['currentId'] as String?,
       models: (body['models'] as List?)?.whereType<String>().toList(),
+      variables: (json['variables'] as Map?)?.cast<String, dynamic>(),
       extra: {
         for (final e in body.entries)
           if (!known.contains(e.key)) e.key: e.value,
@@ -147,6 +337,9 @@ class Chat {
   List<String> models;
   final Map<String, dynamic> extra;
 
+  /// Answers to the model's Chat Variables, kept beside the chat.
+  final Map<String, dynamic> variables;
+
   /// The visible conversation: walk from [currentId] up to the root.
   List<ChatMessage> get thread {
     final out = <ChatMessage>[];
@@ -159,6 +352,30 @@ class Chat {
       cursor = m.parentId;
     }
     return out.reversed.toList();
+  }
+
+  /// Ids of [message] and its alternatives (edits, regenerations), oldest
+  /// first.
+  List<String> siblingsOf(ChatMessage message) {
+    final parent = messages[message.parentId];
+    if (parent != null) return parent.childrenIds;
+    return [
+      for (final m in messages.values)
+        if (m.parentId == null) m.id,
+    ]..sort((a, b) => messages[a]!.timestamp.compareTo(messages[b]!.timestamp));
+  }
+
+  /// The tip reached from [id] by always taking the newest child, which is
+  /// what the web UI shows after switching to a branch.
+  String latestUnder(String id) {
+    var cursor = id;
+    final seen = <String>{};
+    while (seen.add(cursor)) {
+      final children = messages[cursor]?.childrenIds ?? const [];
+      if (children.isEmpty) break;
+      cursor = children.last;
+    }
+    return cursor;
   }
 
   /// Appends [message] under the current tip and makes it the new tip.
@@ -185,17 +402,196 @@ class Chat {
 }
 
 class ChatSummary {
-  ChatSummary({required this.id, required this.title, required this.updatedAt});
+  ChatSummary({
+    required this.id,
+    required this.title,
+    required this.updatedAt,
+    this.unread = false,
+  });
 
-  factory ChatSummary.fromJson(Map<String, dynamic> json) => ChatSummary(
-    id: json['id'] as String,
-    title: json['title'] as String? ?? 'New Chat',
-    updatedAt: DateTime.fromMillisecondsSinceEpoch(
-      ((json['updated_at'] as num?)?.toInt() ?? 0) * 1000,
-    ),
-  );
+  factory ChatSummary.fromJson(Map<String, dynamic> json) {
+    final updated = (json['updated_at'] as num?)?.toInt() ?? 0;
+    return ChatSummary(
+      id: json['id'] as String,
+      title: json['title'] as String? ?? 'New Chat',
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(updated * 1000),
+      // As the server counts it: changed since you last read it. Servers
+      // that don't track reading leave the key out.
+      unread:
+          json.containsKey('last_read_at') &&
+          updated > ((json['last_read_at'] as num?)?.toInt() ?? 0),
+    );
+  }
 
   final String id;
   final String title;
   final DateTime updatedAt;
+
+  /// New replies since you last opened it.
+  final bool unread;
 }
+
+/// A chat folder; folders nest through [parentId].
+class Folder {
+  const Folder({
+    required this.id,
+    required this.name,
+    this.parentId,
+    this.unread = 0,
+  });
+
+  factory Folder.fromJson(Map<String, dynamic> json) => Folder(
+    id: json['id'] as String,
+    name: json['name'] as String? ?? '',
+    parentId: json['parent_id'] as String?,
+    unread: (json['unread_count'] as num?)?.toInt() ?? 0,
+  );
+
+  /// Unread chats in it and the folders inside it.
+  final int unread;
+
+  final String id;
+  final String name;
+  final String? parentId;
+}
+
+class ToolCall {
+  const ToolCall({required this.name, required this.arguments, this.result});
+  final String name;
+  final String arguments;
+  final String? result;
+}
+
+class Source {
+  Source({required this.name, this.url, this.fileId});
+  final String name;
+  final String? url;
+
+  /// The server file it came from, for View source.
+  final String? fileId;
+
+  /// The text the model read from it, with how relevant the server found it.
+  final List<({String text, double? relevance})> passages = [];
+}
+
+/// A photo or file on a message, in the web UI's shape: `id` and `url` are
+/// the server file id; `type` is `image` for inline images (data URLs) and
+/// `file` otherwise, with `content_type` telling photos apart.
+class Attachment {
+  Attachment({
+    required this.type,
+    required this.name,
+    this.id,
+    this.url,
+    this.contentType,
+    this.size,
+    Map<String, dynamic>? raw,
+  }) : raw = raw ?? {};
+
+  factory Attachment.fromJson(Map<String, dynamic> json) => Attachment(
+    type: json['type'] as String? ?? 'file',
+    name: json['name'] as String? ?? '',
+    id: json['id'] as String?,
+    url: json['url'] as String?,
+    contentType: json['content_type'] as String?,
+    size: (json['size'] as num?)?.toInt(),
+    raw: json,
+  );
+
+  /// Builds the entry for a file the server just stored ([uploaded] is the
+  /// upload response), exactly as the web UI adds it to a message.
+  factory Attachment.uploaded(
+    Map<String, dynamic> uploaded, {
+    int? size,
+    bool fullContext = false,
+  }) {
+    final meta = (uploaded['meta'] as Map?) ?? const {};
+    final id = uploaded['id'] as String;
+    final name = '${meta['name'] ?? uploaded['filename'] ?? 'file'}';
+    final contentType = (meta['content_type'] ?? uploaded['content_type'])
+        ?.toString();
+    final collection =
+        meta['collection_name'] ?? uploaded['collection_name'] ?? '';
+    final json = <String, dynamic>{
+      'type': 'file',
+      'file': uploaded,
+      'id': id,
+      'url': id,
+      'name': name,
+      'collection_name': collection,
+      'status': 'uploaded',
+      'size': size ?? meta['size'],
+      'error': '',
+      'content_type': ?contentType,
+      if (fullContext) 'context': 'full',
+    };
+    return Attachment.fromJson(json);
+  }
+
+  final String type;
+  final String name;
+  final String? id;
+  final String? url;
+  final String? contentType;
+  final int? size;
+
+  /// The entry as the server stores it, written back unchanged.
+  final Map<String, dynamic> raw;
+
+  /// Photos the model looks at (SVG is text, not a picture).
+  bool get isImage {
+    if (type == 'image') return true;
+    final base = (contentType ?? '').split(';').first.trim().toLowerCase();
+    return base.startsWith('image/') && base != 'image/svg+xml';
+  }
+
+  /// Videos, played in the app.
+  bool get isVideo {
+    final base = (contentType ?? '').split(';').first.trim().toLowerCase();
+    if (base.startsWith('video/')) return true;
+    return RegExp(
+      r'\.(mp4|m4v|mov|webm|mkv|3gp)$',
+      caseSensitive: false,
+    ).hasMatch(name);
+  }
+
+  /// Sound, such as a voice note: played in the app.
+  bool get isAudio {
+    final base = (contentType ?? '').split(';').first.trim().toLowerCase();
+    if (base.startsWith('audio/')) return true;
+    return RegExp(
+      r'\.(wav|mp3|m4a|aac|ogg|oga|opus|flac)$',
+      caseSensitive: false,
+    ).hasMatch(name);
+  }
+
+  /// A data: URL to show directly, when the image is inline.
+  String? get dataUrl => url != null && url!.startsWith('data:') ? url : null;
+
+  /// The server file id to fetch the bytes from, if it lives on the server.
+  /// Generated images carry only their content path
+  /// (`/api/v1/files/<id>/content`), so the id is read from that.
+  String? get fileId {
+    if (id != null) return id;
+    final u = url;
+    if (u == null || u.startsWith('data:') || u.startsWith('http')) {
+      return null;
+    }
+    return fileIdFromPath(u) ?? (u.startsWith('/') ? null : u);
+  }
+
+  /// A server path (starting with `/`) that isn't a file's content.
+  String? get serverPath {
+    final u = url;
+    if (u == null || !u.startsWith('/') || fileIdFromPath(u) != null) {
+      return null;
+    }
+    return u;
+  }
+
+  Map<String, dynamic> toJson() => raw;
+}
+
+/// The file id in a server content path such as `/api/v1/files/<id>/content`.
+String? fileIdFromPath(String path) =>
+    RegExp(r'/api/v1/files/([^/?#]+)').firstMatch(path)?.group(1);

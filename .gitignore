@@ -47,3 +47,7 @@ google-services.json
 *.keystore
 *.jks
 key.properties
+
+# Rust build output
+native/encryption/target/
+android/app/src/main/jniLibs/arm64-v8a/libopenaide_encryption.so

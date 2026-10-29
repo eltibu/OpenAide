@@ -2,9 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
+import '../../core/widgets/nexus_logo.dart';
 import 'updater.dart';
+import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
-/// Settings page: GitHub token, current build, check and install.
+/// Settings page: current build, update channel, optional GitHub token,
+/// check and install.
 class UpdateScreen extends ConsumerStatefulWidget {
   const UpdateScreen({super.key});
 
@@ -16,6 +20,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
   final _token = TextEditingController();
   String _version = '';
   bool _hasToken = false;
+  UpdateChannel? _channel;
 
   @override
   void initState() {
@@ -27,6 +32,17 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
         .read(updaterProvider.notifier)
         .token()
         .then((t) => setState(() => _hasToken = t != null));
+    ref
+        .read(updaterProvider.notifier)
+        .channel()
+        .then((c) => setState(() => _channel = c));
+  }
+
+  Future<void> _setChannel(UpdateChannel c) async {
+    setState(() => _channel = c);
+    final updater = ref.read(updaterProvider.notifier);
+    await updater.setChannel(c);
+    await updater.check();
   }
 
   @override
@@ -49,13 +65,58 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
     final updater = ref.read(updaterProvider.notifier);
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('App updates')),
+      appBar: AppBar(title: const T('App updates')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text('Installed: $_version', style: theme.textTheme.bodyLarge),
+          Row(
+            children: [
+              const NexusLogo(size: 56),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    T('OpenAide', style: theme.textTheme.titleLarge),
+                    Text(
+                      'Installed: $_version',
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 24),
-          Text('GitHub token', style: theme.textTheme.titleMedium),
+          T('Update channel', style: theme.textTheme.titleMedium),
+          const SizedBox(height: 8),
+          if (_channel != null)
+            SegmentedButton<UpdateChannel>(
+              segments: const [
+                ButtonSegment(
+                  value: UpdateChannel.stable,
+                  label: T('Stable'),
+                  icon: Icon(Icons.verified_outlined),
+                ),
+                ButtonSegment(
+                  value: UpdateChannel.dev,
+                  label: T('Dev builds'),
+                  icon: Icon(Icons.science_outlined),
+                ),
+              ],
+              selected: {_channel!},
+              onSelectionChanged: (s) => _setChannel(s.first),
+            ),
+          const SizedBox(height: 4),
+          Text(
+            _channel == UpdateChannel.dev
+                ? 'Every new build, often several a day. Newest features, '
+                      'less tested.'
+                : 'Public releases only.',
+            style: theme.textTheme.bodySmall,
+          ),
+          const SizedBox(height: 24),
+          T('GitHub token (optional)', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             builtInToken.isNotEmpty
@@ -63,35 +124,38 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
                       'different token here to override it.'
                 : _hasToken
                 ? 'A token is saved. Paste a new one to replace it.'
-                : 'Needed because the repo is private. Create a fine-grained '
-                      'token on GitHub with read-only "Contents" access to '
-                      '$updateRepo only, and paste it here.',
+                : 'Not needed: updates come from public GitHub releases. '
+                      'Only if $updateRepo is private, paste a fine-grained '
+                      'token with read-only "Contents" access to it.',
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: _token,
-            obscureText: true,
-            autocorrect: false,
-            decoration: const InputDecoration(
-              labelText: 'github_pat_…',
-              border: OutlineInputBorder(),
+          Hideable(
+            builder: (obscure, eye) => TextField(
+              controller: _token,
+              obscureText: obscure,
+              autocorrect: false,
+              decoration: InputDecoration(
+                suffixIcon: eye,
+                labelText: tr('github_pat_…'),
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _saveToken(),
             ),
-            onSubmitted: (_) => _saveToken(),
           ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: _saveToken,
-              child: const Text('Save token'),
+              child: const T('Save token'),
             ),
           ),
           const Divider(height: 32),
           switch (state) {
             UpdateIdle() => const SizedBox.shrink(),
             UpdateChecking() => const LinearProgressIndicator(),
-            UpToDate() => const Text('You have the latest build.'),
+            UpToDate() => const T('You have the latest build.'),
             UpdateFound(:final update) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -107,14 +171,14 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
                 FilledButton.icon(
                   onPressed: () => updater.install(update),
                   icon: const Icon(Icons.system_update),
-                  label: const Text('Install'),
+                  label: const T('Install'),
                 ),
               ],
             ),
             UpdateDownloading(:final progress) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Downloading…'),
+                const T('Downloading…'),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(value: progress),
               ],
@@ -129,7 +193,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
             onPressed: state is UpdateChecking || state is UpdateDownloading
                 ? null
                 : () => updater.check(),
-            child: const Text('Check for updates'),
+            child: const T('Check for updates'),
           ),
         ],
       ),
@@ -167,7 +231,7 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
         actions: [
           TextButton(
             onPressed: () => updater.install(update),
-            child: const Text('Install'),
+            child: const T('Install'),
           ),
         ],
       ),
@@ -199,7 +263,7 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
         actions: [
           TextButton(
             onPressed: () => updater.check(),
-            child: const Text('Try again'),
+            child: const T('Try again'),
           ),
         ],
       ),

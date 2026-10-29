@@ -1,0 +1,1075 @@
+/// The Admin Panel's settings pages, native: each reads the server's own
+/// settings as they are and shows every one of them, so a setting a newer
+/// server adds shows up here without an app update. Switches for on/off,
+/// lists for engines, hidden text for keys, a full editor for templates.
+library;
+
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../core/auth/session.dart';
+import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
+
+/// Words written in capitals in a setting's name.
+const _acronyms = {
+  'API', 'URL', 'RAG', 'PDF', 'OCR', 'TTS', 'STT', 'SSL', 'ID', 'JSON', //
+  'LLM', 'BM25', 'VL', 'PSE', 'AI', 'MCP', 'IQ', 'V7', 'SK', 'SID', 'IO',
+  'HTTP', 'HTTPS', 'WS', 'TOP', 'K', 'OAUTH', 'LDAP', 'JWT', 'CSV', 'TLS',
+  'DN', 'OIDC', 'MFA', 'UI', 'URI', 'WEBUI',
+};
+
+/// "ENABLE_RAG_HYBRID_SEARCH" as "Enable RAG hybrid search".
+String settingLabel(String key) {
+  final words = key.split('_').where((w) => w.isNotEmpty).toList();
+  if (words.isEmpty) return key;
+  final out = <String>[];
+  for (final (i, w) in words.indexed) {
+    final up = w.toUpperCase();
+    if (_acronyms.contains(up) && up != 'TOP' && up != 'K') {
+      out.add(up);
+    } else if (up == 'K' && i > 0 && words[i - 1].toUpperCase() == 'TOP') {
+      out.add('K');
+    } else if (i == 0) {
+      out.add('${w[0].toUpperCase()}${w.substring(1).toLowerCase()}');
+    } else {
+      out.add(w.toLowerCase());
+    }
+  }
+  return out.join(' ');
+}
+
+/// Keys, tokens and passwords, shown hidden.
+bool isSecretSetting(String key) {
+  final k = key.toUpperCase();
+  return k.endsWith('_KEY') ||
+      k.endsWith('API_KEY') ||
+      k.contains('TOKEN') &&
+          !k.contains('TOKENS') &&
+          !k.contains('TOKENIZER') ||
+      k.contains('PASSWORD') ||
+      k.contains('SECRET') ||
+      k.endsWith('_SK') ||
+      k == 'KEY' ||
+      k.endsWith('_API_AUTH') ||
+      k.endsWith('_AUTH') && !k.contains('TYPE');
+}
+
+/// Long text: prompt templates and workflows.
+bool isLongSetting(String key, Object? value) =>
+    key.contains('TEMPLATE') ||
+    key.contains('PROMPT') ||
+    key.contains('WORKFLOW') && !key.contains('NODES') ||
+    value is String && value.contains('\n');
+
+/// The settings to hide because they belong to an engine not chosen:
+/// for each engine key, its choices and the name prefixes of their own
+/// settings.
+typedef EngineSettings = Map<String, Map<String, List<String>>>;
+
+bool hiddenByEngine(String key, Map data, EngineSettings engines) {
+  for (final MapEntry(key: engineKey, value: choices) in engines.entries) {
+    if (!data.containsKey(engineKey)) continue;
+    final chosen = '${data[engineKey] ?? ''}';
+    for (final MapEntry(key: choice, value: prefixes) in choices.entries) {
+      if (choice == chosen) continue;
+      // A setting shared with the chosen engine stays.
+      final shared = (choices[chosen] ?? const []).any(key.startsWith);
+      if (!shared && prefixes.any(key.startsWith)) return true;
+    }
+  }
+  return false;
+}
+
+/// One of the Admin Panel's settings pages.
+class ConfigSection {
+  const ConfigSection({
+    required this.title,
+    required this.read,
+    required this.save,
+    this.path = const [],
+    this.exclude = const {},
+    this.choices = const {},
+    this.engines = const {},
+    this.help,
+    this.toSave,
+    this.actions = const [],
+  });
+
+  final String title;
+
+  /// Where the server's settings are read and saved.
+  final String read;
+  final String save;
+
+  /// Shows only the part of the settings under these keys.
+  final List<String> path;
+  final Set<String> exclude;
+
+  /// Known choices for a setting (the current value is always offered).
+  final Map<String, List<String>> choices;
+  final EngineSettings engines;
+  final String? help;
+
+  /// The body to save, when the server takes it in another shape than it
+  /// reads.
+  final Map<String, dynamic> Function(Map<String, dynamic> read)? toSave;
+
+  /// Buttons under the settings: reindex, reset, download.
+  final List<ConfigAction> actions;
+}
+
+/// A one-off job on the server, asked for with a button.
+class ConfigAction {
+  const ConfigAction({
+    required this.label,
+    required this.path,
+    this.method = 'POST',
+    this.confirm,
+    this.saveAs,
+    this.icon = Icons.play_arrow_outlined,
+    this.toFile,
+    this.importAs,
+    this.bodyFrom,
+    this.fileInto,
+    this.showIf,
+  });
+
+  /// Sends what's on the page now (saved or not), as this body.
+  final Map<String, dynamic> Function(Map<String, dynamic> data)? bodyFrom;
+
+  /// Picks a file and puts its text in this setting (Save keeps it).
+  final String? fileInto;
+
+  /// Shown only when this holds for what's on the page.
+  final bool Function(Map<String, dynamic> data)? showIf;
+
+  /// Makes the saved file from the JSON the server sends, instead of
+  /// saving what it sends as it is.
+  final List<int> Function(Object? json)? toFile;
+
+  /// Picks a JSON file and sends it to [path] inside this field.
+  final String? importAs;
+
+  final String label;
+  final String path;
+  final String method;
+
+  /// Asked first, for jobs that can't be undone.
+  final String? confirm;
+
+  /// Downloads what the server sends to a file of this name.
+  final String? saveAs;
+  final IconData icon;
+}
+
+/// Everyone as the web's users.csv: id, name, email and role.
+List<int> usersCsv(Object? json) {
+  final users = json is Map ? json['users'] : json;
+  const headers = ['id', 'name', 'email', 'role'];
+  String cell(Object? v) => v == null ? '' : '"${'$v'.replaceAll('"', '""')}"';
+  return utf8.encode(
+    [
+      headers.join(','),
+      for (final u in users as List? ?? const [])
+        if (u is Map) headers.map((h) => cell(u[h])).join(','),
+    ].join('\n'),
+  );
+}
+
+List<int> _jsonFile(Object? json) => utf8.encode(jsonEncode(json));
+
+Map<String, dynamic> _ldapSwitch(Map<String, dynamic> read) => {
+  'enable_ldap': read['ENABLE_LDAP'] == true,
+};
+
+const _webEngines = <String, List<String>>{
+  '': [],
+  'searxng': ['SEARXNG_'],
+  'yacy': ['YACY_'],
+  'google_pse': ['GOOGLE_PSE_'],
+  'brave': ['BRAVE_SEARCH_'],
+  'brave_llm_context': ['BRAVE_SEARCH_'],
+  'kagi': ['KAGI_'],
+  'mojeek': ['MOJEEK_'],
+  'bocha': ['BOCHA_'],
+  'serpstack': ['SERPSTACK_'],
+  'serper': ['SERPER_'],
+  'serphouse': ['SERPHOUSE_'],
+  'serply': ['SERPLY_'],
+  'searchapi': ['SEARCHAPI_'],
+  'serpapi': ['SERPAPI_'],
+  'duckduckgo': ['DDGS_'],
+  'tavily': ['TAVILY_API_KEY'],
+  'jina': ['JINA_'],
+  'bing': ['BING_'],
+  'exa': ['EXA_'],
+  'perplexity': [
+    'PERPLEXITY_API_KEY',
+    'PERPLEXITY_MODEL',
+    'PERPLEXITY_SEARCH_CONTEXT',
+  ],
+  'perplexity_search': ['PERPLEXITY_API_KEY', 'PERPLEXITY_SEARCH_API_URL'],
+  'sougou': ['SOUGOU_'],
+  'firecrawl': ['FIRECRAWL_'],
+  'external': ['EXTERNAL_WEB_SEARCH_'],
+  'yandex': ['YANDEX_'],
+  'youcom': ['YOUCOM_'],
+  'linkup': ['LINKUP_'],
+  'ollama_cloud': ['OLLAMA_CLOUD_'],
+  'openserp': ['OPENSERP_'],
+  'staan': ['STAAN_'],
+  'microsoft_web_iq': ['MICROSOFT_WEB_IQ_'],
+  'azure': ['AZURE_'],
+};
+
+const _extractionEngines = <String, List<String>>{
+  '': [],
+  'external': ['EXTERNAL_DOCUMENT_LOADER_'],
+  'tika': ['TIKA_'],
+  'docling': ['DOCLING_'],
+  'document_intelligence': ['DOCUMENT_INTELLIGENCE_'],
+  'mistral_ocr': ['MISTRAL_OCR_'],
+  'datalab_marker': ['DATALAB_MARKER_'],
+  'mineru': ['MINERU_'],
+  'paddleocr_vl': ['PADDLEOCR_VL_'],
+};
+
+/// The Admin Panel pages built from the server's own settings.
+final adminConfigSections = <ConfigSection>[
+  const ConfigSection(
+    title: 'Documents',
+    read: '/api/v1/retrieval/config',
+    save: '/api/v1/retrieval/config/update',
+    exclude: {'web', 'status'},
+    choices: {
+      'PDF_LOADER_MODE': ['page', 'single'],
+      'TEXT_SPLITTER': ['', 'character', 'token'],
+      'RAG_RERANKING_ENGINE': ['', 'external'],
+      'MINERU_API_MODE': ['local', 'cloud'],
+      'DATALAB_MARKER_OUTPUT_FORMAT': ['markdown', 'json', 'html'],
+    },
+    engines: {
+      'CONTENT_EXTRACTION_ENGINE': _extractionEngines,
+      'RAG_RERANKING_ENGINE': {
+        '': [],
+        'external': ['RAG_EXTERNAL_RERANKER_'],
+      },
+    },
+    help: 'How files are read, split and searched.',
+    actions: [
+      ConfigAction(
+        label: 'Reindex knowledge',
+        path: '/api/v1/knowledge/reindex',
+        icon: Icons.refresh,
+        confirm: 'Every knowledge base is read again. This can take a while.',
+      ),
+      ConfigAction(
+        label: 'Reset uploads',
+        path: '/api/v1/retrieval/reset/uploads',
+        icon: Icons.folder_delete_outlined,
+        confirm: 'Every uploaded file is deleted from the server.',
+      ),
+      ConfigAction(
+        label: 'Reset vector storage and knowledge',
+        path: '/api/v1/retrieval/reset/db',
+        icon: Icons.delete_forever_outlined,
+        confirm: 'All knowledge and what was learned from files is deleted.',
+      ),
+    ],
+  ),
+  const ConfigSection(
+    title: 'Embedding',
+    read: '/api/v1/retrieval/embedding',
+    save: '/api/v1/retrieval/embedding/update',
+    choices: {
+      'RAG_EMBEDDING_ENGINE': ['', 'ollama', 'openai', 'azure_openai'],
+    },
+    engines: {
+      'RAG_EMBEDDING_ENGINE': {
+        '': [],
+        'ollama': ['ollama_config'],
+        'openai': ['openai_config'],
+        'azure_openai': ['azure_openai_config'],
+      },
+    },
+    help:
+        'The model that turns text into vectors for search. Changing it '
+        'means reindexing knowledge.',
+  ),
+  const ConfigSection(
+    title: 'Database',
+    read: '/api/v1/configs/connections',
+    save: '/api/v1/configs/connections',
+    exclude: {
+      'ENABLE_DIRECT_CONNECTIONS',
+      'ENABLE_DIRECT_INTEGRATIONS',
+      'ENABLE_BASE_MODELS_CACHE',
+    },
+    help: 'A copy of the server\'s database.',
+    actions: [
+      ConfigAction(
+        label: 'Download database',
+        path: '/api/v1/utils/db/download',
+        saveAs: 'webui.db',
+        icon: Icons.download_outlined,
+      ),
+      ConfigAction(
+        label: 'Export settings',
+        path: '/api/v1/configs/export',
+        saveAs: 'config.json',
+        icon: Icons.settings_backup_restore,
+      ),
+      ConfigAction(
+        label: 'Import settings',
+        path: '/api/v1/configs/import',
+        importAs: 'config',
+        confirm: 'The settings in the file replace the server\'s current ones.',
+        icon: Icons.upload_file,
+      ),
+      ConfigAction(
+        label: 'Export all chats',
+        path: '/api/v1/chats/all/db',
+        saveAs: 'all-chats-export.json',
+        toFile: _jsonFile,
+        icon: Icons.forum_outlined,
+      ),
+      ConfigAction(
+        label: 'Export users',
+        path: '/api/v1/users/all',
+        saveAs: 'users.csv',
+        toFile: usersCsv,
+        icon: Icons.people_outline,
+      ),
+    ],
+  ),
+  const ConfigSection(
+    title: 'Web Search',
+    read: '/api/v1/retrieval/config',
+    save: '/api/v1/retrieval/config/update',
+    path: ['web'],
+    choices: {
+      'WEB_LOADER_ENGINE': [
+        '',
+        'safe_web',
+        'playwright',
+        'firecrawl',
+        'tavily',
+        'external',
+      ],
+      'TAVILY_EXTRACT_DEPTH': ['basic', 'advanced'],
+      'TAVILY_SEARCH_DEPTH': ['basic', 'advanced'],
+      'PERPLEXITY_SEARCH_CONTEXT_USAGE': ['low', 'medium', 'high'],
+    },
+    engines: {
+      'WEB_SEARCH_ENGINE': _webEngines,
+      'WEB_LOADER_ENGINE': {
+        '': [],
+        'safe_web': [],
+        'playwright': ['PLAYWRIGHT_'],
+        'firecrawl': ['FIRECRAWL_'],
+        'tavily': ['TAVILY_EXTRACT_'],
+        'external': ['EXTERNAL_WEB_LOADER_'],
+      },
+    },
+    help: 'Which search engine models use, and how pages are read.',
+  ),
+  const ConfigSection(
+    title: 'Audio',
+    read: '/api/v1/audio/config',
+    save: '/api/v1/audio/config/update',
+    choices: {
+      'ENGINE': [
+        '',
+        'openai',
+        'elevenlabs',
+        'azure',
+        'transformers',
+        'deepgram',
+        'mistral',
+      ],
+      'SPLIT_ON': ['punctuation', 'paragraphs', 'none'],
+      'PROVIDER': ['openai', 'azure'],
+      'AUTH_TYPE': ['api_key', 'bearer'],
+    },
+    help: 'Speech to text, text to speech and live voice.',
+    actions: [
+      // The server's own Whisper downloads the model named here.
+      ConfigAction(
+        label: 'Update model',
+        path: '/api/v1/audio/config/update',
+        icon: Icons.download_outlined,
+        showIf: _localWhisper,
+        bodyFrom: _sameAsPage,
+      ),
+    ],
+  ),
+  ConfigSection(
+    title: 'Images',
+    read: '/api/v1/images/config',
+    save: '/api/v1/images/config/update',
+    choices: {},
+    engines: {
+      'IMAGE_GENERATION_ENGINE': {
+        'openai': ['IMAGES_OPENAI_'],
+        'automatic1111': ['AUTOMATIC1111_'],
+        'comfyui': ['COMFYUI_'],
+        'gemini': ['IMAGES_GEMINI_'],
+      },
+      'IMAGE_EDIT_ENGINE': {
+        'openai': ['IMAGES_EDIT_OPENAI_'],
+        'comfyui': ['IMAGES_EDIT_COMFYUI_'],
+        'gemini': ['IMAGES_EDIT_GEMINI_'],
+      },
+    },
+    help: 'Making and changing pictures.',
+    actions: [
+      for (final (engine, url, key, label) in const [
+        (
+          'automatic1111',
+          'AUTOMATIC1111_BASE_URL',
+          'AUTOMATIC1111_API_AUTH',
+          'Verify Automatic1111 connection',
+        ),
+        (
+          'comfyui',
+          'COMFYUI_BASE_URL',
+          'COMFYUI_API_KEY',
+          'Verify ComfyUI connection',
+        ),
+        (
+          'comfyui',
+          'IMAGES_EDIT_COMFYUI_BASE_URL',
+          'IMAGES_EDIT_COMFYUI_API_KEY',
+          'Verify ComfyUI edit connection',
+        ),
+      ])
+        ConfigAction(
+          label: label,
+          path: '/api/v1/images/verify',
+          icon: Icons.wifi_tethering,
+          showIf: (d) => '${d[url] ?? ''}'.isNotEmpty,
+          bodyFrom: (d) => {'engine': engine, 'url': d[url], 'key': d[key]},
+        ),
+      ConfigAction(
+        label: 'Upload ComfyUI workflow.json',
+        path: '',
+        icon: Icons.upload_file,
+        fileInto: 'COMFYUI_WORKFLOW',
+        showIf: (d) => d['IMAGE_GENERATION_ENGINE'] == 'comfyui',
+      ),
+      ConfigAction(
+        label: 'Upload ComfyUI edit workflow.json',
+        path: '',
+        icon: Icons.upload_file,
+        fileInto: 'IMAGES_EDIT_COMFYUI_WORKFLOW',
+        showIf: (d) => d['IMAGE_EDIT_ENGINE'] == 'comfyui',
+      ),
+    ],
+  ),
+  const ConfigSection(
+    title: 'Code Execution',
+    read: '/api/v1/configs/code_execution',
+    save: '/api/v1/configs/code_execution',
+    choices: {
+      'CODE_EXECUTION_ENGINE': ['pyodide', 'jupyter'],
+      'CODE_INTERPRETER_ENGINE': ['pyodide', 'jupyter'],
+      'CODE_EXECUTION_JUPYTER_AUTH': ['', 'token', 'password'],
+      'CODE_INTERPRETER_JUPYTER_AUTH': ['', 'token', 'password'],
+    },
+    help: 'Running code from replies, and the code interpreter.',
+  ),
+  const ConfigSection(
+    title: 'Interface and tasks',
+    read: '/api/v1/tasks/config',
+    save: '/api/v1/tasks/config/update',
+    help: 'Titles, tags, follow-ups, autocomplete and their prompts.',
+  ),
+  const ConfigSection(
+    title: 'Connections',
+    read: '/api/v1/configs/connections',
+    save: '/api/v1/configs/connections',
+    help: 'Direct connections and the model list cache.',
+  ),
+  const ConfigSection(
+    title: 'Sign-in and features',
+    read: '/api/v1/auths/admin/config',
+    save: '/api/v1/auths/admin/config',
+    choices: {
+      'DEFAULT_USER_ROLE': ['pending', 'user', 'admin'],
+    },
+    help:
+        'Every site setting: sign-ups, two-step sign-in, API keys, '
+        'pending accounts and features.',
+  ),
+  const ConfigSection(
+    title: 'OAuth / OIDC',
+    read: '/api/v1/auths/admin/config/oauth',
+    save: '/api/v1/auths/admin/config/oauth',
+    help: 'Signing in with another account provider.',
+  ),
+  const ConfigSection(
+    title: 'LDAP',
+    read: '/api/v1/auths/admin/config/ldap',
+    save: '/api/v1/auths/admin/config/ldap',
+    toSave: _ldapSwitch,
+    help: 'Turn signing in with a directory server on or off.',
+  ),
+  const ConfigSection(
+    title: 'LDAP server',
+    read: '/api/v1/auths/admin/config/ldap/server',
+    save: '/api/v1/auths/admin/config/ldap/server',
+    help: 'The directory server people sign in with.',
+  ),
+  const ConfigSection(
+    title: 'Chats',
+    read: '/api/v1/chats/config',
+    save: '/api/v1/chats/config',
+    help:
+        'Context compaction (/compact), asking before tools run, and tool '
+        'search.',
+  ),
+  const ConfigSection(
+    title: 'Subagents',
+    read: '/api/v1/configs/subagents',
+    save: '/api/v1/configs/subagents',
+    help: 'Models handing parts of a task to helpers.',
+  ),
+];
+
+bool _localWhisper(Map<String, dynamic> d) =>
+    (d['stt'] as Map?)?['ENGINE'] == '';
+
+Map<String, dynamic> _sameAsPage(Map<String, dynamic> d) => d;
+
+Object? _deepCopy(Object? v) => v == null ? null : jsonDecode(jsonEncode(v));
+
+void _say(BuildContext context, String text) =>
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
+
+/// A settings page for one [ConfigSection].
+class ConfigEditorScreen extends ConsumerStatefulWidget {
+  const ConfigEditorScreen({super.key, required this.section});
+  final ConfigSection section;
+
+  @override
+  ConsumerState<ConfigEditorScreen> createState() => _ConfigEditorScreenState();
+}
+
+class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
+  Map<String, dynamic>? _all;
+  Object? _error;
+  bool _dirty = false;
+  bool _saving = false;
+  bool _showAll = false;
+  String _query = '';
+
+  /// Bumped on load so fields start again from the server's values.
+  int _generation = 0;
+
+  ConfigSection get _s => widget.section;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final res = await ref.read(clientProvider).send('GET', _s.read);
+      _all = (_deepCopy(res) as Map).cast<String, dynamic>();
+      _error = null;
+      _dirty = false;
+      _generation++;
+    } catch (e) {
+      _error = e;
+    }
+    if (mounted) setState(() {});
+  }
+
+  /// The part of the settings this page shows.
+  Map<String, dynamic> get _data {
+    Map<String, dynamic> m = _all!;
+    for (final k in _s.path) {
+      m = (m[k] as Map).cast<String, dynamic>();
+    }
+    return m;
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      final body =
+          _s.toSave?.call(_all!) ??
+          (Map<String, dynamic>.of(_all!)..remove('status'));
+      await ref.read(clientProvider).send('POST', _s.save, body: body);
+      if (mounted) _say(context, 'Saved');
+      await _load();
+    } catch (e) {
+      if (mounted) _say(context, 'Not saved: $e');
+    }
+    if (mounted) setState(() => _saving = false);
+  }
+
+  void _set(Map<String, dynamic> m, String key, Object? value) {
+    m[key] = value;
+    if (!_dirty) setState(() => _dirty = true);
+  }
+
+  Future<void> _run(ConfigAction a) async {
+    if (a.confirm != null) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: Text('${a.label}?'),
+          content: Text(a.confirm!),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const T('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: Text(a.label),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    final client = ref.read(clientProvider);
+    try {
+      if (a.fileInto != null) {
+        final picked = await FilePicker.pickFiles();
+        if (picked.isEmpty) return;
+        var text = utf8.decode(await picked.first.readAsBytes());
+        try {
+          text = const JsonEncoder.withIndent('  ').convert(jsonDecode(text));
+        } catch (_) {
+          if (mounted) _say(context, 'That file isn\'t JSON');
+          return;
+        }
+        setState(() {
+          _set(_data, a.fileInto!, text);
+          _generation++;
+        });
+        if (mounted) _say(context, 'Loaded; Save to keep it');
+      } else if (a.bodyFrom != null) {
+        await client.send(a.method, a.path, body: a.bodyFrom!(_data));
+        if (mounted) _say(context, 'Connection works');
+      } else if (a.importAs != null) {
+        final picked = await FilePicker.pickFiles();
+        if (picked.isEmpty) return;
+        final json = jsonDecode(utf8.decode(await picked.first.readAsBytes()));
+        await client.send(a.method, a.path, body: {a.importAs!: json});
+        if (mounted) _say(context, 'Imported');
+        await _load();
+      } else if (a.saveAs != null) {
+        final bytes = a.toFile != null
+            ? a.toFile!(await client.send('GET', a.path))
+            : await client.getBytes(a.path);
+        final saved = await FilePicker.saveFile(
+          fileName: a.saveAs!,
+          bytes: Uint8List.fromList(bytes),
+        );
+        if (saved != null && mounted) _say(context, 'Saved ${a.saveAs}');
+      } else {
+        await client.send(a.method, a.path);
+        if (mounted) _say(context, 'Done');
+      }
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
+  Future<bool> _leave() async {
+    if (!_dirty) return true;
+    final leave = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const T('Leave without saving?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const T('Stay'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: const T('Leave'),
+          ),
+        ],
+      ),
+    );
+    return leave == true;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.nexus.muted;
+    return PopScope(
+      canPop: !_dirty,
+      onPopInvokedWithResult: (popped, _) async {
+        if (popped) return;
+        final nav = Navigator.of(context);
+        if (await _leave()) nav.pop();
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(_s.title),
+          actions: [
+            if (_all != null)
+              IconButton(
+                tooltip: _showAll
+                    ? 'Hide other engines\' settings'
+                    : 'Show every setting',
+                onPressed: () => setState(() => _showAll = !_showAll),
+                icon: Icon(
+                  _showAll ? Icons.filter_alt_off_outlined : Icons.tune,
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: FilledButton(
+                onPressed: _dirty && !_saving ? _save : null,
+                child: Text(_saving ? 'Saving…' : 'Save'),
+              ),
+            ),
+          ],
+        ),
+        body: _error != null && _all == null
+            ? Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text('Couldn\'t load these settings.\n$_error'),
+                ),
+              )
+            : _all == null
+            ? const Center(child: CircularProgressIndicator())
+            : ListView(
+                key: ValueKey(_generation),
+                padding: const EdgeInsets.only(bottom: 40),
+                children: [
+                  if (_s.help != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                      child: Text(_s.help!, style: TextStyle(color: muted)),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                    child: TextField(
+                      decoration: InputDecoration(
+                        hintText: tr('Find a setting'),
+                        prefixIcon: Icon(Icons.search),
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (v) =>
+                          setState(() => _query = v.trim().toLowerCase()),
+                    ),
+                  ),
+                  ..._fields(_data, const []),
+                  if (_s.actions.isNotEmpty) ...[
+                    const Divider(height: 32),
+                    for (final a in _s.actions)
+                      if (a.showIf?.call(_data) ?? true)
+                        ListTile(
+                          leading: Icon(a.icon),
+                          title: Text(a.label),
+                          onTap: () => _run(a),
+                        ),
+                  ],
+                ],
+              ),
+      ),
+    );
+  }
+
+  bool _matches(String key) =>
+      _query.isEmpty ||
+      key.toLowerCase().contains(_query) ||
+      settingLabel(key).toLowerCase().contains(_query);
+
+  List<Widget> _fields(Map<String, dynamic> m, List<String> at) {
+    final out = <Widget>[];
+    final nested = <String>[];
+    for (final key in m.keys) {
+      if (at.isEmpty && _s.exclude.contains(key)) continue;
+      if (key == 'status') continue;
+      final v = m[key];
+      // Maps of settings (not free-form parameters) become their own group.
+      if (!_showAll && hiddenByEngine(key, m, _s.engines)) continue;
+      if (v is Map &&
+          v.values.any((x) => x is! Map) &&
+          _looksLikeSettings(key, v)) {
+        nested.add(key);
+        continue;
+      }
+      if (!_matches(key)) continue;
+      out.add(_field(m, key));
+    }
+    for (final key in nested) {
+      final inner = _fields((m[key] as Map).cast<String, dynamic>(), [
+        ...at,
+        key,
+      ]);
+      if (inner.isEmpty) continue;
+      out
+        ..add(
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
+            child: Text(
+              _groupName(key),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ),
+        )
+        ..addAll(inner);
+    }
+    return out;
+  }
+
+  /// Groups of settings have names in capitals, or are a "…_config";
+  /// parameters are neither.
+  static bool _looksLikeSettings(String key, Map v) =>
+      v.isNotEmpty &&
+      (key.endsWith('_config') ||
+          v.keys.every((k) => '$k' == '$k'.toUpperCase()));
+
+  static String _groupName(String key) => switch (key) {
+    'tts' => 'Text to speech',
+    'stt' => 'Speech to text',
+    'realtime' => 'Live voice',
+    _ => settingLabel(key),
+  };
+
+  Widget _field(Map<String, dynamic> m, String key) {
+    final v = m[key];
+    final label = settingLabel(key);
+    final known = _s.choices[key] ?? _s.engines[key]?.keys.toList();
+    if (v is bool) {
+      return SwitchListTile(
+        title: Text(label),
+        value: v,
+        onChanged: (on) => setState(() => _set(m, key, on)),
+      );
+    }
+    if (known != null && (v == null || v is String)) {
+      final options = [...known, if (!known.contains(v ?? '')) '${v ?? ''}'];
+      return ListTile(
+        title: Text(label),
+        trailing: DropdownButton<String>(
+          value: '${v ?? ''}',
+          items: [
+            for (final o in options)
+              DropdownMenuItem(
+                value: o,
+                child: Text(o.isEmpty ? 'Default' : o),
+              ),
+          ],
+          onChanged: (o) => setState(() => _set(m, key, o)),
+        ),
+      );
+    }
+    if (v is Map || (v is List && v.any((x) => x is Map))) {
+      return ListTile(
+        title: Text(label),
+        subtitle: Text(
+          v is Map
+              ? (v.isEmpty ? 'None' : '${v.length} entries')
+              : '${(v as List).length} items',
+        ),
+        trailing: const Icon(Icons.data_object),
+        onTap: () => _editJson(m, key),
+      );
+    }
+    if (isLongSetting(key, v)) {
+      final text = '${v ?? ''}';
+      return ListTile(
+        title: Text(label),
+        subtitle: Text(
+          text.isEmpty ? 'Default' : text.split('\n').first,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: const Icon(Icons.edit_note),
+        onTap: () => _editLong(m, key),
+      );
+    }
+    final list = v is List;
+    final number = v is num;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: _TextSetting(
+        label: list ? '$label (comma separated)' : label,
+        initial: list
+            ? v.join(', ')
+            : v == null
+            ? ''
+            : '$v',
+        secret: isSecretSetting(key),
+        number: number,
+        onChanged: (t) {
+          final s = t.trim();
+          _set(
+            m,
+            key,
+            list
+                ? [
+                    for (final x in s.split(','))
+                      if (x.trim().isNotEmpty) x.trim(),
+                  ]
+                : v is int
+                ? int.tryParse(s) ?? (s.isEmpty ? null : v)
+                : v is double
+                ? double.tryParse(s) ?? (s.isEmpty ? null : v)
+                : v == null
+                ? (s.isEmpty
+                      ? null
+                      : int.tryParse(s) ?? double.tryParse(s) ?? t)
+                : t,
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _editLong(Map<String, dynamic> m, String key) async {
+    final c = TextEditingController(text: '${m[key] ?? ''}');
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (page) => Scaffold(
+          appBar: AppBar(
+            title: Text(settingLabel(key)),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  c.clear();
+                },
+                child: const T('Default'),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilledButton(
+                  onPressed: () => Navigator.pop(page, true),
+                  child: const T('Done'),
+                ),
+              ),
+            ],
+          ),
+          body: Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: c,
+              maxLines: null,
+              expands: true,
+              textAlignVertical: TextAlignVertical.top,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              decoration: InputDecoration(
+                hintText: tr('Empty uses the server\'s default'),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    if (saved == true) setState(() => _set(m, key, c.text));
+    // Not disposed: the dialog's text field still builds while it closes.
+  }
+
+  Future<void> _editJson(Map<String, dynamic> m, String key) async {
+    final c = TextEditingController(
+      text: const JsonEncoder.withIndent('  ').convert(m[key]),
+    );
+    String? problem;
+    final saved = await showDialog<Object?>(
+      context: context,
+      builder: (d) => StatefulBuilder(
+        builder: (d, set) => AlertDialog(
+          title: Text(settingLabel(key)),
+          content: SizedBox(
+            width: 500,
+            child: TextField(
+              controller: c,
+              maxLines: 14,
+              minLines: 6,
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              decoration: InputDecoration(
+                errorText: problem,
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d),
+              child: const T('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                try {
+                  Navigator.pop(d, [jsonDecode(c.text)]);
+                } on FormatException catch (e) {
+                  set(() => problem = 'Not valid JSON: ${e.message}');
+                }
+              },
+              child: const T('Done'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved is List) setState(() => _set(m, key, saved.first));
+    // Not disposed: the dialog's text field still builds while it closes.
+  }
+}
+
+class _TextSetting extends StatefulWidget {
+  const _TextSetting({
+    required this.label,
+    required this.initial,
+    required this.secret,
+    required this.number,
+    required this.onChanged,
+  });
+  final String label;
+  final String initial;
+  final bool secret;
+  final bool number;
+  final ValueChanged<String> onChanged;
+
+  @override
+  State<_TextSetting> createState() => _TextSettingState();
+}
+
+class _TextSettingState extends State<_TextSetting> {
+  late bool _hidden = widget.secret;
+
+  @override
+  Widget build(BuildContext context) => TextFormField(
+    initialValue: widget.initial,
+    obscureText: _hidden,
+    keyboardType: widget.number
+        ? const TextInputType.numberWithOptions(decimal: true, signed: true)
+        : TextInputType.text,
+    decoration: InputDecoration(
+      labelText: widget.label,
+      suffixIcon: widget.secret
+          ? IconButton(
+              tooltip: _hidden ? 'Show' : 'Hide',
+              onPressed: () => setState(() => _hidden = !_hidden),
+              icon: Icon(_hidden ? Icons.visibility : Icons.visibility_off),
+            )
+          : null,
+    ),
+    onChanged: widget.onChanged,
+  );
+}

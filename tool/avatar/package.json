@@ -1,0 +1,14 @@
+{
+  "name": "nexus-voice-avatar",
+  "private": true,
+  "description": "Builds assets/avatar/avatar.js, the voice call avatar renderer.",
+  "scripts": {
+    "build": "esbuild avatar.js --bundle --minify --format=iife --legal-comments=eof --outfile=../../assets/avatar/avatar.js"
+  },
+  "devDependencies": {
+    "@pixiv/three-vrm": "3.5.5",
+    "@pixiv/three-vrm-animation": "3.5.5",
+    "esbuild": "0.24.2",
+    "three": "0.186.1"
+  }
+}

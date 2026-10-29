@@ -32,7 +32,9 @@ android {
         applicationId = "com.nexus.nexus_assistant"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // Android 9 (API 28) is the first to accept a key rotation proof, which
+        // lets builds signed with the release key install over the old key.
+        minSdk = maxOf(flutter.minSdkVersion, 28)
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
@@ -40,6 +42,33 @@ android {
         // flag during build.
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Models on the phone (llama.cpp) are built for 64-bit ARM, which
+        // nearly every phone since 2017 has; elsewhere the screen says so.
+        externalNativeBuild {
+            cmake {
+                abiFilters += listOf("arm64-v8a")
+                arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared")
+            }
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path("src/main/cpp/CMakeLists.txt")
+            version = "3.31.6"
+        }
+    }
+
+    // llama.cpp picks the CPU code for the phone's chip from separate
+    // libraries at run time, so they have to be unpacked on install.
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            // Hands-free listening, like models on the phone, is for 64-bit
+            // ARM only; this keeps the other chips' copies out of the APK.
+            excludes += listOf("lib/armeabi-v7a/libvosk.so", "lib/x86/libvosk.so", "lib/x86_64/libvosk.so")
+        }
     }
 
     signingConfigs {
@@ -65,6 +94,9 @@ android {
 dependencies {
     // FileProvider, used to hand a downloaded update to the installer.
     implementation("androidx.core:core-ktx:1.13.1")
+    // Hands-free "Hey OpenAide": offline speech on the phone (Apache 2.0).
+    implementation("com.alphacephei:vosk-android:0.3.75@aar")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
 }
 
 kotlin {

@@ -1,38 +1,143 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'core/api/openwebui_client.dart';
+import 'core/offline/offline_cache.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/session.dart';
-import 'features/auth/login_screen.dart';
+import 'core/i18n/app_strings.dart';
+import 'core/theme.dart';
+import 'core/widgets/nexus_logo.dart';
+import 'features/auth/welcome_screen.dart';
+import 'features/auth/sign_in_steps.dart';
+import 'features/chat/chat_controller.dart';
 import 'features/chat/chat_screen.dart';
+import 'features/chat/in_app_toasts.dart';
+import 'features/chat/server_asks.dart';
+import 'features/phone/app_lock.dart';
+import 'features/phone/assist_panel.dart';
+import 'features/standalone/local_chats.dart';
+import 'features/standalone/standalone_screen.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Saved copies of your chats, for opening them with no connection.
+  try {
+    final support = await getApplicationSupportDirectory();
+    OpenWebUiClient.offline = FileOfflineStore(
+      Directory('${support.path}/offline'),
+    );
+  } catch (_) {
+    // No saved copies; everything still loads from the server.
+  }
+  // Settings > General > Language.
+  await AppStrings.instance.start();
   runApp(const ProviderScope(child: NexusApp()));
 }
 
+/// The assistant as a panel over other apps: Android's AssistActivity runs
+/// this instead of [main] (see AssistEntry.kt).
+@pragma('vm:entry-point')
+Future<void> assistMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppStrings.instance.start();
+  runApp(const ProviderScope(child: AssistPanelApp()));
+}
+
 class NexusApp extends ConsumerWidget {
-  const NexusApp({super.key});
+  const NexusApp({super.key, this.navigatorObservers = const []});
+
+  /// For the end-to-end tests, which follow the pages they open.
+  final List<NavigatorObserver> navigatorObservers;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    const seed = Color(0xFF6750A4);
     final session = ref.watch(sessionProvider);
-    return MaterialApp(
-      title: 'Nexus Assistant',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(colorSchemeSeed: seed, useMaterial3: true),
-      darkTheme: ThemeData(
-        colorSchemeSeed: seed,
-        brightness: Brightness.dark,
-        useMaterial3: true,
+    final ui = ref.watch(userSettingsProvider).value?['ui'] as Map?;
+    final theme = ui?['nexusTheme'];
+    // Settings > Interface > UI Scale, on top of the phone's font size.
+    final scale = (ui?['textScale'] as num?)?.toDouble() ?? 1.0;
+    // The server's own wording (Admin > UI translations), as on the web.
+    final i18n = ref.watch(serverConfigProvider).value?['i18n'];
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => AppStrings.instance.setAdminWords(i18n),
+    );
+    // A new language redraws the app where it is.
+    return ListenableBuilder(
+      listenable: AppStrings.instance,
+      builder: (context, _) => MaterialApp(
+        title: 'OpenAide',
+        debugShowCheckedModeBanner: false,
+        navigatorObservers: navigatorObservers,
+        // Settings > Phone and assistant > App lock.
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: scale == 1.0
+                ? media
+                : media.copyWith(
+                    textScaler: TextScaler.linear(
+                      media.textScaler.scale(1) * scale.clamp(1.0, 1.5),
+                    ),
+                  ),
+            child: AppStringsScope(
+              child: AppLockGate(child: OfflineStrip(child: child!)),
+            ),
+          );
+        },
+        // Settings > General > Language: the phone's own words (dates,
+        // Cancel and OK in pickers) follow it too.
+        locale: AppStrings.instance.locale,
+        supportedLocales: [
+          for (final l in kMaterialSupportedLanguages) Locale(l),
+        ],
+        localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        theme: nexusTheme(Brightness.light),
+        darkTheme: nexusTheme(Brightness.dark, oled: theme == 'oled-dark'),
+        // Settings > Theme, kept on the server with the rest.
+        themeMode: switch (theme) {
+          'light' => ThemeMode.light,
+          'dark' || 'oled-dark' => ThemeMode.dark,
+          _ => ThemeMode.system,
+        },
+        home: switch (session) {
+          // Signed in, but an admin hasn't approved the account yet.
+          AsyncData(value: final s?) when s.user?['role'] == 'pending' =>
+            PendingScreen(
+              signedIn: true,
+              onCheck: () => ref.read(sessionProvider.notifier).recheck(),
+            ),
+          AsyncData(value: != null) => const InAppToasts(
+            child: ServerAsks(child: ChatScreen()),
+          ),
+          // Spinner only while restoring a saved session; during sign-in the
+          // login screen stays up so what was typed isn't lost.
+          AsyncLoading() when !ref.read(sessionProvider.notifier).booted =>
+            const Scaffold(
+              body: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    NexusLogo(size: 112),
+                    SizedBox(height: 32),
+                    CircularProgressIndicator(),
+                  ],
+                ),
+              ),
+            ),
+          _ when ref.watch(standaloneModeProvider).isLoading =>
+            const Scaffold(),
+          // Signed out: chats with AI providers only, when chosen.
+          _ when ref.watch(standaloneModeProvider).value == true =>
+            const StandaloneScreen(),
+          _ => const WelcomeScreen(),
+        },
       ),
-      home: switch (session) {
-        AsyncData(value: != null) => const ChatScreen(),
-        // Spinner only while restoring a saved session; during sign-in the
-        // login screen stays up so what was typed isn't lost.
-        AsyncLoading() when !ref.read(sessionProvider.notifier).booted =>
-          const Scaffold(body: Center(child: CircularProgressIndicator())),
-        _ => const LoginScreen(),
-      },
     );
   }
 }
