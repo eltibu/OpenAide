@@ -11,6 +11,7 @@ import '../settings/settings_screen.dart'
     show settingsApiProvider, uiSettingsProvider;
 import 'chat_controller.dart' show userSettingsProvider;
 import 'composer_draft.dart';
+import '../../core/i18n/app_strings.dart';
 
 const defaultQuickActions = <Map<String, dynamic>>[
   {
@@ -143,17 +144,18 @@ class _QuickActionsScreenState extends ConsumerState<QuickActionsScreen> {
               TextField(
                 controller: label,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: InputDecoration(labelText: tr('Title')),
               ),
               TextField(
                 controller: prompt,
                 minLines: 3,
                 maxLines: 8,
-                decoration: const InputDecoration(
-                  labelText: 'Prompt',
-                  helperText:
-                      '{{SELECTED_CONTENT}} is the selection quoted, '
-                      '{{CONTENT}} as is, {{INPUT_CONTENT}} what you type.',
+                decoration: InputDecoration(
+                  labelText: tr('Prompt'),
+                  helperText: tr(
+                    '{{SELECTED_CONTENT}} is the selection quoted, '
+                    '{{CONTENT}} as is, {{INPUT_CONTENT}} what you type.',
+                  ),
                   helperMaxLines: 3,
                 ),
               ),
@@ -163,7 +165,7 @@ class _QuickActionsScreenState extends ConsumerState<QuickActionsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () {
@@ -178,7 +180,7 @@ class _QuickActionsScreenState extends ConsumerState<QuickActionsScreen> {
                 'prompt': prompt.text,
               });
             },
-            child: const Text('Save'),
+            child: const T('Save'),
           ),
         ],
       ),
@@ -192,11 +194,11 @@ class _QuickActionsScreenState extends ConsumerState<QuickActionsScreen> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Quick Actions'),
+        title: const T('Quick Actions'),
         actions: [
           TextButton(
             onPressed: _busy ? null : () => _save(null),
-            child: const Text('Reset'),
+            child: const T('Reset'),
           ),
         ],
       ),
@@ -208,7 +210,7 @@ class _QuickActionsScreenState extends ConsumerState<QuickActionsScreen> {
                 if (made != null) await _save([...actions, made]);
               },
         icon: const Icon(Icons.add),
-        label: const Text('New Button'),
+        label: const T('New Button'),
       ),
       body: actions == null
           ? const Center(child: CircularProgressIndicator())
@@ -218,7 +220,7 @@ class _QuickActionsScreenState extends ConsumerState<QuickActionsScreen> {
                 if (_busy) const LinearProgressIndicator(minHeight: 2),
                 Padding(
                   padding: const EdgeInsets.all(16),
-                  child: Text(
+                  child: T(
                     'Select text in a reply to see these next to Copy. They '
                     'put the selection into the chat box.',
                     style: TextStyle(color: muted),
@@ -240,7 +242,7 @@ class _QuickActionsScreenState extends ConsumerState<QuickActionsScreen> {
                       }
                     },
                     trailing: IconButton(
-                      tooltip: 'Remove action',
+                      tooltip: tr('Remove action'),
                       icon: const Icon(Icons.remove_circle_outline),
                       onPressed: _busy
                           ? null

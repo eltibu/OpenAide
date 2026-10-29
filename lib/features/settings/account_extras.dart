@@ -8,9 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show serverConfigProvider;
 import 'settings_screen.dart' show meProvider, settingsApiProvider;
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 bool _feature(WidgetRef ref, String key) =>
     ((ref.watch(serverConfigProvider).value?['features'] as Map?)?[key]) ==
@@ -33,7 +35,7 @@ class AccountStatus extends ConsumerWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Update your status'),
+        title: const T('Update your status'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -44,7 +46,7 @@ class AccountStatus extends ConsumerWidget {
                   child: TextField(
                     controller: emoji,
                     textAlign: TextAlign.center,
-                    decoration: const InputDecoration(hintText: '🙂'),
+                    decoration: InputDecoration(hintText: tr('🙂')),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -52,8 +54,8 @@ class AccountStatus extends ConsumerWidget {
                   child: TextField(
                     controller: message,
                     autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'What\'s your status?',
+                    decoration: InputDecoration(
+                      hintText: tr('What\'s your status?'),
                     ),
                   ),
                 ),
@@ -64,11 +66,11 @@ class AccountStatus extends ConsumerWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Save'),
+            child: const T('Save'),
           ),
         ],
       ),
@@ -111,14 +113,14 @@ class AccountStatus extends ConsumerWidget {
         '${me['status_emoji'] ?? ''}'.isEmpty ? '💬' : '${me['status_emoji']}',
         style: const TextStyle(fontSize: 22),
       ),
-      title: const Text('Status'),
+      title: const T('Status'),
       subtitle: Text(
         set ? '${me['status_message'] ?? ''}' : 'Update your status',
       ),
       onTap: () => _edit(context, ref, me),
       trailing: set
           ? IconButton(
-              tooltip: 'Clear status',
+              tooltip: tr('Clear status'),
               icon: const Icon(Icons.close),
               onPressed: () => _save(context, ref),
             )
@@ -162,19 +164,19 @@ class _ApiKeysState extends ConsumerState<ApiKeys> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (d) => AlertDialog(
-          title: const Text('Make a new key?'),
-          content: const Text(
+          title: const T('Make a new key?'),
+          content: const T(
             'The old key stops working, so anything using it needs the new '
             'one.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const Text('Make new key'),
+              child: const T('Make new key'),
             ),
           ],
         ),
@@ -212,23 +214,23 @@ class _ApiKeysState extends ConsumerState<ApiKeys> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('API keys', style: Theme.of(context).textTheme.titleSmall),
+        T('API keys', style: Theme.of(context).textTheme.titleSmall),
         if (token.isNotEmpty)
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('JWT token'),
+            title: const T('JWT token'),
             subtitle: Text(
               '${hide(token)} · ends when you sign out',
               style: TextStyle(color: muted),
             ),
             trailing: IconButton(
-              tooltip: 'Copy token',
+              tooltip: tr('Copy token'),
               icon: const Icon(Icons.copy),
               onPressed: () => _copy(token, 'Token'),
             ),
           ),
         if (!keysOn)
-          Text(
+          T(
             'API keys are off on this server. An admin can turn them on in '
             'Admin Panel > General.',
             style: TextStyle(color: muted),
@@ -241,13 +243,13 @@ class _ApiKeysState extends ConsumerState<ApiKeys> {
             child: TextButton.icon(
               onPressed: _create,
               icon: const Icon(Icons.key),
-              label: const Text('Create new secret key'),
+              label: const T('Create new secret key'),
             ),
           )
         else
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('API key'),
+            title: const T('API key'),
             subtitle: SelectableText(
               _show ? _key! : hide(_key!),
               style: TextStyle(color: muted),
@@ -257,15 +259,15 @@ class _ApiKeysState extends ConsumerState<ApiKeys> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: 'Copy API key',
+                  tooltip: tr('Copy API key'),
                   icon: const Icon(Icons.copy),
                   onPressed: () => _copy(_key!, 'API key'),
                 ),
                 PopupMenuButton<String>(
                   onSelected: (v) => v == 'new' ? _create() : _delete(),
                   itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'new', child: Text('Create new key')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete key')),
+                    PopupMenuItem(value: 'new', child: T('Create new key')),
+                    PopupMenuItem(value: 'delete', child: T('Delete key')),
                   ],
                 ),
               ],

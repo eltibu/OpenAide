@@ -17,6 +17,7 @@ import 'file_tools.dart';
 import 'sqlite_view.dart';
 import 'terminal_api.dart';
 import '../studio/office_preview.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The terminal servers this user may use; empty when none is set up.
 final terminalServersProvider = FutureProvider<List<TerminalServer>>((
@@ -284,10 +285,7 @@ class _ShellViewState extends State<_ShellView>
             MaterialBanner(
               content: Text(_problem!),
               actions: [
-                TextButton(
-                  onPressed: _reconnect,
-                  child: const Text('Reconnect'),
-                ),
+                TextButton(onPressed: _reconnect, child: const T('Reconnect')),
               ],
             ),
           Expanded(
@@ -512,7 +510,7 @@ class _FileBrowserState extends State<FileBrowser>
 
   void _toast(String message) =>
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(message)));
+          .showSnackBar(SnackBar(content: Text(tr(message))));
 
   Future<void> _run(Future<void> Function() action, String done) async {
     try {
@@ -538,11 +536,11 @@ class _FileBrowserState extends State<FileBrowser>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, text.text.trim()),
-            child: const Text('OK'),
+            child: const T('OK'),
           ),
         ],
       ),
@@ -653,33 +651,33 @@ class _FileBrowserState extends State<FileBrowser>
               if (e.isDir && widget.onOpenInTerminal != null)
                 ListTile(
                   leading: const Icon(Icons.terminal),
-                  title: const Text('Open in terminal'),
+                  title: const T('Open in terminal'),
                   onTap: () => Navigator.pop(context, 'terminal'),
                 ),
               if (!e.isDir)
                 ListTile(
                   leading: const Icon(Icons.download_outlined),
-                  title: const Text('Download to phone'),
+                  title: const T('Download to phone'),
                   onTap: () => Navigator.pop(context, 'download'),
                 ),
               ListTile(
                 leading: const Icon(Icons.checklist),
-                title: const Text('Select'),
+                title: const T('Select'),
                 onTap: () => Navigator.pop(context, 'select'),
               ),
               ListTile(
                 leading: const Icon(Icons.copy),
-                title: const Text('Copy path'),
+                title: const T('Copy path'),
                 onTap: () => Navigator.pop(context, 'copy'),
               ),
               ListTile(
                 leading: const Icon(Icons.drive_file_rename_outline),
-                title: const Text('Rename'),
+                title: const T('Rename'),
                 onTap: () => Navigator.pop(context, 'rename'),
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('Delete'),
+                title: const T('Delete'),
                 onTap: () => Navigator.pop(context, 'delete'),
               ),
             ],
@@ -718,11 +716,11 @@ class _FileBrowserState extends State<FileBrowser>
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: const T('Cancel'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
+                child: const T('Delete'),
               ),
             ],
           ),
@@ -775,17 +773,17 @@ class _FileBrowserState extends State<FileBrowser>
         title: Text(
           'Delete ${list.length} item${list.length == 1 ? '' : 's'}?',
         ),
-        content: const Text(
+        content: const T(
           'They will be deleted from the server, folders with everything in them.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -835,36 +833,36 @@ class _FileBrowserState extends State<FileBrowser>
     return Row(
       children: [
         IconButton(
-          tooltip: 'Done',
+          tooltip: tr('Done'),
           icon: const Icon(Icons.close),
           onPressed: () => setState(_picked.clear),
         ),
         Expanded(child: Text('${_picked.length} selected')),
         IconButton(
-          tooltip: 'Select all',
+          tooltip: tr('Select all'),
           icon: const Icon(Icons.select_all),
           onPressed: () =>
               setState(() => _picked.addAll(_shown.map((e) => e.path))),
         ),
         if (files == 2 && _picked.length == 2)
           IconButton(
-            tooltip: 'Compare',
+            tooltip: tr('Compare'),
             icon: const Icon(Icons.difference_outlined),
             onPressed: _compare,
           ),
         if (files > 0)
           IconButton(
-            tooltip: 'Download',
+            tooltip: tr('Download'),
             icon: const Icon(Icons.download_outlined),
             onPressed: _downloadPicked,
           ),
         IconButton(
-          tooltip: 'Move',
+          tooltip: tr('Move'),
           icon: const Icon(Icons.drive_file_move_outlined),
           onPressed: _movePicked,
         ),
         IconButton(
-          tooltip: 'Delete',
+          tooltip: tr('Delete'),
           icon: const Icon(Icons.delete_outline),
           onPressed: _deletePicked,
         ),
@@ -898,7 +896,7 @@ class _FileBrowserState extends State<FileBrowser>
             if (list.isEmpty) {
               return const Padding(
                 padding: EdgeInsets.all(24),
-                child: Text(
+                child: T(
                   'Nothing is listening on a port. Start a server in the '
                   'terminal (for example python -m http.server 8000).',
                 ),
@@ -913,7 +911,7 @@ class _FileBrowserState extends State<FileBrowser>
                     title: Text('Port ${p.port}'),
                     subtitle: p.process.isEmpty ? null : Text(p.process),
                     trailing: IconButton(
-                      tooltip: 'Copy address',
+                      tooltip: tr('Copy address'),
                       icon: const Icon(Icons.link),
                       onPressed: () => Clipboard.setData(
                         ClipboardData(
@@ -954,7 +952,7 @@ class _FileBrowserState extends State<FileBrowser>
   }
 
   Widget _viewMenu() => PopupMenuButton<String>(
-    tooltip: 'Sort and show',
+    tooltip: tr('Sort and show'),
     icon: const Icon(Icons.sort),
     onSelected: (v) => setState(() {
       switch (v) {
@@ -987,21 +985,21 @@ class _FileBrowserState extends State<FileBrowser>
       CheckedPopupMenuItem(
         value: 'desc',
         checked: _descending,
-        child: const Text('Reverse order'),
+        child: const T('Reverse order'),
       ),
       const PopupMenuDivider(),
       CheckedPopupMenuItem(
         value: 'grid',
         checked: _grid,
-        child: const Text('Grid view'),
+        child: const T('Grid view'),
       ),
       CheckedPopupMenuItem(
         value: 'hidden',
         checked: _showHidden,
-        child: const Text('Show hidden files'),
+        child: const T('Show hidden files'),
       ),
-      const PopupMenuItem(value: 'select', child: Text('Select…')),
-      const PopupMenuItem(value: 'ports', child: Text('Running web pages')),
+      const PopupMenuItem(value: 'select', child: T('Select…')),
+      const PopupMenuItem(value: 'ports', child: T('Running web pages')),
     ],
   );
 
@@ -1096,7 +1094,7 @@ class _FileBrowserState extends State<FileBrowser>
       floatingActionButton: dir == null
           ? null
           : FloatingActionButton(
-              tooltip: 'Add',
+              tooltip: tr('Add'),
               onPressed: () async {
                 final choice = await showModalBottomSheet<String>(
                   context: context,
@@ -1107,22 +1105,22 @@ class _FileBrowserState extends State<FileBrowser>
                       children: [
                         ListTile(
                           leading: const Icon(Icons.upload_file),
-                          title: const Text('Upload from phone'),
+                          title: const T('Upload from phone'),
                           onTap: () => Navigator.pop(context, 'upload'),
                         ),
                         ListTile(
                           leading: const Icon(Icons.drive_folder_upload),
-                          title: const Text('Upload Folder'),
+                          title: const T('Upload Folder'),
                           onTap: () => Navigator.pop(context, 'dir'),
                         ),
                         ListTile(
                           leading: const Icon(Icons.create_new_folder_outlined),
-                          title: const Text('New folder'),
+                          title: const T('New folder'),
                           onTap: () => Navigator.pop(context, 'folder'),
                         ),
                         ListTile(
                           leading: const Icon(Icons.note_add_outlined),
-                          title: const Text('New file'),
+                          title: const T('New file'),
                           onTap: () => Navigator.pop(context, 'file'),
                         ),
                       ],
@@ -1153,13 +1151,13 @@ class _FileBrowserState extends State<FileBrowser>
               child: Row(
                 children: [
                   IconButton(
-                    tooltip: 'Back',
+                    tooltip: tr('Back'),
                     visualDensity: VisualDensity.compact,
                     onPressed: _back.isEmpty ? null : _goBack,
                     icon: const Icon(Icons.chevron_left),
                   ),
                   IconButton(
-                    tooltip: 'Forward',
+                    tooltip: tr('Forward'),
                     visualDensity: VisualDensity.compact,
                     onPressed: _forward.isEmpty ? null : _goForward,
                     icon: const Icon(Icons.chevron_right),
@@ -1204,7 +1202,7 @@ class _FileBrowserState extends State<FileBrowser>
                           const SizedBox(height: 12),
                           OutlinedButton(
                             onPressed: _start,
-                            child: const Text('Try again'),
+                            child: const T('Try again'),
                           ),
                         ],
                       ),
@@ -1220,14 +1218,14 @@ class _FileBrowserState extends State<FileBrowser>
                         if (dir != '/')
                           ListTile(
                             leading: const Icon(Icons.arrow_upward),
-                            title: const Text('..'),
+                            title: const T('..'),
                             onTap: () => _go(parentPath(dir!)),
                           ),
                         if (_shown.isEmpty)
                           Padding(
                             padding: const EdgeInsets.all(32),
                             child: Center(
-                              child: Text(
+                              child: T(
                                 'This folder is empty',
                                 style: TextStyle(color: muted),
                               ),
@@ -1402,7 +1400,7 @@ class _FileViewerState extends State<FileViewer> {
       _ask.clear();
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Sent to the chat')));
+            .showSnackBar(const SnackBar(content: T('Sent to the chat')));
       }
     } catch (e) {
       if (mounted) {
@@ -1483,7 +1481,7 @@ class _FileViewerState extends State<FileViewer> {
       if (!mounted) return;
       setState(() => _dirty = false);
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Saved')));
+          .showSnackBar(const SnackBar(content: T('Saved')));
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -1511,15 +1509,15 @@ class _FileViewerState extends State<FileViewer> {
         final leave = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Discard your changes?'),
+            title: const T('Discard your changes?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Keep editing'),
+                child: const T('Keep editing'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Discard'),
+                child: const T('Discard'),
               ),
             ],
           ),
@@ -1534,7 +1532,7 @@ class _FileViewerState extends State<FileViewer> {
           title: Text(widget.name),
           actions: [
             IconButton(
-              tooltip: 'Copy path',
+              tooltip: tr('Copy path'),
               icon: const Icon(Icons.link),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: widget.path));
@@ -1545,12 +1543,12 @@ class _FileViewerState extends State<FileViewer> {
             ),
             if (_image) ...[
               IconButton(
-                tooltip: 'Zoom out',
+                tooltip: tr('Zoom out'),
                 icon: const Icon(Icons.zoom_out),
                 onPressed: () => _zoomBy(1 / 1.5),
               ),
               IconButton(
-                tooltip: 'Zoom in',
+                tooltip: tr('Zoom in'),
                 icon: const Icon(Icons.zoom_in),
                 onPressed: () => _zoomBy(1.5),
               ),
@@ -1563,20 +1561,20 @@ class _FileViewerState extends State<FileViewer> {
               ),
             if (_bytes != null)
               IconButton(
-                tooltip: 'Download to phone',
+                tooltip: tr('Download to phone'),
                 icon: const Icon(Icons.download_outlined),
                 onPressed: _download,
               ),
             if (_text != null)
               IconButton(
-                tooltip: 'Copy all',
+                tooltip: tr('Copy all'),
                 icon: const Icon(Icons.copy),
                 onPressed: () =>
                     Clipboard.setData(ClipboardData(text: _edit.text)),
               ),
             if (_dirty)
               IconButton(
-                tooltip: 'Save',
+                tooltip: tr('Save'),
                 icon: _saving
                     ? const SizedBox.square(
                         dimension: 20,
@@ -1681,15 +1679,15 @@ class _FileViewerState extends State<FileViewer> {
                           maxLines: 4,
                           textInputAction: TextInputAction.send,
                           onSubmitted: (_) => _send(),
-                          decoration: const InputDecoration(
-                            hintText: 'Ask or edit…',
+                          decoration: InputDecoration(
+                            hintText: tr('Ask or edit…'),
                             isDense: true,
                             border: OutlineInputBorder(),
                           ),
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Send',
+                        tooltip: tr('Send'),
                         onPressed: _asking ? null : _send,
                         icon: _asking
                             ? const SizedBox.square(

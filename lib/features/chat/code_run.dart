@@ -12,6 +12,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/auth/session.dart';
 import 'chat_controller.dart' show serverConfigProvider;
+import '../../core/i18n/app_strings.dart';
 
 /// Whether a block looks like Python, as the web decides when to offer Run.
 bool isPythonBlock(String language, String code) {
@@ -189,7 +190,7 @@ class _CodeRunPanelState extends ConsumerState<CodeRunPanel> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   SizedBox(width: 8),
-                  Text('Running…'),
+                  T('Running…'),
                 ],
               ),
             ),

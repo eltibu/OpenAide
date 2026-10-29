@@ -39,8 +39,37 @@ const assistantOpensKey = 'nexusAssistantOpens';
 String assistantOpens(Map? ui) => switch (ui?[assistantOpensKey]) {
   'dictate' => 'dictate',
   'chat' => 'new',
+  'panel' => 'panel',
   _ => 'call',
 };
+
+/// Tells Android whether the assistant opens as a panel over other apps
+/// (see AssistEntry.kt); it has to know before the app starts.
+Future<void> setAssistPanel(bool on) async {
+  try {
+    await phoneChannel.invokeMethod('overlay', {'on': on});
+  } on MissingPluginException {
+    // Not on a phone.
+  }
+}
+
+/// From the panel: carries on in the full app, at [chatId] if there is one.
+Future<void> openAppFromPanel(String? chatId) async {
+  try {
+    await phoneChannel.invokeMethod('openApp', {'chatId': chatId});
+  } on MissingPluginException {
+    // Not on a phone.
+  }
+}
+
+/// Closes the panel, back to the app it was over.
+Future<void> closeAssistPanel() async {
+  try {
+    await phoneChannel.invokeMethod('close');
+  } on MissingPluginException {
+    // Not on a phone.
+  }
+}
 
 /// What [launch] comes down to: the assistant button takes your setting.
 String launchAction(PhoneLaunch launch, Map? ui) =>

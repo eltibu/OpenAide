@@ -11,6 +11,7 @@ import '../../core/models/model_info.dart';
 import '../settings/settings_screen.dart'
     show meProvider, settingsApiProvider, uiSettingsProvider;
 import '../workspace/models_screen.dart' show ModelEditor, modelsApiProvider;
+import '../../core/i18n/app_strings.dart';
 import 'chat_controller.dart'
     show modelsProvider, serverConfigProvider, userSettingsProvider;
 
@@ -101,7 +102,7 @@ class ModelMoreMenu extends ConsumerWidget {
     final me = ref.watch(meProvider).value;
     final messenger = ScaffoldMessenger.of(context);
     return PopupMenuButton<String>(
-      tooltip: 'More',
+      tooltip: tr('More'),
       icon: Icon(icon ?? Icons.more_horiz),
       onSelected: (v) async {
         switch (v) {
@@ -116,9 +117,7 @@ class ModelMoreMenu extends ConsumerWidget {
             await Clipboard.setData(
               ClipboardData(text: modelLink(url, model.id)),
             );
-            messenger.showSnackBar(
-              const SnackBar(content: Text('Link copied')),
-            );
+            messenger.showSnackBar(const SnackBar(content: T('Link copied')));
           case 'edit':
             try {
               final m = await ref.read(modelsApiProvider).get(model.id);
@@ -139,12 +138,12 @@ class ModelMoreMenu extends ConsumerWidget {
       },
       itemBuilder: (_) => [
         if (canEditModel(model, me))
-          const PopupMenuItem(value: 'edit', child: Text('Edit')),
+          const PopupMenuItem(value: 'edit', child: T('Edit')),
         PopupMenuItem(
           value: 'pin',
           child: Text(pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'),
         ),
-        const PopupMenuItem(value: 'link', child: Text('Copy Link')),
+        const PopupMenuItem(value: 'link', child: T('Copy Link')),
       ],
     );
   }

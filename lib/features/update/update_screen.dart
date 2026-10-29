@@ -4,6 +4,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/widgets/nexus_logo.dart';
 import 'updater.dart';
+import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 /// Settings page: current build, update channel, optional GitHub token,
 /// check and install.
@@ -63,7 +65,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
     final updater = ref.read(updaterProvider.notifier);
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('App updates')),
+      appBar: AppBar(title: const T('App updates')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -75,7 +77,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('OpenAide', style: theme.textTheme.titleLarge),
+                    T('OpenAide', style: theme.textTheme.titleLarge),
                     Text(
                       'Installed: $_version',
                       style: theme.textTheme.bodyLarge,
@@ -86,19 +88,19 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
             ],
           ),
           const SizedBox(height: 24),
-          Text('Update channel', style: theme.textTheme.titleMedium),
+          T('Update channel', style: theme.textTheme.titleMedium),
           const SizedBox(height: 8),
           if (_channel != null)
             SegmentedButton<UpdateChannel>(
               segments: const [
                 ButtonSegment(
                   value: UpdateChannel.stable,
-                  label: Text('Stable'),
+                  label: T('Stable'),
                   icon: Icon(Icons.verified_outlined),
                 ),
                 ButtonSegment(
                   value: UpdateChannel.dev,
-                  label: Text('Dev builds'),
+                  label: T('Dev builds'),
                   icon: Icon(Icons.science_outlined),
                 ),
               ],
@@ -114,7 +116,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 24),
-          Text('GitHub token (optional)', style: theme.textTheme.titleMedium),
+          T('GitHub token (optional)', style: theme.textTheme.titleMedium),
           const SizedBox(height: 4),
           Text(
             builtInToken.isNotEmpty
@@ -128,29 +130,32 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: _token,
-            obscureText: true,
-            autocorrect: false,
-            decoration: const InputDecoration(
-              labelText: 'github_pat_…',
-              border: OutlineInputBorder(),
+          Hideable(
+            builder: (obscure, eye) => TextField(
+              controller: _token,
+              obscureText: obscure,
+              autocorrect: false,
+              decoration: InputDecoration(
+                suffixIcon: eye,
+                labelText: tr('github_pat_…'),
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _saveToken(),
             ),
-            onSubmitted: (_) => _saveToken(),
           ),
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
               onPressed: _saveToken,
-              child: const Text('Save token'),
+              child: const T('Save token'),
             ),
           ),
           const Divider(height: 32),
           switch (state) {
             UpdateIdle() => const SizedBox.shrink(),
             UpdateChecking() => const LinearProgressIndicator(),
-            UpToDate() => const Text('You have the latest build.'),
+            UpToDate() => const T('You have the latest build.'),
             UpdateFound(:final update) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -166,14 +171,14 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
                 FilledButton.icon(
                   onPressed: () => updater.install(update),
                   icon: const Icon(Icons.system_update),
-                  label: const Text('Install'),
+                  label: const T('Install'),
                 ),
               ],
             ),
             UpdateDownloading(:final progress) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Downloading…'),
+                const T('Downloading…'),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(value: progress),
               ],
@@ -188,7 +193,7 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
             onPressed: state is UpdateChecking || state is UpdateDownloading
                 ? null
                 : () => updater.check(),
-            child: const Text('Check for updates'),
+            child: const T('Check for updates'),
           ),
         ],
       ),
@@ -226,7 +231,7 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
         actions: [
           TextButton(
             onPressed: () => updater.install(update),
-            child: const Text('Install'),
+            child: const T('Install'),
           ),
         ],
       ),
@@ -258,7 +263,7 @@ class _UpdateBannerState extends ConsumerState<UpdateBanner> {
         actions: [
           TextButton(
             onPressed: () => updater.check(),
-            child: const Text('Try again'),
+            child: const T('Try again'),
           ),
         ],
       ),

@@ -11,6 +11,8 @@
     <!-- Calls and recordings keep going with the phone locked. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Hands-free: open the assistant over other apps when it hears you. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Phone actions: timers and alarms, and finding who to call or text. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -49,17 +51,6 @@
             <meta-data
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
-            <!-- The phone's assistant: long-press power or home, or the
-                 headset button. Pick Nexus in Settings > Apps > Default apps
-                 > Digital assistant app. -->
-            <intent-filter>
-                <action android:name="android.intent.action.ASSIST" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <intent-filter>
-                <action android:name="android.intent.action.VOICE_COMMAND" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
             <!-- Share to Nexus from other apps. -->
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
@@ -78,8 +69,47 @@
                 <data android:mimeType="text/plain" />
             </intent-filter>
         </activity>
+        <!-- The phone's assistant: long-press power or home, or the
+             headset button. Pick OpenAide in Settings > Apps > Default apps
+             > Digital assistant app. AssistEntry opens the full app or the
+             panel over other apps (AssistActivity). -->
+        <activity
+            android:name=".AssistEntry"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VOICE_COMMAND" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+        <activity
+            android:name=".AssistActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="com.nexus.nexus_assistant.assist"
+            android:theme="@style/AssistTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/AssistTheme" />
+        </activity>
         <service
             android:name=".MicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+        <!-- Hands-free: listens for "Hey OpenAide" on the phone. -->
+        <service
+            android:name=".WakeService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
         <!-- Settings > Notifications > While the app is closed. -->

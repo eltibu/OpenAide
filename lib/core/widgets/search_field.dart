@@ -4,6 +4,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../i18n/app_strings.dart';
+
 class SearchField extends StatefulWidget {
   const SearchField({
     super.key,
@@ -51,7 +53,7 @@ class _SearchFieldState extends State<SearchField> {
         suffixIcon: _text.text.isEmpty
             ? null
             : IconButton(
-                tooltip: 'Clear',
+                tooltip: tr('Clear'),
                 icon: const Icon(Icons.close, size: 20),
                 onPressed: () {
                   _text.clear();

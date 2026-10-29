@@ -5,6 +5,7 @@
 library;
 
 import '../../core/widgets/markdown_style.dart';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,9 +19,12 @@ import '../../core/theme.dart';
 import 'agent_store.dart';
 import 'agent_tools.dart';
 import 'mcp_servers.dart';
+import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 Widget _header(BuildContext context, String text, {Widget? trailing}) =>
     Padding(
@@ -49,7 +53,7 @@ class AgentSettingsScreen extends ConsumerWidget {
     final config = async.value;
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Tools and skills')),
+      appBar: AppBar(title: const T('Tools and skills')),
       body: config == null
           ? const Center(child: CircularProgressIndicator())
           : ListView(
@@ -57,7 +61,7 @@ class AgentSettingsScreen extends ConsumerWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                  child: Text(
+                  child: T(
                     'For models from your AI providers and models on this '
                     'phone. Chats on an Open WebUI server use the server\'s '
                     'own tools.',
@@ -78,7 +82,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                   if (group == 'Web')
                     ListTile(
                       leading: const Icon(Icons.travel_explore),
-                      title: const Text('Search engine'),
+                      title: const T('Search engine'),
                       subtitle: Text(config.searchEngine.label),
                       trailing: const Icon(Icons.chevron_right),
                       onTap: () => showDialog<void>(
@@ -92,7 +96,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                   'Skills',
                   trailing: PopupMenuButton<String>(
                     icon: const Icon(Icons.add),
-                    tooltip: 'Add a skill',
+                    tooltip: tr('Add a skill'),
                     onSelected: (v) => v == 'new'
                         ? Navigator.push(
                             context,
@@ -102,10 +106,10 @@ class AgentSettingsScreen extends ConsumerWidget {
                           )
                         : _importSkills(context, store),
                     itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'new', child: Text('Write a skill')),
+                      PopupMenuItem(value: 'new', child: T('Write a skill')),
                       PopupMenuItem(
                         value: 'import',
-                        child: Text('Import .skill, .zip or SKILL.md'),
+                        child: T('Import .skill, .zip or SKILL.md'),
                       ),
                     ],
                   ),
@@ -122,7 +126,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                     onChanged: (on) => store.setSkillOn(s.id, on),
                     secondary: IconButton(
                       icon: const Icon(Icons.description_outlined),
-                      tooltip: 'Open',
+                      tooltip: tr('Open'),
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -136,7 +140,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                   'MCP servers',
                   trailing: IconButton(
                     icon: const Icon(Icons.add),
-                    tooltip: 'Add an MCP server',
+                    tooltip: tr('Add an MCP server'),
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -165,7 +169,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                         store.saveMcpServer({...s, 'enabled': on}),
                     secondary: IconButton(
                       icon: const Icon(Icons.settings_outlined),
-                      tooltip: 'Edit',
+                      tooltip: tr('Edit'),
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -179,7 +183,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                   'Tool servers (OpenAPI)',
                   trailing: IconButton(
                     icon: const Icon(Icons.add),
-                    tooltip: 'Add a tool server',
+                    tooltip: tr('Add a tool server'),
                     onPressed: () => Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -207,7 +211,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                         store.saveToolServer({...s, 'enabled': on}),
                     secondary: IconButton(
                       icon: const Icon(Icons.settings_outlined),
-                      tooltip: 'Edit',
+                      tooltip: tr('Edit'),
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -218,8 +222,8 @@ class AgentSettingsScreen extends ConsumerWidget {
                   ),
                 _header(context, 'Memory and notes'),
                 SwitchListTile(
-                  title: const Text('Use memory in chats'),
-                  subtitle: const Text(
+                  title: const T('Use memory in chats'),
+                  subtitle: const T(
                     'What it remembered goes along with every chat',
                   ),
                   value: config.memoryOn,
@@ -227,7 +231,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.psychology_outlined),
-                  title: const Text('Memory'),
+                  title: const T('Memory'),
                   subtitle: Text('${config.memories.length} remembered'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.push(
@@ -237,7 +241,7 @@ class AgentSettingsScreen extends ConsumerWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.sticky_note_2_outlined),
-                  title: const Text('Notes'),
+                  title: const T('Notes'),
                   subtitle: Text('${config.notes.length} on this phone'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => Navigator.push(
@@ -303,7 +307,7 @@ class _SearchDialogState extends ConsumerState<_SearchDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Search engine'),
+    title: const T('Search engine'),
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -317,7 +321,7 @@ class _SearchDialogState extends ConsumerState<_SearchDialog> {
                   value: e,
                   title: Text(e.label),
                   subtitle: e == SearchEngine.duckDuckGo
-                      ? const Text('Free, no key')
+                      ? const T('Free, no key')
                       : null,
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -325,18 +329,23 @@ class _SearchDialogState extends ConsumerState<_SearchDialog> {
           ),
         ),
         if (_engine.needsKey)
-          TextField(
-            controller: _key,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'API key'),
+          Hideable(
+            builder: (obscure, eye) => TextField(
+              controller: _key,
+              obscureText: obscure,
+              decoration: InputDecoration(
+                suffixIcon: eye,
+                labelText: tr('API key'),
+              ),
+            ),
           ),
         if (_engine.needsUrl)
           TextField(
             controller: _url,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'Address',
-              hintText: 'https://search.example.com',
+            decoration: InputDecoration(
+              labelText: tr('Address'),
+              hintText: tr('https://search.example.com'),
             ),
           ),
       ],
@@ -344,7 +353,7 @@ class _SearchDialogState extends ConsumerState<_SearchDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: const T('Cancel'),
       ),
       FilledButton(
         onPressed: () async {
@@ -357,7 +366,7 @@ class _SearchDialogState extends ConsumerState<_SearchDialog> {
               );
           if (context.mounted) Navigator.pop(context);
         },
-        child: const Text('Save'),
+        child: const T('Save'),
       ),
     ],
   );
@@ -422,7 +431,7 @@ class _SkillEditorState extends ConsumerState<SkillEditorScreen> {
         actions: [
           if (s != null)
             IconButton(
-              tooltip: 'Copy as SKILL.md',
+              tooltip: tr('Copy as SKILL.md'),
               icon: const Icon(Icons.copy),
               onPressed: () {
                 Clipboard.setData(ClipboardData(text: s.skillMd));
@@ -431,7 +440,7 @@ class _SkillEditorState extends ConsumerState<SkillEditorScreen> {
             ),
           if (mine)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               icon: const Icon(Icons.delete_outline),
               onPressed: () async {
                 await ref.read(agentStoreProvider.notifier).deleteSkill(s.id);
@@ -441,12 +450,12 @@ class _SkillEditorState extends ConsumerState<SkillEditorScreen> {
           if (_readOnly)
             TextButton(
               onPressed: () => setState(() => _readOnly = false),
-              child: const Text('Change'),
+              child: const T('Change'),
             )
           else
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: FilledButton(onPressed: _save, child: const Text('Save')),
+              child: FilledButton(onPressed: _save, child: const T('Save')),
             ),
         ],
       ),
@@ -454,23 +463,23 @@ class _SkillEditorState extends ConsumerState<SkillEditorScreen> {
         padding: const EdgeInsets.all(16),
         children: [
           if (_readOnly)
-            Text(
+            T(
               'Comes with the app. Tap Change to make it your own.',
               style: TextStyle(color: context.nexus.muted),
             ),
           TextField(
             controller: _name,
             readOnly: _readOnly,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(labelText: tr('Name')),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _description,
             readOnly: _readOnly,
             maxLines: null,
-            decoration: const InputDecoration(
-              labelText: 'When to use it',
-              helperText: 'The model reads this to decide when it applies',
+            decoration: InputDecoration(
+              labelText: tr('When to use it'),
+              helperText: tr('The model reads this to decide when it applies'),
             ),
           ),
           const SizedBox(height: 12),
@@ -480,8 +489,8 @@ class _SkillEditorState extends ConsumerState<SkillEditorScreen> {
             minLines: 10,
             maxLines: null,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-            decoration: const InputDecoration(
-              labelText: 'Instructions (markdown)',
+            decoration: InputDecoration(
+              labelText: tr('Instructions (markdown)'),
               alignLabelWithHint: true,
               border: OutlineInputBorder(),
             ),
@@ -641,7 +650,7 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
         actions: [
           if (widget.server != null)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               icon: const Icon(Icons.delete_outline),
               onPressed: () async {
                 await ref
@@ -663,7 +672,7 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
                       await _saveOnly();
                       if (context.mounted) Navigator.pop(context);
                     },
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -674,34 +683,37 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
           TextField(
             controller: _url,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(
-              labelText: 'Server address',
-              hintText: 'https://example.com/mcp',
+            decoration: InputDecoration(
+              labelText: tr('Server address'),
+              hintText: tr('https://example.com/mcp'),
             ),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Name (optional)'),
+            decoration: InputDecoration(labelText: tr('Name (optional)')),
           ),
           const SizedBox(height: 16),
           SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'none', label: Text('No sign-in')),
-              ButtonSegment(value: 'key', label: Text('Key')),
-              ButtonSegment(value: 'oauth', label: Text('Sign in')),
+              ButtonSegment(value: 'none', label: T('No sign-in')),
+              ButtonSegment(value: 'key', label: T('Key')),
+              ButtonSegment(value: 'oauth', label: T('Sign in')),
             ],
             selected: {_auth},
             onSelectionChanged: (v) => setState(() => _auth = v.first),
           ),
           const SizedBox(height: 8),
           if (_auth == 'key')
-            TextField(
-              controller: _key,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: 'Key or token',
-                helperText: 'Sent as "Authorization: Bearer <key>"',
+            Hideable(
+              builder: (obscure, eye) => TextField(
+                controller: _key,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  suffixIcon: eye,
+                  labelText: tr('Key or token'),
+                  helperText: tr('Sent as "Authorization: Bearer <key>"'),
+                ),
               ),
             ),
           if (_auth == 'oauth') ...[
@@ -719,21 +731,24 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
             ),
             ExpansionTile(
               tilePadding: EdgeInsets.zero,
-              title: const Text('Client ID (only if the service asks)'),
+              title: const T('Client ID (only if the service asks)'),
               children: [
                 TextField(
                   controller: _clientId,
-                  decoration: const InputDecoration(labelText: 'Client ID'),
+                  decoration: InputDecoration(labelText: tr('Client ID')),
                 ),
-                TextField(
-                  controller: _clientSecret,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Client secret (optional)',
+                Hideable(
+                  builder: (obscure, eye) => TextField(
+                    controller: _clientSecret,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      suffixIcon: eye,
+                      labelText: tr('Client secret (optional)'),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
+                T(
                   'Redirect address to register: http://localhost/callback '
                   '(any port)',
                   style: TextStyle(color: muted, fontSize: 12),
@@ -743,13 +758,13 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
           ],
           ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('Extra headers'),
+            title: const T('Extra headers'),
             children: [
               TextField(
                 controller: _headers,
                 maxLines: null,
-                decoration: const InputDecoration(
-                  hintText: 'X-Api-Key: abc123\nOne per line',
+                decoration: InputDecoration(
+                  hintText: tr('X-Api-Key: abc123\nOne per line'),
                 ),
               ),
             ],
@@ -760,7 +775,7 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
               OutlinedButton.icon(
                 onPressed: _busy ? null : _test,
                 icon: const Icon(Icons.wifi_tethering),
-                label: const Text('Connect and list tools'),
+                label: const T('Connect and list tools'),
               ),
               const SizedBox(width: 12),
               if (_busy)
@@ -858,6 +873,10 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditorScreen> {
   }
 
   Future<void> _test() async {
+    if (Uri.tryParse(_url.text.trim())?.host.isEmpty ?? true) {
+      setState(() => _status = 'Enter the server address (https://...)');
+      return;
+    }
     setState(() {
       _busy = true;
       _status = 'Connecting…';
@@ -878,7 +897,7 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditorScreen> {
       actions: [
         if (widget.server != null)
           IconButton(
-            tooltip: 'Delete',
+            tooltip: tr('Delete'),
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
               await ref.read(agentStoreProvider.notifier).deleteToolServer(_id);
@@ -896,7 +915,7 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditorScreen> {
               await _save();
               if (context.mounted) Navigator.pop(context);
             },
-            child: const Text('Save'),
+            child: const T('Save'),
           ),
         ),
       ],
@@ -907,28 +926,31 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditorScreen> {
         TextField(
           controller: _url,
           keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            labelText: 'Server address',
-            hintText: 'https://tools.example.com',
+          decoration: InputDecoration(
+            labelText: tr('Server address'),
+            hintText: tr('https://tools.example.com'),
           ),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _path,
-          decoration: const InputDecoration(labelText: 'OpenAPI spec path'),
+          decoration: InputDecoration(labelText: tr('OpenAPI spec path')),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _name,
-          decoration: const InputDecoration(labelText: 'Name (optional)'),
+          decoration: InputDecoration(labelText: tr('Name (optional)')),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: _key,
-          obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Key (optional)',
-            helperText: 'Sent as "Authorization: Bearer <key>"',
+        Hideable(
+          builder: (obscure, eye) => TextField(
+            controller: _key,
+            obscureText: obscure,
+            decoration: InputDecoration(
+              suffixIcon: eye,
+              labelText: tr('Key (optional)'),
+              helperText: tr('Sent as "Authorization: Bearer <key>"'),
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -937,7 +959,7 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditorScreen> {
             OutlinedButton.icon(
               onPressed: _busy ? null : _test,
               icon: const Icon(Icons.wifi_tethering),
-              label: const Text('Test'),
+              label: const T('Test'),
             ),
             const SizedBox(width: 12),
             if (_status != null)
@@ -965,10 +987,10 @@ class MemoryScreen extends ConsumerWidget {
     final items = [...?config?.memories].reversed.toList();
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Memory'),
+        title: const T('Memory'),
         actions: [
           IconButton(
-            tooltip: 'Add',
+            tooltip: tr('Add'),
             icon: const Icon(Icons.add),
             onPressed: () async {
               final text = await _ask(context, 'Remember', '');
@@ -979,21 +1001,21 @@ class MemoryScreen extends ConsumerWidget {
           ),
           if (items.isNotEmpty)
             IconButton(
-              tooltip: 'Forget everything',
+              tooltip: tr('Forget everything'),
               icon: const Icon(Icons.delete_sweep_outlined),
               onPressed: () async {
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (c) => AlertDialog(
-                    title: const Text('Forget everything?'),
+                    title: const T('Forget everything?'),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(c, false),
-                        child: const Text('Cancel'),
+                        child: const T('Cancel'),
                       ),
                       FilledButton(
                         onPressed: () => Navigator.pop(c, true),
-                        child: const Text('Forget'),
+                        child: const T('Forget'),
                       ),
                     ],
                   ),
@@ -1007,7 +1029,7 @@ class MemoryScreen extends ConsumerWidget {
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: Text(
+                child: T(
                   'Nothing yet. Say "remember that..." in a chat.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.nexus.muted),
@@ -1020,7 +1042,7 @@ class MemoryScreen extends ConsumerWidget {
                   ListTile(
                     title: Text('${m['text']}'),
                     trailing: IconButton(
-                      tooltip: 'Forget',
+                      tooltip: tr('Forget'),
                       icon: const Icon(Icons.close),
                       onPressed: () => store.forget('${m['id']}'),
                     ),
@@ -1041,15 +1063,16 @@ Future<String?> _ask(BuildContext context, String title, String text) {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(ctx),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(ctx, c.text),
-          child: const Text('Save'),
+          child: const T('Save'),
         ),
       ],
     ),
-  ).whenComplete(c.dispose);
+  );
+  // c is not disposed: the dialog's text field still builds while it closes.
 }
 
 /// Notes the model saved on the phone.
@@ -1061,12 +1084,12 @@ class LocalNotesScreen extends ConsumerWidget {
     final notes = [...?ref.watch(agentStoreProvider).value?.notes]
       ..sort((a, b) => (b['at'] as num? ?? 0).compareTo(a['at'] as num? ?? 0));
     return Scaffold(
-      appBar: AppBar(title: const Text('Notes')),
+      appBar: AppBar(title: const T('Notes')),
       body: notes.isEmpty
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(32),
-                child: Text(
+                child: T(
                   'No notes yet. Ask in a chat: "save a note with...".',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: context.nexus.muted),
@@ -1105,7 +1128,7 @@ class _NoteScreen extends ConsumerWidget {
         title: Text('${note['title']}'),
         actions: [
           IconButton(
-            tooltip: 'Copy',
+            tooltip: tr('Copy'),
             icon: const Icon(Icons.copy),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: '${note['content']}'));
@@ -1113,7 +1136,7 @@ class _NoteScreen extends ConsumerWidget {
             },
           ),
           IconButton(
-            tooltip: 'Edit',
+            tooltip: tr('Edit'),
             icon: const Icon(Icons.edit_outlined),
             onPressed: () async {
               final text = await _ask(
@@ -1133,7 +1156,7 @@ class _NoteScreen extends ConsumerWidget {
             },
           ),
           IconButton(
-            tooltip: 'Delete',
+            tooltip: tr('Delete'),
             icon: const Icon(Icons.delete_outline),
             onPressed: () async {
               await ref

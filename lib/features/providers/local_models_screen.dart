@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/ai/local_llm.dart';
 import '../../core/theme.dart';
 import 'local_models.dart';
+import '../../core/i18n/app_strings.dart';
 
 final _deviceProvider = FutureProvider.autoDispose<DeviceInfo>(
   (ref) => deviceInfo(),
@@ -91,11 +92,11 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('Download anyway'),
+              child: const T('Download anyway'),
             ),
           ],
         ),
@@ -126,36 +127,36 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
     final link = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add from a link'),
+        title: const T('Add from a link'),
         content: TextField(
           controller: input,
           autofocus: true,
           keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            hintText: 'https://huggingface.co/…/model.gguf',
-            helperText: 'A link to a .gguf file',
+          decoration: InputDecoration(
+            hintText: tr('https://huggingface.co/…/model.gguf'),
+            helperText: tr('A link to a .gguf file'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, input.text),
-            child: const Text('Download'),
+            child: const T('Download'),
           ),
         ],
       ),
     );
-    input.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (link == null || link.trim().isEmpty) return;
     final m = modelFromLink(link);
     if (m == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
+            content: T(
               "That isn't a link to a .gguf file. On Hugging Face, open the "
               "file and copy its download link.",
             ),
@@ -190,7 +191,7 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
@@ -209,11 +210,11 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
     final mine = models.value ?? const <LocalModel>[];
     final muted = TextStyle(color: context.nexus.muted);
     return Scaffold(
-      appBar: AppBar(title: const Text('Models on this phone')),
+      appBar: AppBar(title: const T('Models on this phone')),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
-          Text(
+          T(
             'These models run on the phone itself: no server, no account '
             'and no internet once downloaded. They are smaller and slower '
             'than online models, and use battery while they answer. Pick '
@@ -227,7 +228,7 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
                 color: Theme.of(context).colorScheme.errorContainer,
                 child: const Padding(
                   padding: EdgeInsets.all(12),
-                  child: Text(
+                  child: T(
                     "This phone can't run models on the device: it needs a "
                     '64-bit ARM processor.',
                   ),
@@ -266,8 +267,8 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
           _heading(context, 'How they run'),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Let models think first'),
-            subtitle: const Text(
+            title: const T('Let models think first'),
+            subtitle: const T(
               'Models that can (Qwen3) reason before answering: better '
               'answers, but slower.',
             ),
@@ -277,13 +278,13 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          const Text('Conversation memory'),
+          const T('Conversation memory'),
           const SizedBox(height: 8),
           SegmentedButton<int>(
             segments: const [
-              ButtonSegment(value: 2048, label: Text('Short')),
-              ButtonSegment(value: 4096, label: Text('Normal')),
-              ButtonSegment(value: 8192, label: Text('Long')),
+              ButtonSegment(value: 2048, label: T('Short')),
+              ButtonSegment(value: 4096, label: T('Normal')),
+              ButtonSegment(value: 8192, label: T('Long')),
             ],
             selected: {_settings.contextSize},
             onSelectionChanged: (v) => _setSettings(
@@ -291,7 +292,7 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
+          T(
             'How much of the chat the model keeps in mind. Longer uses more '
             'memory and starts slower.',
             style: muted,
@@ -310,7 +311,7 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
             textInputAction: TextInputAction.search,
             onSubmitted: (_) => _runSearch(),
             decoration: InputDecoration(
-              hintText: 'Search, e.g. qwen, llama, mistral, phi',
+              hintText: tr('Search, e.g. qwen, llama, mistral, phi'),
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searching
                   ? const Padding(
@@ -338,7 +339,7 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
           if (_results != null && _results!.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text('No GGUF models found.', style: muted),
+              child: T('No GGUF models found.', style: muted),
             ),
           for (final r in _results ?? const <HfRepo>[])
             ListTile(
@@ -354,7 +355,7 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
           OutlinedButton.icon(
             onPressed: () => _addLink(device),
             icon: const Icon(Icons.link),
-            label: const Text('Add from a link'),
+            label: const T('Add from a link'),
           ),
         ],
       ),
@@ -457,7 +458,7 @@ class _Downloadable extends StatelessWidget {
                   child: Icon(Icons.check),
                 )
               : IconButton(
-                  tooltip: 'Download',
+                  tooltip: tr('Download'),
                   icon: const Icon(Icons.download),
                   onPressed: device?.supported == false ? null : onDownload,
                 ),
@@ -527,7 +528,7 @@ class _MyModel extends StatelessWidget {
             ),
             if (m.state == 'failed' && m.url != null)
               IconButton(
-                tooltip: 'Try again',
+                tooltip: tr('Try again'),
                 icon: const Icon(Icons.refresh),
                 onPressed: onRetry,
               ),
@@ -573,7 +574,7 @@ class _RepoFilesState extends State<_RepoFiles> {
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
+            child: T(
               'Each file is the same model at a different size. Q4_K_M is '
               'usually the best balance; bigger files are a little smarter '
               'and slower.',
@@ -593,7 +594,7 @@ class _RepoFilesState extends State<_RepoFiles> {
                 }
                 if (data.files.isEmpty) {
                   return const Center(
-                    child: Text('No single-file GGUF models here.'),
+                    child: T('No single-file GGUF models here.'),
                   );
                 }
                 return ListView(
@@ -601,7 +602,7 @@ class _RepoFilesState extends State<_RepoFiles> {
                     if (data.gated)
                       const Padding(
                         padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
-                        child: Text(
+                        child: T(
                           'This model needs a Hugging Face sign-in to '
                           'download, so it will probably fail. Look for a '
                           'copy by another uploader (bartowski or unsloth).',

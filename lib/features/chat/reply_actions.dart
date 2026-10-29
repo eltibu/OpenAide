@@ -12,6 +12,7 @@ import 'file_details.dart' show FileDetailsScreen;
 import 'output_editor.dart';
 import 'markdown_extras.dart';
 import 'read_aloud.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The web UI's thumbs-up reasons, then its thumbs-down ones.
 const likeReasons = {
@@ -110,11 +111,8 @@ Future<void> rateReply(
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    '1 - Awful',
-                    style: Theme.of(context).textTheme.labelSmall,
-                  ),
-                  Text(
+                  T('1 - Awful', style: Theme.of(context).textTheme.labelSmall),
+                  T(
                     '10 - Amazing',
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
@@ -140,8 +138,8 @@ Future<void> rateReply(
               controller: comment,
               minLines: 1,
               maxLines: 4,
-              decoration: const InputDecoration(
-                hintText: 'Tell more (optional)',
+              decoration: InputDecoration(
+                hintText: tr('Tell more (optional)'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -150,7 +148,7 @@ Future<void> rateReply(
               alignment: Alignment.centerRight,
               child: FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Send feedback'),
+                child: const T('Send feedback'),
               ),
             ),
           ],
@@ -159,7 +157,7 @@ Future<void> rateReply(
     ),
   );
   final text = comment.text.trim();
-  comment.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   if (sent == true && (reason != null || text.isNotEmpty || score != null)) {
     await controller.rate(
       reply,
@@ -185,14 +183,14 @@ class RegenerateButton extends ConsumerWidget {
     final ui = ref.watch(userSettingsProvider).value?['ui'] as Map?;
     if (ui?['regenerateMenu'] == false) {
       return IconButton(
-        tooltip: 'Regenerate',
+        tooltip: tr('Regenerate'),
         visualDensity: VisualDensity.compact,
         icon: Icon(Icons.refresh, size: 18, color: color),
         onPressed: () => controller.regenerate(reply),
       );
     }
     return PopupMenuButton<String>(
-      tooltip: 'Regenerate',
+      tooltip: tr('Regenerate'),
       icon: Icon(Icons.refresh, size: 18, color: color),
       style: const ButtonStyle(visualDensity: VisualDensity.compact),
       onSelected: (v) async {
@@ -211,30 +209,27 @@ class RegenerateButton extends ConsumerWidget {
       itemBuilder: (_) => const [
         PopupMenuItem(
           value: 'again',
-          child: ListTile(
-            leading: Icon(Icons.refresh),
-            title: Text('Try again'),
-          ),
+          child: ListTile(leading: Icon(Icons.refresh), title: T('Try again')),
         ),
         PopupMenuItem(
           value: 'Add Details',
           child: ListTile(
             leading: Icon(Icons.unfold_more),
-            title: Text('Add details'),
+            title: T('Add details'),
           ),
         ),
         PopupMenuItem(
           value: 'More Concise',
           child: ListTile(
             leading: Icon(Icons.unfold_less),
-            title: Text('More concise'),
+            title: T('More concise'),
           ),
         ),
         PopupMenuItem(
           value: 'own',
           child: ListTile(
             leading: Icon(Icons.edit_note),
-            title: Text('Your own instructions…'),
+            title: T('Your own instructions…'),
           ),
         ),
       ],
@@ -286,7 +281,7 @@ class ReplyMoreButton extends ConsumerWidget {
     final controller = ref.read(chatControllerProvider.notifier);
     final tables = markdownTablesAsCsv(reply.content);
     return PopupMenuButton<String>(
-      tooltip: 'More',
+      tooltip: tr('More'),
       icon: Icon(Icons.more_horiz, size: 18, color: color),
       style: const ButtonStyle(visualDensity: VisualDensity.compact),
       onSelected: (v) async {
@@ -328,22 +323,19 @@ class ReplyMoreButton extends ConsumerWidget {
             value: 'continue',
             child: ListTile(
               leading: Icon(Icons.play_arrow_outlined),
-              title: Text('Continue'),
-              subtitle: Text('Keep writing where it stopped'),
+              title: T('Continue'),
+              subtitle: T('Keep writing where it stopped'),
             ),
           ),
         const PopupMenuItem(
           value: 'edit',
-          child: ListTile(
-            leading: Icon(Icons.edit_outlined),
-            title: Text('Edit'),
-          ),
+          child: ListTile(leading: Icon(Icons.edit_outlined), title: T('Edit')),
         ),
         const PopupMenuItem(
           value: 'note',
           child: ListTile(
             leading: Icon(Icons.note_add_outlined),
-            title: Text('Save as a note'),
+            title: T('Save as a note'),
           ),
         ),
         if (tables.isNotEmpty)
@@ -351,22 +343,22 @@ class ReplyMoreButton extends ConsumerWidget {
             value: 'csv',
             child: ListTile(
               leading: Icon(Icons.table_chart_outlined),
-              title: Text('Copy table as CSV'),
+              title: T('Copy table as CSV'),
             ),
           ),
         const PopupMenuItem(
           value: 'info',
           child: ListTile(
             leading: Icon(Icons.info_outline),
-            title: Text('Info'),
-            subtitle: Text('Model, time and tokens'),
+            title: T('Info'),
+            subtitle: T('Model, time and tokens'),
           ),
         ),
         const PopupMenuItem(
           value: 'delete',
           child: ListTile(
             leading: Icon(Icons.delete_outline),
-            title: Text('Delete'),
+            title: T('Delete'),
           ),
         ),
       ],
@@ -395,7 +387,7 @@ Future<void> editReply(
   final choice = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Edit reply'),
+      title: const T('Edit reply'),
       content: SizedBox(
         width: 560,
         child: TextField(
@@ -408,21 +400,21 @@ Future<void> editReply(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         TextButton(
           onPressed: () => Navigator.pop(context, 'copy'),
-          child: const Text('Save as copy'),
+          child: const T('Save as copy'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, 'save'),
-          child: const Text('Save'),
+          child: const T('Save'),
         ),
       ],
     ),
   );
   final value = text.text;
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   if (choice == null || value.trim().isEmpty) return;
   await ref
       .read(chatControllerProvider.notifier)
@@ -439,7 +431,7 @@ Future<void> _saveAsNote(
   try {
     await NotesApi(ref.read(clientProvider))
         .create(chat?.title ?? 'From a chat', reply.content);
-    messenger.showSnackBar(const SnackBar(content: Text('Saved to Notes')));
+    messenger.showSnackBar(const SnackBar(content: T('Saved to Notes')));
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text("Couldn't save: $e")));
   }
@@ -483,7 +475,7 @@ Future<void> showReplyInfo(BuildContext context, ChatMessage reply) {
         shrinkWrap: true,
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
         children: [
-          Text('Reply info', style: Theme.of(context).textTheme.titleMedium),
+          T('Reply info', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           for (final (k, v) in rows)
             Padding(
@@ -507,7 +499,7 @@ Future<void> showReplyInfo(BuildContext context, ChatMessage reply) {
           if (usage.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: Text(
+              child: T(
                 'The server did not record token use for this reply.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
@@ -536,7 +528,7 @@ class FollowUps extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
+          T(
             'Follow up',
             style: Theme.of(context).textTheme.labelMedium
                 ?.copyWith(color: scheme.onSurfaceVariant),
@@ -612,7 +604,7 @@ Future<void> showSource(BuildContext context, Source source) {
                 alignment: Alignment.centerLeft,
               ),
               icon: const Icon(Icons.description_outlined, size: 16),
-              label: const Text('View source'),
+              label: const T('View source'),
               onPressed: () => Navigator.push(
                 context,
                 MaterialPageRoute<void>(
@@ -626,7 +618,7 @@ Future<void> showSource(BuildContext context, Source source) {
           if (source.passages.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12),
-              child: Text('No quoted text was saved for this source.'),
+              child: T('No quoted text was saved for this source.'),
             ),
           for (final p in source.passages) ...[
             const SizedBox(height: 12),
@@ -699,7 +691,7 @@ Future<String?> askText(
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, text.text),
@@ -708,7 +700,7 @@ Future<String?> askText(
       ],
     ),
   );
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   return value;
 }
 
@@ -721,11 +713,11 @@ Future<bool> confirm(BuildContext context, String title, String body) async =>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),

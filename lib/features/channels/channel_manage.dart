@@ -11,9 +11,11 @@ import '../../core/theme.dart';
 import '../admin/apps_screen.dart' show AppsApi, ServerApp;
 import '../chat/chat_controller.dart' show serverConfigProvider;
 import 'channels_api.dart';
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// Whether the signed-in person can rename, delete or change who is in [c].
 bool canManage(WidgetRef ref, Channel c) {
@@ -51,7 +53,7 @@ Future<ChannelMessage?> showPinned(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text(
+              child: T(
                 'Pinned messages',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
@@ -59,7 +61,7 @@ Future<ChannelMessage?> showPinned(
             if (list.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(20),
-                child: Text(
+                child: T(
                   'Nothing pinned yet. Long-press a message to pin it.',
                   style: TextStyle(color: muted),
                 ),
@@ -102,18 +104,18 @@ Future<({String name, String description})?> askChannelDetails(
           TextField(
             controller: n,
             autofocus: true,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(labelText: tr('Name')),
           ),
           TextField(
             controller: d,
-            decoration: const InputDecoration(labelText: 'Description'),
+            decoration: InputDecoration(labelText: tr('Description')),
           ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(dialog, false),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(dialog, true),
@@ -123,8 +125,7 @@ Future<({String name, String description})?> askChannelDetails(
     ),
   );
   final result = (name: n.text.trim(), description: d.text.trim());
-  n.dispose();
-  d.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   return ok == true && result.name.isNotEmpty ? result : null;
 }
 
@@ -334,12 +335,12 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
           const Divider(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-            child: Text('Apps', style: Theme.of(context).textTheme.titleSmall),
+            child: T('Apps', style: Theme.of(context).textTheme.titleSmall),
           ),
           if (manage)
             ListTile(
               leading: const CircleAvatar(child: Icon(Icons.apps)),
-              title: const Text('Add an app'),
+              title: const T('Add an app'),
               onTap: snap.hasData ? () => _addApp(apps) : null,
             ),
           for (final a in apps)
@@ -349,7 +350,7 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
               subtitle: _appBlurb(a),
               trailing: manage
                   ? IconButton(
-                      tooltip: 'Remove app',
+                      tooltip: tr('Remove app'),
                       icon: const Icon(Icons.remove_circle_outline),
                       onPressed: () => _removeApp(a),
                     )
@@ -398,7 +399,7 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
     }
     final me = ref.read(sessionProvider).value?.user?['id'];
     return Scaffold(
-      appBar: AppBar(title: const Text('Members')),
+      appBar: AppBar(title: const T('Members')),
       body: FutureBuilder<List<ChannelMember>>(
         future: _members,
         builder: (context, snap) {
@@ -416,7 +417,7 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
               if (manage)
                 ListTile(
                   leading: const CircleAvatar(child: Icon(Icons.person_add)),
-                  title: const Text('Add people'),
+                  title: const T('Add people'),
                   onTap: () => _add(list),
                 ),
               for (final u in list)
@@ -428,7 +429,7 @@ class _ChannelMembersScreenState extends ConsumerState<ChannelMembersScreen> {
                   subtitle: u.email == null ? null : Text(u.email!),
                   trailing: manage && u.id != widget.channel.ownerId
                       ? IconButton(
-                          tooltip: 'Remove',
+                          tooltip: tr('Remove'),
                           icon: const Icon(Icons.person_remove_outlined),
                           onPressed: () => _remove(u),
                         )
@@ -499,29 +500,29 @@ class _ChannelWebhooksScreenState extends State<ChannelWebhooksScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('New webhook'),
+        title: const T('New webhook'),
         content: TextField(
           controller: name,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'Name',
-            hintText: 'Shown as the sender',
+          decoration: InputDecoration(
+            labelText: tr('Name'),
+            hintText: tr('Shown as the sender'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Create'),
+            child: const T('Create'),
           ),
         ],
       ),
     );
     final text = name.text.trim();
-    name.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true || text.isEmpty) return;
     try {
       final hook = await widget.api.createWebhook(widget.channel.id, text);
@@ -546,11 +547,11 @@ class _ChannelWebhooksScreenState extends State<ChannelWebhooksScreen> {
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Webhooks')),
+      appBar: AppBar(title: const T('Webhooks')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _create,
         icon: const Icon(Icons.add),
-        label: const Text('New webhook'),
+        label: const T('New webhook'),
       ),
       body: FutureBuilder<List<ChannelWebhook>>(
         future: _hooks,
@@ -589,7 +590,7 @@ class _ChannelWebhooksScreenState extends State<ChannelWebhooksScreen> {
                     if (context.mounted) _say(context, 'Address copied');
                   },
                   trailing: IconButton(
-                    tooltip: 'Delete',
+                    tooltip: tr('Delete'),
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => _delete(h),
                   ),

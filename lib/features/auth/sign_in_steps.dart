@@ -14,6 +14,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/widgets/nexus_logo.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Recovery codes as a text file, one per line.
 String recoveryCodesFile(List<String> codes) =>
@@ -32,7 +33,7 @@ Future<void> downloadRecoveryCodes(
   );
   if (saved != null && context.mounted) {
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Recovery codes saved')));
+        .showSnackBar(const SnackBar(content: T('Recovery codes saved')));
   }
 }
 
@@ -73,13 +74,13 @@ class PendingScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     return _page(context, [
-      Text(
+      T(
         'Account Activation Pending',
         textAlign: TextAlign.center,
         style: theme.textTheme.headlineSmall,
       ),
       const SizedBox(height: 12),
-      const Text(
+      const T(
         'Contact your admin for access. You can use the app once they '
         'approve your account.',
         textAlign: TextAlign.center,
@@ -87,7 +88,7 @@ class PendingScreen extends ConsumerWidget {
       const SizedBox(height: 24),
       FilledButton(
         onPressed: busy ? null : onCheck,
-        child: const Text('Check Again'),
+        child: const T('Check Again'),
       ),
       TextButton(
         onPressed: () => signedIn
@@ -169,13 +170,13 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
     if (_step.next == 'codes') {
       final codes = _step.recoveryCodes;
       return _page(context, [
-        Text(
+        T(
           'Recovery codes',
           textAlign: TextAlign.center,
           style: theme.textTheme.headlineSmall,
         ),
         const SizedBox(height: 8),
-        Text(
+        T(
           'Each code signs you in once if you lose your authenticator. '
           'They are shown only now.',
           textAlign: TextAlign.center,
@@ -193,7 +194,7 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.copy),
-                label: const Text('Copy'),
+                label: const T('Copy'),
                 onPressed: () =>
                     Clipboard.setData(ClipboardData(text: codes.join('\n'))),
               ),
@@ -202,7 +203,7 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
             Expanded(
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.download),
-                label: const Text('Download'),
+                label: const T('Download'),
                 onPressed: () => downloadRecoveryCodes(context, codes),
               ),
             ),
@@ -213,7 +214,7 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
           onPressed: busy
               ? null
               : () => ref.read(sessionProvider.notifier).finishStep(_step),
-          child: const Text('Continue'),
+          child: const T('Continue'),
         ),
       ]);
     }
@@ -256,7 +257,7 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
               _shownFor = null;
               _loadSetup();
             },
-            child: const Text('Retry setup'),
+            child: const T('Retry setup'),
           ),
         ] else if (setup == null)
           const Center(child: CircularProgressIndicator())
@@ -272,7 +273,7 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
           ),
           TextButton.icon(
             icon: const Icon(Icons.copy, size: 18),
-            label: const Text('Copy key'),
+            label: const T('Copy key'),
             onPressed: () => Clipboard.setData(
               ClipboardData(text: '${setup['manual_key'] ?? ''}'),
             ),
@@ -313,7 +314,7 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
                 dimension: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            : const Text('Continue'),
+            : const T('Continue'),
       ),
       if (_step.next == 'verify')
         TextButton(
@@ -324,7 +325,7 @@ class _TwoStepScreenState extends ConsumerState<TwoStepScreen> {
         ),
       TextButton(
         onPressed: () => ref.read(sessionProvider.notifier).restart(),
-        child: const Text('Sign in again'),
+        child: const T('Sign in again'),
       ),
     ]);
   }

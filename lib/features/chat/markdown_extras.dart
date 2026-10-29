@@ -10,6 +10,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import 'chat_controller.dart' show serverConfigProvider;
 import 'code_run.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// What the web UI draws in replies beyond plain Markdown: math (KaTeX
 /// syntax: `$…$`, `$$…$$`, `\(…\)`, `\[…\]`), Mermaid diagrams, and code
@@ -247,9 +248,9 @@ class _CodeFrameState extends ConsumerState<CodeFrame> {
                   small('Expand', Icons.open_in_full, _expand),
                   small('Copy code', Icons.copy_outlined, () {
                     Clipboard.setData(ClipboardData(text: code));
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Code copied')),
-                    );
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(const SnackBar(content: T('Code copied')));
                   }),
                 ],
               ),
@@ -299,7 +300,7 @@ class _CodePageState extends State<_CodePage> {
     final navigator = Navigator.of(context);
     try {
       await widget.onSave!(_text.text);
-      messenger.showSnackBar(const SnackBar(content: Text('Saved')));
+      messenger.showSnackBar(const SnackBar(content: T('Saved')));
       navigator.pop();
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('Not saved: $e')));
@@ -317,18 +318,18 @@ class _CodePageState extends State<_CodePage> {
         actions: [
           if (widget.canRun)
             IconButton(
-              tooltip: 'Run',
+              tooltip: tr('Run'),
               icon: const Icon(Icons.play_arrow_rounded),
               onPressed: () => setState(() => _runs++),
             ),
           if (widget.onSave != null && !_editing)
             IconButton(
-              tooltip: 'Edit code',
+              tooltip: tr('Edit code'),
               icon: const Icon(Icons.edit_outlined),
               onPressed: () => setState(() => _editing = true),
             ),
           IconButton(
-            tooltip: 'Copy code',
+            tooltip: tr('Copy code'),
             icon: const Icon(Icons.copy_outlined),
             onPressed: () => Clipboard.setData(ClipboardData(text: code)),
           ),
@@ -337,7 +338,7 @@ class _CodePageState extends State<_CodePage> {
               padding: const EdgeInsets.only(right: 8),
               child: FilledButton(
                 onPressed: _saving ? null : _save,
-                child: const Text('Save'),
+                child: const T('Save'),
               ),
             ),
         ],
@@ -441,10 +442,10 @@ class _MermaidViewState extends State<MermaidView> {
           Row(
             children: [
               const SizedBox(width: 12),
-              Text('Diagram', style: Theme.of(context).textTheme.labelSmall),
+              T('Diagram', style: Theme.of(context).textTheme.labelSmall),
               const Spacer(),
               IconButton(
-                tooltip: 'Copy the diagram code',
+                tooltip: tr('Copy the diagram code'),
                 iconSize: 16,
                 visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.copy_outlined),
@@ -452,7 +453,7 @@ class _MermaidViewState extends State<MermaidView> {
                     Clipboard.setData(ClipboardData(text: widget.code)),
               ),
               IconButton(
-                tooltip: 'Full screen',
+                tooltip: tr('Full screen'),
                 iconSize: 16,
                 visualDensity: VisualDensity.compact,
                 icon: const Icon(Icons.open_in_full),
@@ -460,7 +461,7 @@ class _MermaidViewState extends State<MermaidView> {
                   context,
                   MaterialPageRoute<void>(
                     builder: (_) => Scaffold(
-                      appBar: AppBar(title: const Text('Diagram')),
+                      appBar: AppBar(title: const T('Diagram')),
                       body: WebViewWidget(
                         controller: WebViewController()
                           ..setJavaScriptMode(JavaScriptMode.unrestricted)

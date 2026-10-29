@@ -7,6 +7,8 @@ import '../../core/net/local_network.dart';
 import '../../core/widgets/nexus_logo.dart';
 import 'sign_in_steps.dart';
 import 'sso_login_screen.dart';
+import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.onBack});
@@ -49,9 +51,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         notifier.signInWithLdap(_url.text, _email.text, _password.text);
       case _ when _signUp:
         if (_password.text != _confirm.text) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Passwords do not match.')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: T('Passwords do not match.')));
           return;
         }
         notifier.signUp(_url.text, _name.text, _email.text, _password.text);
@@ -67,7 +69,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Connect without encryption?'),
+        title: const T('Connect without encryption?'),
         content: Text(
           '$host is reached over plain http. Your password, sign-in and '
           'chats would cross the internet unencrypted, and anyone on the '
@@ -76,11 +78,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Connect anyway'),
+            child: const T('Connect anyway'),
           ),
         ],
       ),
@@ -136,13 +138,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               children: [
                 const Center(child: NexusLogo(size: 96)),
                 const SizedBox(height: 12),
-                Text(
+                T(
                   'OpenAide',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 4),
-                Text(
+                T(
                   'Connect to your Open WebUI server',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium,
@@ -152,30 +154,33 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   controller: _url,
                   keyboardType: TextInputType.url,
                   autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Server URL',
-                    hintText: 'https://openwebui.example.com',
+                  decoration: InputDecoration(
+                    labelText: tr('Server URL'),
+                    hintText: tr('https://openwebui.example.com'),
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 16),
                 SegmentedButton<String>(
                   segments: const [
-                    ButtonSegment(value: 'email', label: Text('Email')),
-                    ButtonSegment(value: 'ldap', label: Text('LDAP')),
-                    ButtonSegment(value: 'key', label: Text('API key')),
+                    ButtonSegment(value: 'email', label: T('Email')),
+                    ButtonSegment(value: 'ldap', label: T('LDAP')),
+                    ButtonSegment(value: 'key', label: T('API key')),
                   ],
                   selected: {_mode},
                   onSelectionChanged: (s) => setState(() => _mode = s.first),
                 ),
                 const SizedBox(height: 16),
                 if (_mode == 'key')
-                  TextField(
-                    controller: _apiKey,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'API key (Settings → Account)',
-                      border: OutlineInputBorder(),
+                  Hideable(
+                    builder: (obscure, eye) => TextField(
+                      controller: _apiKey,
+                      obscureText: obscure,
+                      decoration: InputDecoration(
+                        suffixIcon: eye,
+                        labelText: tr('API key (Settings → Account)'),
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   )
                 else ...[
@@ -183,8 +188,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     TextField(
                       controller: _name,
                       textCapitalization: TextCapitalization.words,
-                      decoration: const InputDecoration(
-                        labelText: 'Name',
+                      decoration: InputDecoration(
+                        labelText: tr('Name'),
                         border: OutlineInputBorder(),
                       ),
                     ),
@@ -202,24 +207,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    onSubmitted: (_) => _submit(),
-                    decoration: const InputDecoration(
-                      labelText: 'Password',
-                      border: OutlineInputBorder(),
+                  Hideable(
+                    builder: (obscure, eye) => TextField(
+                      controller: _password,
+                      obscureText: obscure,
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        suffixIcon: eye,
+                        labelText: tr('Password'),
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
                   if (_signUp && _mode == 'email') ...[
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _confirm,
-                      obscureText: true,
-                      onSubmitted: (_) => _submit(),
-                      decoration: const InputDecoration(
-                        labelText: 'Confirm Password',
-                        border: OutlineInputBorder(),
+                    Hideable(
+                      builder: (obscure, eye) => TextField(
+                        controller: _confirm,
+                        obscureText: obscure,
+                        onSubmitted: (_) => _submit(),
+                        decoration: InputDecoration(
+                          suffixIcon: eye,
+                          labelText: tr('Confirm Password'),
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
                   ],
@@ -257,10 +268,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   onPressed: session.isLoading ? null : _signInWithBrowser,
                   icon: const Icon(Icons.open_in_browser),
-                  label: const Text('Sign in with browser (SSO)'),
+                  label: const T('Sign in with browser (SSO)'),
                 ),
                 const SizedBox(height: 4),
-                Text(
+                T(
                   'Use this for SSO, or when a login page sits in front of '
                   'Open WebUI.',
                   textAlign: TextAlign.center,
@@ -279,7 +290,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         onPressed: session.isLoading
                             ? null
                             : () => _allowAndRetry(e),
-                        child: const Text('Connect anyway, unencrypted'),
+                        child: const T('Connect anyway, unencrypted'),
                       ),
                     ),
                 ],

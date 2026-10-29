@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 const bannerTypes = ['info', 'success', 'warning', 'error'];
 
@@ -61,7 +62,7 @@ class _BannersScreenState extends ConsumerState<BannersScreen> {
           .send('POST', '/api/v1/configs/banners', body: {'banners': _banners});
       if (mounted) {
         ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Saved')));
+            .showSnackBar(const SnackBar(content: T('Saved')));
         setState(() => _dirty = false);
       }
     } catch (e) {
@@ -81,13 +82,13 @@ class _BannersScreenState extends ConsumerState<BannersScreen> {
     final list = _banners;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Banners'),
+        title: const T('Banners'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _dirty ? _save : null,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -100,7 +101,7 @@ class _BannersScreenState extends ConsumerState<BannersScreen> {
                 _changed();
               },
               icon: const Icon(Icons.add),
-              label: const Text('Add banner'),
+              label: const T('Add banner'),
             ),
       body: list == null
           ? Center(
@@ -114,7 +115,7 @@ class _BannersScreenState extends ConsumerState<BannersScreen> {
                 if (list.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Text(
+                    child: T(
                       'No banners. Add one to show a notice to everyone.',
                       style: TextStyle(color: context.nexus.muted),
                     ),
@@ -147,7 +148,7 @@ class _BannersScreenState extends ConsumerState<BannersScreen> {
                                 },
                               ),
                               const Spacer(),
-                              const Text('Can be closed'),
+                              const T('Can be closed'),
                               Switch(
                                 value: b['dismissible'] != false,
                                 onChanged: (on) {
@@ -156,7 +157,7 @@ class _BannersScreenState extends ConsumerState<BannersScreen> {
                                 },
                               ),
                               IconButton(
-                                tooltip: 'Remove banner',
+                                tooltip: tr('Remove banner'),
                                 onPressed: () {
                                   setState(() => list.remove(b));
                                   _changed();
@@ -171,8 +172,8 @@ class _BannersScreenState extends ConsumerState<BannersScreen> {
                               initialValue: '${b['content'] ?? ''}',
                               minLines: 1,
                               maxLines: 5,
-                              decoration: const InputDecoration(
-                                labelText: 'Message',
+                              decoration: InputDecoration(
+                                labelText: tr('Message'),
                               ),
                               onChanged: (t) {
                                 b['content'] = t;

@@ -8,9 +8,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// 'tool' or 'function'.
 String _base(String kind) =>
@@ -77,24 +79,24 @@ Future<bool> importCodeFromUrl(
   final ok = await showDialog<bool>(
     context: context,
     builder: (d) => AlertDialog(
-      title: const Text('Import from URL'),
+      title: const T('Import from URL'),
       content: TextField(
         controller: url,
         autofocus: true,
         keyboardType: TextInputType.url,
-        decoration: const InputDecoration(
-          labelText: 'URL',
-          hintText: 'https://github.com/…/tool.py',
+        decoration: InputDecoration(
+          labelText: tr('URL'),
+          hintText: tr('https://github.com/…/tool.py'),
         ),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(d, false),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(d, true),
-          child: const Text('Import'),
+          child: const T('Import'),
         ),
       ],
     ),
@@ -234,7 +236,7 @@ class _CodeItemEditorState extends ConsumerState<CodeItemEditor> {
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _saving || _loading || _error != null ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -273,7 +275,7 @@ class _CodeItemEditorState extends ConsumerState<CodeItemEditor> {
                   decoration: InputDecoration(labelText: '$_noun Description'),
                 ),
                 const SizedBox(height: 16),
-                Text('Code', style: TextStyle(color: muted)),
+                T('Code', style: TextStyle(color: muted)),
                 const SizedBox(height: 4),
                 TextField(
                   controller: _code,
@@ -289,7 +291,7 @@ class _CodeItemEditorState extends ConsumerState<CodeItemEditor> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                Text(
+                T(
                   'Only add code you trust: it runs on your server.',
                   style: TextStyle(color: muted, fontSize: 12),
                 ),

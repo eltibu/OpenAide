@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../workspace/knowledge_screen.dart' show knowledgeListProvider;
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 Future<void> editFolder(BuildContext context, String id) =>
     showModalBottomSheet<void>(
@@ -118,17 +119,17 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
                   16 + MediaQuery.viewInsetsOf(context).bottom,
                 ),
                 children: [
-                  Text('Folder settings', style: theme.textTheme.titleLarge),
+                  T('Folder settings', style: theme.textTheme.titleLarge),
                   const SizedBox(height: 4),
-                  Text(
+                  T(
                     'Every chat in this folder uses these.',
                     style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: _name,
-                    decoration: const InputDecoration(
-                      labelText: 'Name',
+                    decoration: InputDecoration(
+                      labelText: tr('Name'),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -137,18 +138,18 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
                     controller: _system,
                     minLines: 3,
                     maxLines: 8,
-                    decoration: const InputDecoration(
-                      labelText: 'System prompt',
-                      hintText: 'How OpenAide should act in these chats',
+                    decoration: InputDecoration(
+                      labelText: tr('System prompt'),
+                      hintText: tr('How OpenAide should act in these chats'),
                       border: OutlineInputBorder(),
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Text('Knowledge', style: theme.textTheme.titleSmall),
+                  T('Knowledge', style: theme.textTheme.titleSmall),
                   if (knowledge.isEmpty)
                     const Padding(
                       padding: EdgeInsets.only(top: 6),
-                      child: Text('No knowledge bases on the server yet.'),
+                      child: T('No knowledge bases on the server yet.'),
                     ),
                   for (final k in knowledge)
                     CheckboxListTile(
@@ -184,7 +185,7 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
                     alignment: Alignment.centerRight,
                     child: FilledButton(
                       onPressed: _saving ? null : _save,
-                      child: const Text('Save'),
+                      child: const T('Save'),
                     ),
                   ),
                 ],

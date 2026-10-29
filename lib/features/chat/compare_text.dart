@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../terminal/file_tools.dart' show DiffLine, diffTokens;
+import '../../core/i18n/app_strings.dart';
 
 /// The differences between [a] and [b]: by line, or with [approximate] by
 /// word, so a changed word in a long paragraph shows on its own.
@@ -99,18 +100,18 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
     final leave = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        content: const Text(
+        content: const T(
           'Your comparison changes will be discarded. Your prompt will stay '
           'unchanged.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Discard'),
+            child: const T('Discard'),
           ),
         ],
       ),
@@ -138,14 +139,14 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            tooltip: 'Close',
+            tooltip: tr('Close'),
             icon: const Icon(Icons.close),
             onPressed: _close,
           ),
-          title: const Text('Compare text'),
+          title: const T('Compare text'),
           actions: [
             IconButton(
-              tooltip: 'Swap',
+              tooltip: tr('Swap'),
               icon: const Icon(Icons.swap_horiz),
               onPressed: () => setState(() {
                 final t = _a.text;
@@ -154,7 +155,7 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
               }),
             ),
             PopupMenuButton<String>(
-              tooltip: 'Options',
+              tooltip: tr('Options'),
               onSelected: (v) => setState(() {
                 switch (v) {
                   case 'approx':
@@ -173,27 +174,27 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
                 CheckedPopupMenuItem(
                   value: 'approx',
                   checked: _approximate,
-                  child: const Text('Approximate comparison'),
+                  child: const T('Approximate comparison'),
                 ),
                 CheckedPopupMenuItem(
                   value: 'space',
                   checked: _ignoreSpace,
-                  child: const Text('Ignore whitespace'),
+                  child: const T('Ignore whitespace'),
                 ),
                 CheckedPopupMenuItem(
                   value: 'emphasis',
                   checked: _ignoreEmphasis,
-                  child: const Text('Ignore emphasis markers'),
+                  child: const T('Ignore emphasis markers'),
                 ),
                 CheckedPopupMenuItem(
                   value: 'changes',
                   checked: _onlyChanges,
-                  child: const Text('Only show changes'),
+                  child: const T('Only show changes'),
                 ),
                 CheckedPopupMenuItem(
                   value: 'side',
                   checked: _sideBySide,
-                  child: const Text('Side by side'),
+                  child: const T('Side by side'),
                 ),
               ],
             ),
@@ -205,8 +206,8 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
               child: SegmentedButton<bool>(
                 segments: const [
-                  ButtonSegment(value: false, label: Text('Edit')),
-                  ButtonSegment(value: true, label: Text('Compare')),
+                  ButtonSegment(value: false, label: T('Edit')),
+                  ButtonSegment(value: true, label: T('Compare')),
                 ],
                 selected: {_comparing},
                 onSelectionChanged: (v) => setState(() => _comparing = v.first),
@@ -233,14 +234,14 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
                     Expanded(
                       child: OutlinedButton(
                         onPressed: () => _use(_a.text),
-                        child: const Text('Keep original'),
+                        child: const T('Keep original'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
                       child: FilledButton(
                         onPressed: _b.text.isEmpty ? null : () => _use(_b.text),
-                        child: const Text('Use in prompt'),
+                        child: const T('Use in prompt'),
                       ),
                     ),
                   ],
@@ -263,7 +264,7 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
       alignLabelWithHint: true,
       border: const OutlineInputBorder(),
       suffixIcon: IconButton(
-        tooltip: 'Copy',
+        tooltip: tr('Copy'),
         icon: const Icon(Icons.copy, size: 18),
         onPressed: () => Clipboard.setData(ClipboardData(text: c.text)),
       ),
@@ -280,7 +281,7 @@ class _CompareTextScreenState extends State<CompareTextScreen> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('Paste or write a revision under Edit to compare.'),
+          child: T('Paste or write a revision under Edit to compare.'),
         ),
       );
     }

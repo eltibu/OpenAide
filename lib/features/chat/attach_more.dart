@@ -13,6 +13,7 @@ import '../notes/notes_api.dart';
 import '../workspace/knowledge_api.dart';
 import '../workspace/knowledge_screen.dart' show knowledgeListProvider;
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// One thing to pick.
 typedef _Item = ({String id, String title, String subtitle});
@@ -23,27 +24,27 @@ Future<void> attachWebpage(BuildContext context, WidgetRef ref) async {
   final url = await showDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      title: const Text('Attach a web page'),
+      title: const T('Attach a web page'),
       content: TextField(
         controller: text,
         autofocus: true,
         keyboardType: TextInputType.url,
-        decoration: const InputDecoration(hintText: 'https://…'),
+        decoration: InputDecoration(hintText: tr('https://…')),
         onSubmitted: (v) => Navigator.pop(context, v),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(context, text.text),
-          child: const Text('Attach'),
+          child: const T('Attach'),
         ),
       ],
     ),
   );
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   var u = (url ?? '').trim();
   if (u.isEmpty) return;
   if (!u.startsWith(RegExp('https?://'))) u = 'https://$u';
@@ -205,7 +206,7 @@ class HashMentions extends ConsumerWidget {
           dense: true,
           leading: const Icon(Icons.language),
           title: Text('Attach $query'),
-          subtitle: const Text('Web page'),
+          subtitle: const T('Web page'),
           onTap: () {
             onDone();
             controller.attachWebpage(
@@ -241,7 +242,7 @@ class HashMentions extends ConsumerWidget {
             dense: true,
             leading: const Icon(Icons.sticky_note_2_outlined),
             title: Text(n.title.isEmpty ? 'Untitled note' : n.title),
-            subtitle: const Text('Note'),
+            subtitle: const T('Note'),
             onTap: () {
               onDone();
               controller.attachReference({
@@ -315,8 +316,8 @@ class _PickerState extends State<_Picker> {
                   ),
                   const SizedBox(height: 8),
                   TextField(
-                    decoration: const InputDecoration(
-                      hintText: 'Search',
+                    decoration: InputDecoration(
+                      hintText: tr('Search'),
                       prefixIcon: Icon(Icons.search),
                       isDense: true,
                       border: OutlineInputBorder(),
@@ -356,10 +357,7 @@ class _PickerState extends State<_Picker> {
                   if (items.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
-                        'Nothing here.',
-                        style: TextStyle(color: muted),
-                      ),
+                      child: T('Nothing here.', style: TextStyle(color: muted)),
                     );
                   }
                   return ListView.builder(

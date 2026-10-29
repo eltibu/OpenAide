@@ -13,9 +13,11 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
 import 'admin_api.dart';
 import 'config_editor.dart' show settingLabel;
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// "public_models" as "Public models".
 String permissionLabel(String key) => switch (key) {
@@ -225,20 +227,20 @@ class _DefaultPermissionsScreenState
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Default permissions'),
+      title: const T('Default permissions'),
       actions: [
         PopupMenuButton<String>(
           onSelected: (_) =>
               _load('/api/v1/users/default/permissions/defaults', dirty: true),
           itemBuilder: (_) => const [
-            PopupMenuItem(value: 'reset', child: Text('Reset to defaults')),
+            PopupMenuItem(value: 'reset', child: T('Reset to defaults')),
           ],
         ),
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: FilledButton(
             onPressed: _dirty ? _save : null,
-            child: const Text('Save'),
+            child: const T('Save'),
           ),
         ),
       ],
@@ -255,7 +257,7 @@ class _DefaultPermissionsScreenState
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Text(
+                child: T(
                   'Everyone gets these. Groups can give their members more.',
                   style: TextStyle(color: context.nexus.muted),
                 ),
@@ -299,37 +301,36 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('New group'),
+        title: const T('New group'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: name,
               autofocus: true,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: InputDecoration(labelText: tr('Name')),
             ),
             TextField(
               controller: about,
-              decoration: const InputDecoration(labelText: 'Description'),
+              decoration: InputDecoration(labelText: tr('Description')),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Create'),
+            child: const T('Create'),
           ),
         ],
       ),
     );
     final n = name.text.trim();
     final a = about.text.trim();
-    name.dispose();
-    about.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true || n.isEmpty) return;
     try {
       final made = await ref
@@ -362,11 +363,11 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
     final groups = ref.watch(groupsProvider);
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Groups')),
+      appBar: AppBar(title: const T('Groups')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _create(context, ref),
         icon: const Icon(Icons.group_add_outlined),
-        label: const Text('New group'),
+        label: const T('New group'),
       ),
       body: RefreshIndicator(
         onRefresh: () => ref.refresh(groupsProvider.future),
@@ -375,8 +376,8 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.verified_user_outlined),
-              title: const Text('Default permissions'),
-              subtitle: const Text('What everyone may do'),
+              title: const T('Default permissions'),
+              subtitle: const T('What everyone may do'),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => Navigator.push(
                 context,
@@ -398,10 +399,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen> {
                 if (list.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'No groups yet.',
-                      style: TextStyle(color: muted),
-                    ),
+                    child: T('No groups yet.', style: TextStyle(color: muted)),
                   ),
                 for (final (g, depth) in groupTree(list, collapsed: _closed))
                   ListTile(
@@ -675,7 +673,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
           shrinkWrap: true,
           children: [
             ListTile(
-              title: const Text('No parent'),
+              title: const T('No parent'),
               trailing: _parent == null ? const Icon(Icons.check) : null,
               onTap: () => Navigator.pop(sheet, (null,)),
             ),
@@ -733,7 +731,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
                 padding: const EdgeInsets.all(12),
                 child: FilledButton(
                   onPressed: () => Navigator.pop(sheet, true),
-                  child: const Text('Done'),
+                  child: const T('Done'),
                 ),
               ),
             ],
@@ -768,17 +766,17 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete ${_name.text}?'),
-        content: const Text(
+        content: const T(
           'Its members lose what it gives them. They keep their accounts.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -835,15 +833,12 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
     return [
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-        child: Text('Preview', style: heading),
+        child: T('Preview', style: heading),
       ),
       if (_dirty)
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-          child: Text(
-            'Save to see changes here.',
-            style: TextStyle(color: muted),
-          ),
+          child: T('Save to see changes here.', style: TextStyle(color: muted)),
         ),
       part('Models', 'models', 'No models accessible'),
       part('Knowledge', 'knowledge', 'No knowledge bases accessible'),
@@ -859,10 +854,10 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Group'),
+        title: const T('Group'),
         actions: [
           IconButton(
-            tooltip: 'Delete group',
+            tooltip: tr('Delete group'),
             onPressed: _delete,
             icon: const Icon(Icons.delete_outline),
           ),
@@ -870,7 +865,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _dirty ? _save : null,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -882,7 +877,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: TextField(
               controller: _name,
-              decoration: const InputDecoration(labelText: 'Name'),
+              decoration: InputDecoration(labelText: tr('Name')),
               onChanged: (_) => _changed(),
             ),
           ),
@@ -890,13 +885,13 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
               controller: _about,
-              decoration: const InputDecoration(labelText: 'Description'),
+              decoration: InputDecoration(labelText: tr('Description')),
               onChanged: (_) => _changed(),
             ),
           ),
           ListTile(
             leading: const Icon(Icons.account_tree_outlined),
-            title: const Text('Parent group'),
+            title: const T('Parent group'),
             subtitle: Text(
               _parent == null
                   ? 'No parent'
@@ -906,7 +901,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('Default models'),
+            title: const T('Default models'),
             subtitle: Text(
               _defaultModelsText(),
               style: TextStyle(color: muted),
@@ -918,7 +913,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
                       setState(() => _config['default_models'] = <String>[]);
                       _changed();
                     },
-                    child: const Text('Inherit'),
+                    child: const T('Inherit'),
                   ),
             onTap: _pickDefaultModels,
           ),
@@ -926,8 +921,8 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
             child: DropdownButtonFormField<String>(
               initialValue: '${_config['share'] ?? 'members'}',
-              decoration: const InputDecoration(
-                labelText: 'Who can share to this group',
+              decoration: InputDecoration(
+                labelText: tr('Who can share to this group'),
               ),
               items: [
                 for (final o in groupShareOptions.entries)
@@ -963,7 +958,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
                 TextButton.icon(
                   onPressed: _addMember,
                   icon: const Icon(Icons.person_add_alt),
-                  label: const Text('Add'),
+                  label: const T('Add'),
                 ),
                 PopupMenuButton<String>(
                   onSelected: (v) => switch (v) {
@@ -977,21 +972,18 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
                     CheckedPopupMenuItem(
                       value: 'direct',
                       checked: !_showInherited,
-                      child: const Text('Direct'),
+                      child: const T('Direct'),
                     ),
                     CheckedPopupMenuItem(
                       value: 'inherited',
                       checked: _showInherited,
-                      child: const Text('Inherited'),
+                      child: const T('Inherited'),
                     ),
                     const PopupMenuDivider(),
-                    const PopupMenuItem(
-                      value: 'csv',
-                      child: Text('Import CSV'),
-                    ),
+                    const PopupMenuItem(value: 'csv', child: T('Import CSV')),
                     const PopupMenuItem(
                       value: 'template',
-                      child: Text('Download CSV Template'),
+                      child: T('Download CSV Template'),
                     ),
                   ],
                 ),
@@ -1001,7 +993,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
           if (_showInherited && _inherited.isEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-              child: Text(
+              child: T(
                 'No one is in this group through a subgroup.',
                 style: TextStyle(color: muted),
               ),
@@ -1014,7 +1006,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
               trailing: _showInherited
                   ? null
                   : IconButton(
-                      tooltip: 'Remove',
+                      tooltip: tr('Remove'),
                       onPressed: () => _removeMember('${m['id']}'),
                       icon: const Icon(Icons.person_remove_outlined),
                     ),
@@ -1022,7 +1014,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
           if (_preview != null) ..._previewSection(heading, muted),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
-            child: Text('Permissions', style: heading),
+            child: T('Permissions', style: heading),
           ),
           if (_perms == null)
             const Padding(
@@ -1082,8 +1074,8 @@ class _UserPickerState extends State<_UserPicker> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
               autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Add someone',
+              decoration: InputDecoration(
+                hintText: tr('Add someone'),
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),

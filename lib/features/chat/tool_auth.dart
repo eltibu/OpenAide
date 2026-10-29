@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../server/server_page.dart';
 import 'chat_controller.dart' show toolsProvider;
+import '../../core/i18n/app_strings.dart';
 
 /// Where the server starts the sign-in for the tool [id] (such as
 /// `server:mcp:abc`), as the web works it out.
@@ -59,7 +60,7 @@ Future<void> disconnectTool(
               '${Uri.encodeComponent(toolSessionProvider(id))}',
         );
     messenger.showSnackBar(
-      const SnackBar(content: Text('OAuth session disconnected')),
+      const SnackBar(content: T('OAuth session disconnected')),
     );
   } catch (e) {
     messenger.showSnackBar(SnackBar(content: Text("Couldn't disconnect: $e")));

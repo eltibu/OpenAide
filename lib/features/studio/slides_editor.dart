@@ -5,6 +5,7 @@ import '../../core/theme.dart';
 import 'ai_sheet.dart';
 import 'slides.dart';
 import 'studio_doc.dart' show cleanAiText;
+import '../../core/i18n/app_strings.dart';
 
 /// A slide drawn the way it is presented and exported: 16:9, title on
 /// top (centred on the first slide), then its points.
@@ -258,7 +259,7 @@ class SlidesEditorState extends State<SlidesEditor> {
     _changed();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Slide removed'),
+        content: const T('Slide removed'),
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () {
@@ -354,8 +355,8 @@ class SlidesEditorState extends State<SlidesEditor> {
                     style: text.titleMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
-                    decoration: const InputDecoration(
-                      hintText: 'Slide title',
+                    decoration: InputDecoration(
+                      hintText: tr('Slide title'),
                       border: InputBorder.none,
                       isDense: true,
                     ),
@@ -380,8 +381,8 @@ class SlidesEditorState extends State<SlidesEditor> {
                       onChanged: (_) => _changed(),
                       maxLines: null,
                       style: text.bodyMedium?.copyWith(color: muted),
-                      decoration: const InputDecoration(
-                        labelText: 'Speaker notes',
+                      decoration: InputDecoration(
+                        labelText: tr('Speaker notes'),
                         isDense: true,
                       ),
                     ),
@@ -396,11 +397,11 @@ class SlidesEditorState extends State<SlidesEditor> {
                         ),
                         onPressed: () => _ai(i),
                         icon: const Icon(Icons.auto_awesome, size: 18),
-                        label: const Text('Edit with AI'),
+                        label: const T('Edit with AI'),
                       ),
                       if (widget.dictate != null)
                         IconButton(
-                          tooltip: 'Dictate a point',
+                          tooltip: tr('Dictate a point'),
                           visualDensity: VisualDensity.compact,
                           onPressed: () async {
                             final said = await widget.dictate!(context);
@@ -427,13 +428,13 @@ class SlidesEditorState extends State<SlidesEditor> {
                         ),
                       ),
                       IconButton(
-                        tooltip: 'Move up',
+                        tooltip: tr('Move up'),
                         visualDensity: VisualDensity.compact,
                         onPressed: i == 0 ? null : () => _move(i, -1),
                         icon: const Icon(Icons.arrow_upward),
                       ),
                       IconButton(
-                        tooltip: 'Move down',
+                        tooltip: tr('Move down'),
                         visualDensity: VisualDensity.compact,
                         onPressed: i == _cards.length - 1
                             ? null
@@ -441,19 +442,19 @@ class SlidesEditorState extends State<SlidesEditor> {
                         icon: const Icon(Icons.arrow_downward),
                       ),
                       IconButton(
-                        tooltip: 'Duplicate',
+                        tooltip: tr('Duplicate'),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _addBelow(i, copy: c.slide),
                         icon: const Icon(Icons.copy_all_outlined),
                       ),
                       IconButton(
-                        tooltip: 'Add a slide below',
+                        tooltip: tr('Add a slide below'),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _addBelow(i),
                         icon: const Icon(Icons.add_box_outlined),
                       ),
                       IconButton(
-                        tooltip: 'Remove',
+                        tooltip: tr('Remove'),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _remove(i),
                         icon: const Icon(Icons.delete_outline),
@@ -571,7 +572,7 @@ class _PresentScreenState extends State<PresentScreen> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Close',
+                  tooltip: tr('Close'),
                   color: Colors.white70,
                   onPressed: () => Navigator.pop(context),
                   icon: const Icon(Icons.close),

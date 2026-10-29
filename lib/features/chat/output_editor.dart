@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// One row of the Visual view: the items it stands for ([indices], a tool
 /// call with its result), and what kind it is.
@@ -214,8 +215,8 @@ class _OutputEditScreenState extends State<OutputEditScreen> {
           initialValue: messageText(r.item),
           minLines: 1,
           maxLines: null,
-          decoration: const InputDecoration(
-            hintText: 'Message text...',
+          decoration: InputDecoration(
+            hintText: tr('Message text...'),
             isDense: true,
           ),
           onChanged: (t) =>
@@ -226,8 +227,8 @@ class _OutputEditScreenState extends State<OutputEditScreen> {
           initialValue: reasoningText(r.item),
           minLines: 1,
           maxLines: null,
-          decoration: const InputDecoration(
-            hintText: 'Reasoning text...',
+          decoration: InputDecoration(
+            hintText: tr('Reasoning text...'),
             isDense: true,
           ),
           onChanged: (t) =>
@@ -283,7 +284,7 @@ class _OutputEditScreenState extends State<OutputEditScreen> {
             ),
             Expanded(child: body),
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               icon: const Icon(Icons.remove_circle_outline, size: 20),
               onPressed: () =>
                   setState(() => _output = removeItems(_output, r.indices)),
@@ -295,7 +296,7 @@ class _OutputEditScreenState extends State<OutputEditScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Edit reply'),
+        title: const T('Edit reply'),
         actions: [
           Tooltip(
             message: _json
@@ -329,7 +330,7 @@ class _OutputEditScreenState extends State<OutputEditScreen> {
               children: [
                 for (final r in outputRows(_output)) row(r),
                 if (outputRows(_output).isEmpty)
-                  Text(
+                  T(
                     'Nothing left in this reply.',
                     style: TextStyle(color: muted),
                   ),
@@ -343,17 +344,17 @@ class _OutputEditScreenState extends State<OutputEditScreen> {
             children: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: const T('Cancel'),
               ),
               const SizedBox(width: 8),
               TextButton(
                 onPressed: () => _done(true),
-                child: const Text('Save as copy'),
+                child: const T('Save as copy'),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: () => _done(false),
-                child: const Text('Save'),
+                child: const T('Save'),
               ),
             ],
           ),

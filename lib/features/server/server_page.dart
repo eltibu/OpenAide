@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// One of the server's own pages (Notes, Workspace, Admin...) inside the
 /// app, signed in as the user. A stand-in until each section is native:
@@ -169,7 +170,7 @@ class _ServerPageState extends ConsumerState<ServerPage> {
         appBar: AppBar(
           // Always straight back to the app, whatever the page did.
           leading: IconButton(
-            tooltip: 'Close',
+            tooltip: tr('Close'),
             icon: const Icon(Icons.close),
             onPressed: () => Navigator.of(context).pop(),
           ),
@@ -177,14 +178,14 @@ class _ServerPageState extends ConsumerState<ServerPage> {
           actions: [
             if (widget.browse) ...[
               IconButton(
-                tooltip: 'Back',
+                tooltip: tr('Back'),
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () async {
                   if (await _web.canGoBack()) await _web.goBack();
                 },
               ),
               IconButton(
-                tooltip: 'Forward',
+                tooltip: tr('Forward'),
                 icon: const Icon(Icons.arrow_forward),
                 onPressed: () async {
                   if (await _web.canGoForward()) await _web.goForward();
@@ -192,7 +193,7 @@ class _ServerPageState extends ConsumerState<ServerPage> {
               ),
             ],
             IconButton(
-              tooltip: 'Reload',
+              tooltip: tr('Reload'),
               icon: const Icon(Icons.refresh),
               onPressed: _web.reload,
             ),

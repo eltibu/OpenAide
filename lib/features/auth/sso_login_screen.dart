@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../core/i18n/app_strings.dart';
+
 /// What an in-app browser sign-in produced.
 class SsoResult {
   const SsoResult({required this.token, this.cookie});
@@ -75,7 +77,7 @@ class _SsoLoginScreenState extends State<SsoLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sign in'),
+        title: const T('Sign in'),
         bottom: _loading
             ? const PreferredSize(
                 preferredSize: Size.fromHeight(2),

@@ -19,6 +19,8 @@ import 'admin_api.dart';
 import 'admin_models_screen.dart';
 import 'analytics_screen.dart';
 import 'banners_screen.dart';
+import 'ui_translations.dart';
+import 'visible_controls.dart';
 import 'config_editor.dart';
 import 'evaluations_screen.dart';
 import 'connections_screen.dart';
@@ -28,6 +30,8 @@ import 'pipelines_screen.dart';
 import 'user_extras.dart';
 import '../workspace/code_editor.dart';
 import '../../core/widgets/search_field.dart';
+import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -60,7 +64,8 @@ const _sectionIcons = {
 };
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// The Admin Panel: people, site switches, functions and the server's
 /// settings pages are native; what isn't yet opens as the server's page.
@@ -72,98 +77,108 @@ class AdminScreen extends StatelessWidget {
     void open(Widget page) =>
         Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
     return Scaffold(
-      appBar: AppBar(title: const Text('Admin Panel')),
+      appBar: AppBar(title: const T('Admin Panel')),
       body: ListView(
         children: [
           ListTile(
             leading: const Icon(Icons.people_outline),
-            title: const Text('Users'),
-            subtitle: const Text('Accounts, roles and passwords'),
+            title: const T('Users'),
+            subtitle: const T('Accounts, roles and passwords'),
             onTap: () => open(const UsersScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.groups_outlined),
-            title: const Text('Groups and permissions'),
-            subtitle: const Text(
+            title: const T('Groups and permissions'),
+            subtitle: const T(
               'What everyone may do, and groups that give more',
             ),
             onTap: () => open(const GroupsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.insights_outlined),
-            title: const Text('Analytics'),
-            subtitle: const Text('Messages, models, people and tokens'),
+            title: const T('Analytics'),
+            subtitle: const T('Messages, models, people and tokens'),
             onTap: () => open(const AnalyticsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.emoji_events_outlined),
-            title: const Text('Leaderboard and feedback'),
-            subtitle: const Text('How people rate the models'),
+            title: const T('Leaderboard and feedback'),
+            subtitle: const T('How people rate the models'),
             onTap: () => open(const EvaluationsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.casino_outlined),
-            title: const Text('Evaluations'),
-            subtitle: const Text('Arena models for blind comparisons'),
+            title: const T('Evaluations'),
+            subtitle: const T('Arena models for blind comparisons'),
             onTap: () => open(const ArenaScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.toggle_on_outlined),
-            title: const Text('General'),
-            subtitle: const Text('Sign-ups, features and sessions'),
+            title: const T('General'),
+            subtitle: const T('Sign-ups, features and sessions'),
             onTap: () => open(const AdminGeneral()),
           ),
           ListTile(
             leading: const Icon(Icons.functions),
-            title: const Text('Functions'),
-            subtitle: const Text('Filters, pipes and actions'),
+            title: const T('Functions'),
+            subtitle: const T('Filters, pipes and actions'),
             onTap: () => open(const FunctionsScreen()),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.campaign_outlined),
-            title: const Text('Banners'),
-            subtitle: const Text('Notices shown to everyone'),
+            title: const T('Banners'),
+            subtitle: const T('Notices shown to everyone'),
             onTap: () => open(const BannersScreen()),
           ),
           ListTile(
+            leading: const Icon(Icons.translate),
+            title: const T('UI translations'),
+            subtitle: const T('Your own wording for any text, per language'),
+            onTap: () => open(const UiTranslationsScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.visibility_outlined),
+            title: const T('Visible controls'),
+            subtitle: const T('Which controls people who aren\'t admins see'),
+            onTap: () => open(const VisibleControlsScreen()),
+          ),
+          ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
-            title: const Text('Models'),
-            subtitle: const Text(
+            title: const T('Models'),
+            subtitle: const T(
               'Switch on, hide, set up, order and set defaults',
             ),
             onTap: () => open(const AdminModelsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.cable),
-            title: const Text('Model connections'),
-            subtitle: const Text('OpenAI-compatible and Ollama servers'),
+            title: const T('Model connections'),
+            subtitle: const T('OpenAI-compatible and Ollama servers'),
             onTap: () => open(const ConnectionsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.extension_outlined),
-            title: const Text('Integrations'),
-            subtitle: const Text('Tool servers (OpenAPI, MCP) and terminals'),
+            title: const T('Integrations'),
+            subtitle: const T('Tool servers (OpenAPI, MCP) and terminals'),
             onTap: () => open(const IntegrationsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.apps),
-            title: const Text('Apps'),
-            subtitle: const Text('Outside apps that join channels'),
+            title: const T('Apps'),
+            subtitle: const T('Outside apps that join channels'),
             onTap: () => open(const AppsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.account_tree_outlined),
-            title: const Text('Pipelines'),
-            subtitle: const Text('Install, set up and remove pipelines'),
+            title: const T('Pipelines'),
+            subtitle: const T('Install, set up and remove pipelines'),
             onTap: () => open(const PipelinesScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.webhook),
-            title: const Text('Events'),
-            subtitle: const Text(
-              'Webhooks the server calls when things happen',
-            ),
+            title: const T('Events'),
+            subtitle: const T('Webhooks the server calls when things happen'),
             onTap: () => open(const EventsScreen()),
           ),
           for (final section in adminConfigSections)
@@ -176,8 +191,8 @@ class AdminScreen extends StatelessWidget {
           const Divider(),
           ListTile(
             leading: const Icon(Icons.settings_applications_outlined),
-            title: const Text('More server settings'),
-            subtitle: const Text('Everything else, on the web page'),
+            title: const T('More server settings'),
+            subtitle: const T('Everything else, on the web page'),
             trailing: const Icon(Icons.open_in_new, size: 18),
             onTap: () => open(
               const ServerPage(
@@ -218,9 +233,9 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
     final muted = context.nexus.muted;
     final me = ref.watch(sessionProvider).value?.user?['id'];
     return Scaffold(
-      appBar: AppBar(title: const Text('Users')),
+      appBar: AppBar(title: const T('Users')),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'Add user',
+        tooltip: tr('Add user'),
         onPressed: _edit,
         child: const Icon(Icons.person_add_alt),
       ),
@@ -255,7 +270,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                     if (users.isEmpty)
                       Padding(
                         padding: const EdgeInsets.all(24),
-                        child: Text(
+                        child: T(
                           'No one matches.',
                           style: TextStyle(color: muted),
                         ),
@@ -371,18 +386,18 @@ class _UserEditorState extends ConsumerState<UserEditor> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete ${u.name}?'),
-        content: const Text(
+        content: const T(
           'Their account and chats are removed from the server. This can\'t '
           'be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -409,7 +424,7 @@ class _UserEditorState extends ConsumerState<UserEditor> {
                     as Map?)?['enable_admin_chat_access'] !=
                 false)
               IconButton(
-                tooltip: 'Chats',
+                tooltip: tr('Chats'),
                 icon: const Icon(Icons.forum_outlined),
                 onPressed: () => Navigator.push(
                   context,
@@ -422,7 +437,7 @@ class _UserEditorState extends ConsumerState<UserEditor> {
                 ),
               ),
             IconButton(
-              tooltip: 'Preview Access',
+              tooltip: tr('Preview Access'),
               icon: const Icon(Icons.visibility_outlined),
               onPressed: () => Navigator.push(
                 context,
@@ -437,7 +452,7 @@ class _UserEditorState extends ConsumerState<UserEditor> {
           ],
           if (!_isNew && !self)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               onPressed: _busy ? null : _delete,
               icon: const Icon(Icons.delete_outline),
             ),
@@ -467,22 +482,25 @@ class _UserEditorState extends ConsumerState<UserEditor> {
           const SizedBox(height: 12),
           TextField(
             controller: _name,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(labelText: tr('Name')),
           ),
           TextField(
             controller: _email,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: 'Email'),
+            decoration: InputDecoration(labelText: tr('Email')),
           ),
           // Changing a password signs that person out everywhere, so your
           // own isn't changed from here.
           if (!self)
-            TextField(
-              controller: _password,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: _isNew ? 'Password' : 'New password',
-                helperText: _isNew ? null : 'Leave empty to keep theirs',
+            Hideable(
+              builder: (obscure, eye) => TextField(
+                controller: _password,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  suffixIcon: eye,
+                  labelText: _isNew ? 'Password' : 'New password',
+                  helperText: _isNew ? null : 'Leave empty to keep theirs',
+                ),
               ),
             ),
           if (!_isNew) ...[
@@ -497,7 +515,7 @@ class _UserEditorState extends ConsumerState<UserEditor> {
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
                   icon: const Icon(Icons.logout),
-                  label: const Text('Sign out all devices'),
+                  label: const T('Sign out all devices'),
                   onPressed: _busy ? null : _signOutEverywhere,
                 ),
               ),
@@ -512,7 +530,7 @@ class _UserEditorState extends ConsumerState<UserEditor> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Sign out all devices?'),
+        title: const T('Sign out all devices?'),
         content: Text(
           '${u.name} will need to sign in again on every device. API keys '
           'remain active.',
@@ -520,11 +538,11 @@ class _UserEditorState extends ConsumerState<UserEditor> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Sign out'),
+            child: const T('Sign out'),
           ),
         ],
       ),
@@ -602,13 +620,13 @@ class _AdminGeneralState extends ConsumerState<AdminGeneral> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('General'),
+        title: const T('General'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: c == null || _busy ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -631,8 +649,8 @@ class _AdminGeneralState extends ConsumerState<AdminGeneral> {
                     initialValue: userRoles.contains(c['DEFAULT_USER_ROLE'])
                         ? c['DEFAULT_USER_ROLE'] as String
                         : 'pending',
-                    decoration: const InputDecoration(
-                      labelText: 'New accounts start as',
+                    decoration: InputDecoration(
+                      labelText: tr('New accounts start as'),
                     ),
                     items: [
                       for (final r in userRoles)
@@ -659,16 +677,18 @@ class _AdminGeneralState extends ConsumerState<AdminGeneral> {
                       TextField(
                         controller: _url,
                         keyboardType: TextInputType.url,
-                        decoration: const InputDecoration(
-                          labelText: 'Server address',
-                          helperText: 'Used in links and sign-in redirects',
+                        decoration: InputDecoration(
+                          labelText: tr('Server address'),
+                          helperText: tr('Used in links and sign-in redirects'),
                         ),
                       ),
                       TextField(
                         controller: _jwt,
-                        decoration: const InputDecoration(
-                          labelText: 'Sign-ins last',
-                          helperText: 'Like 4w, 7d or 12h; -1 for never ending',
+                        decoration: InputDecoration(
+                          labelText: tr('Sign-ins last'),
+                          helperText: tr(
+                            'Like 4w, 7d or 12h; -1 for never ending',
+                          ),
                         ),
                       ),
                     ],
@@ -714,10 +734,10 @@ class FunctionsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Functions'),
+        title: const T('Functions'),
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'New Function',
+            tooltip: tr('New Function'),
             icon: const Icon(Icons.add),
             onSelected: (v) async {
               final saved = v == 'url'
@@ -726,8 +746,8 @@ class FunctionsScreen extends ConsumerWidget {
               if (saved) ref.invalidate(functionsProvider);
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'new', child: Text('New Function')),
-              PopupMenuItem(value: 'url', child: Text('Import from URL')),
+              PopupMenuItem(value: 'new', child: T('New Function')),
+              PopupMenuItem(value: 'url', child: T('Import from URL')),
             ],
           ),
         ],
@@ -749,7 +769,7 @@ class FunctionsScreen extends ConsumerWidget {
               if (items.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text(
+                  child: T(
                     'No functions yet. Tap + to write one or import it.',
                     style: TextStyle(color: muted),
                   ),
@@ -781,8 +801,8 @@ class FunctionsScreen extends ConsumerWidget {
                   children: [
                     if (f.type != 'pipe')
                       SwitchListTile(
-                        title: const Text('For all models'),
-                        subtitle: const Text(
+                        title: const T('For all models'),
+                        subtitle: const T(
                           'Runs on every model, not just ones that pick it',
                         ),
                         value: f.global,
@@ -794,7 +814,7 @@ class FunctionsScreen extends ConsumerWidget {
                       ),
                     ListTile(
                       leading: const Icon(Icons.edit_outlined),
-                      title: const Text('Edit'),
+                      title: const T('Edit'),
                       onTap: () async {
                         if (await editFunction(context, id: f.id)) {
                           ref.invalidate(functionsProvider);
@@ -803,7 +823,7 @@ class FunctionsScreen extends ConsumerWidget {
                     ),
                     ListTile(
                       leading: const Icon(Icons.copy_all_outlined),
-                      title: const Text('Clone'),
+                      title: const T('Clone'),
                       onTap: () => run(() async {
                         final one =
                             ((await ref
@@ -826,7 +846,7 @@ class FunctionsScreen extends ConsumerWidget {
                     ),
                     ListTile(
                       leading: const Icon(Icons.tune),
-                      title: const Text('Settings'),
+                      title: const T('Settings'),
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute<void>(
@@ -843,7 +863,7 @@ class FunctionsScreen extends ConsumerWidget {
                     ),
                     ListTile(
                       leading: const Icon(Icons.history),
-                      title: const Text('Version history'),
+                      title: const T('Version history'),
                       onTap: () async {
                         final changed = await Navigator.push<bool>(
                           context,
@@ -860,7 +880,7 @@ class FunctionsScreen extends ConsumerWidget {
                     ),
                     ListTile(
                       leading: const Icon(Icons.ios_share),
-                      title: const Text('Export'),
+                      title: const T('Export'),
                       onTap: () => run(() async {
                         final one = await ref
                             .read(clientProvider)
@@ -876,21 +896,21 @@ class FunctionsScreen extends ConsumerWidget {
                         Icons.delete_outline,
                         color: Theme.of(context).colorScheme.error,
                       ),
-                      title: const Text('Delete'),
+                      title: const T('Delete'),
                       onTap: () async {
                         final ok = await showDialog<bool>(
                           context: context,
                           builder: (d) => AlertDialog(
                             title: Text('Delete ${f.name}?'),
-                            content: const Text('This can\'t be undone.'),
+                            content: const T('This can\'t be undone.'),
                             actions: [
                               TextButton(
                                 onPressed: () => Navigator.pop(d, false),
-                                child: const Text('Cancel'),
+                                child: const T('Cancel'),
                               ),
                               FilledButton(
                                 onPressed: () => Navigator.pop(d, true),
-                                child: const Text('Delete'),
+                                child: const T('Delete'),
                               ),
                             ],
                           ),

@@ -10,6 +10,7 @@ import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../auth/sign_in_steps.dart';
+import '../../core/i18n/app_strings.dart';
 
 const _base = '/api/v1/auths/mfa';
 
@@ -49,7 +50,7 @@ class TwoStepSettings extends ConsumerWidget {
     final enabled = status['enabled'] == true;
     return ListTile(
       leading: const Icon(Icons.verified_user_outlined),
-      title: const Text('Multi-factor authentication'),
+      title: const T('Multi-factor authentication'),
       subtitle: Text(
         twoStepSummary(status),
         style: TextStyle(color: context.nexus.muted),
@@ -160,14 +161,14 @@ class _TwoStepManageScreenState extends ConsumerState<TwoStepManageScreen> {
     final replacing = _challenge != null && setup != null;
     final error = _error;
     return Scaffold(
-      appBar: AppBar(title: const Text('Multi-factor authentication')),
+      appBar: AppBar(title: const T('Multi-factor authentication')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           if (codes != null) ...[
-            Text('Recovery codes', style: theme.textTheme.titleMedium),
+            T('Recovery codes', style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
-            Text(
+            T(
               'Each code signs you in once if you lose your authenticator. '
               'They are shown only now.',
               style: TextStyle(color: muted),
@@ -183,21 +184,21 @@ class _TwoStepManageScreenState extends ConsumerState<TwoStepManageScreen> {
               children: [
                 OutlinedButton.icon(
                   icon: const Icon(Icons.copy),
-                  label: const Text('Copy'),
+                  label: const T('Copy'),
                   onPressed: () =>
                       Clipboard.setData(ClipboardData(text: codes.join('\n'))),
                 ),
                 OutlinedButton.icon(
                   icon: const Icon(Icons.download),
-                  label: const Text('Download'),
+                  label: const T('Download'),
                   onPressed: () => downloadRecoveryCodes(context, codes),
                 ),
               ],
             ),
             const SizedBox(height: 16),
-            FilledButton(onPressed: _done, child: const Text('Done')),
+            FilledButton(onPressed: _done, child: const T('Done')),
           ] else if (replacing) ...[
-            Text(
+            T(
               'Scan this with your new authenticator app, or type the key '
               'into it, then enter the 6-digit code it shows.',
               style: TextStyle(color: muted),
@@ -214,7 +215,7 @@ class _TwoStepManageScreenState extends ConsumerState<TwoStepManageScreen> {
             ),
             TextButton.icon(
               icon: const Icon(Icons.copy, size: 18),
-              label: const Text('Copy key'),
+              label: const T('Copy key'),
               onPressed: () => Clipboard.setData(
                 ClipboardData(text: '${setup['manual_key'] ?? ''}'),
               ),
@@ -224,17 +225,17 @@ class _TwoStepManageScreenState extends ConsumerState<TwoStepManageScreen> {
               keyboardType: TextInputType.number,
               maxLength: 6,
               onSubmitted: (_) => _run(_confirm),
-              decoration: const InputDecoration(
-                labelText: 'Code',
+              decoration: InputDecoration(
+                labelText: tr('Code'),
                 border: OutlineInputBorder(),
               ),
             ),
             FilledButton(
               onPressed: _busy ? null : () => _run(_confirm),
-              child: const Text('Confirm'),
+              child: const T('Confirm'),
             ),
           ] else ...[
-            Text(
+            T(
               'Verify with a fresh code. Changes sign out all devices, this '
               'phone too.',
               style: TextStyle(color: muted),
@@ -254,7 +255,7 @@ class _TwoStepManageScreenState extends ConsumerState<TwoStepManageScreen> {
             CheckboxListTile(
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text('Use a recovery code'),
+              title: const T('Use a recovery code'),
               value: _recovery,
               onChanged: (v) => setState(() {
                 _recovery = v == true;
@@ -267,11 +268,11 @@ class _TwoStepManageScreenState extends ConsumerState<TwoStepManageScreen> {
               children: [
                 FilledButton(
                   onPressed: _busy ? null : () => _run(_replace),
-                  child: const Text('Replace authenticator'),
+                  child: const T('Replace authenticator'),
                 ),
                 OutlinedButton(
                   onPressed: _busy ? null : () => _run(_newCodes),
-                  child: const Text('Generate recovery codes'),
+                  child: const T('Generate recovery codes'),
                 ),
               ],
             ),
@@ -289,7 +290,7 @@ class _TwoStepManageScreenState extends ConsumerState<TwoStepManageScreen> {
             if (needsFreshSignIn(error))
               TextButton(
                 onPressed: () => ref.read(sessionProvider.notifier).signOut(),
-                child: const Text('Sign in again'),
+                child: const T('Sign in again'),
               ),
           ],
         ],

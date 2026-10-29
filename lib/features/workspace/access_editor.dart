@@ -15,6 +15,7 @@ import '../../core/theme.dart';
 import '../channels/channel_manage.dart' show pickPerson;
 import '../channels/channels_api.dart';
 import 'version_history.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// A grant as the server takes it back (only these three fields).
 typedef Grant = ({String type, String id, String permission});
@@ -152,7 +153,7 @@ class ItemMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => PopupMenuButton<String>(
-    tooltip: 'More',
+    tooltip: tr('More'),
     onSelected: (v) => switch (v) {
       'access' => editAccess(context, ref, kind: kind, id: id, name: name),
       'export' => exportItem(context, ref, kind: kind, id: id, name: name),
@@ -172,13 +173,13 @@ class ItemMenu extends ConsumerWidget {
       _ => null,
     },
     itemBuilder: (_) => [
-      const PopupMenuItem(value: 'access', child: Text('Access')),
+      const PopupMenuItem(value: 'access', child: T('Access')),
       if (onClone != null)
-        const PopupMenuItem(value: 'clone', child: Text('Clone')),
-      const PopupMenuItem(value: 'export', child: Text('Export')),
+        const PopupMenuItem(value: 'clone', child: T('Clone')),
+      const PopupMenuItem(value: 'export', child: T('Export')),
       for (final (i, (label, _)) in extra.indexed)
         PopupMenuItem(value: 'extra:$i', child: Text(label)),
-      const PopupMenuItem(value: 'history', child: Text('Version history')),
+      const PopupMenuItem(value: 'history', child: T('Version history')),
     ],
   );
 }
@@ -285,7 +286,7 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
               ),
             ListTile(
               leading: const Icon(Icons.person_add_alt),
-              title: const Text('A person…'),
+              title: const T('A person…'),
               onTap: () => Navigator.pop(c, 'user'),
             ),
           ],
@@ -348,7 +349,7 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _busy ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -357,17 +358,17 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
         children: [
           if (_folder)
             ListTile(
-              title: const Text('Sharing mode'),
+              title: const T('Sharing mode'),
               subtitle: Wrap(
                 spacing: 6,
                 children: [
                   ChoiceChip(
-                    label: const Text('Clone only'),
+                    label: const T('Clone only'),
                     selected: _shareMode == null,
                     onSelected: (_) => setState(() => _shareMode = null),
                   ),
                   ChoiceChip(
-                    label: const Text('Allow replies'),
+                    label: const T('Allow replies'),
                     selected: _shareMode == 'continue',
                     onSelected: (_) => setState(() => _shareMode = 'continue'),
                   ),
@@ -377,17 +378,17 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
           // Folders are shared with people and groups only, as on the web.
           if (!_folder)
             ListTile(
-              title: const Text('Visibility'),
+              title: const T('Visibility'),
               subtitle: Wrap(
                 spacing: 6,
                 children: [
                   ChoiceChip(
-                    label: const Text('Private'),
+                    label: const T('Private'),
                     selected: !_public,
                     onSelected: (_) => _setPublic(false),
                   ),
                   ChoiceChip(
-                    label: const Text('Public'),
+                    label: const T('Public'),
                     selected: _public,
                     onSelected: (_) => _setPublic(true),
                   ),
@@ -396,14 +397,14 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
             ),
           if (_public && widget.kind != 'app')
             SwitchListTile(
-              title: const Text('Allow public write access'),
-              subtitle: const Text('Anyone can change it, not just use it'),
+              title: const T('Allow public write access'),
+              subtitle: const T('Anyone can change it, not just use it'),
               value: _publicWrite,
               onChanged: _setPublicWrite,
             ),
           const Divider(),
           ListTile(
-            title: const Text('Groups and people'),
+            title: const T('Groups and people'),
             subtitle: Text(
               _principals.isEmpty
                   ? 'Only you${_public ? ' and everyone (to use)' : ''}.'
@@ -413,7 +414,7 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
             trailing: TextButton.icon(
               onPressed: _add,
               icon: const Icon(Icons.add),
-              label: const Text('Add Access'),
+              label: const T('Add Access'),
             ),
           ),
           for (final e in _principals.entries)
@@ -431,13 +432,13 @@ class _AccessEditorState extends ConsumerState<AccessEditor> {
                     value: e.value,
                     underline: const SizedBox.shrink(),
                     items: const [
-                      DropdownMenuItem(value: 'read', child: Text('Can use')),
-                      DropdownMenuItem(value: 'write', child: Text('Can edit')),
+                      DropdownMenuItem(value: 'read', child: T('Can use')),
+                      DropdownMenuItem(value: 'write', child: T('Can edit')),
                     ],
                     onChanged: (v) => _set(e.key.$1, e.key.$2, v),
                   ),
                   IconButton(
-                    tooltip: 'Remove',
+                    tooltip: tr('Remove'),
                     icon: const Icon(Icons.close),
                     onPressed: () => _set(e.key.$1, e.key.$2, null),
                   ),

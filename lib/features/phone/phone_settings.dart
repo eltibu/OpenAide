@@ -11,6 +11,8 @@ import '../settings/settings_screen.dart';
 import 'app_lock.dart';
 import 'phone_actions.dart';
 import 'phone_launch.dart';
+import 'wake_phrase.dart';
+import '../../core/i18n/app_strings.dart';
 
 class PhoneSettings extends ConsumerStatefulWidget {
   const PhoneSettings({super.key});
@@ -58,9 +60,13 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
   }
 
   void _say(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr(text))));
 
   Future<void> _set(Map<String, dynamic> fields) async {
+    if (fields.containsKey(assistantOpensKey)) {
+      await setAssistPanel(fields[assistantOpensKey] == 'panel');
+    }
     try {
       await ref.read(settingsApiProvider).patchUi(fields);
     } catch (e) {
@@ -74,9 +80,8 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
     // Section names in the accent colour, as on every settings page.
-    final heading = Theme.of(
-      context,
-    ).textTheme.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary);
+    final heading = Theme.of(context).textTheme.titleSmall
+        ?.copyWith(color: Theme.of(context).colorScheme.primary);
     final ui = ref.watch(uiSettingsProvider).value;
     final opens = assistantOpens(ui);
     final lock = ref.watch(appLockProvider).value;
@@ -96,7 +101,7 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
       onTap: onTap,
     );
     return Scaffold(
-      appBar: AppBar(title: const Text('Phone and assistant')),
+      appBar: AppBar(title: const T('Phone and assistant')),
       body: ListView(
         children: [
           title('Assistant'),
@@ -125,24 +130,32 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text(
+            child: T(
               'When it opens as the assistant',
               style: TextStyle(color: muted),
             ),
           ),
-          pick(opens == 'call', 'Start a voice call', () {
+          pick(opens == 'call', tr('Start a voice call'), () {
             _set({assistantOpensKey: 'call'});
           }),
-          pick(opens == 'dictate', 'Dictate a message', () {
+          pick(opens == 'dictate', tr('Dictate a message'), () {
             _set({assistantOpensKey: 'dictate'});
           }),
-          pick(opens == 'new', 'Open a new chat', () {
+          pick(opens == 'new', tr('Open a new chat'), () {
             _set({assistantOpensKey: 'chat'});
           }),
+          pick(
+            opens == 'panel',
+            tr('Ask in a panel over the app you\'re in'),
+            () {
+              _set({assistantOpensKey: 'panel'});
+            },
+          ),
+          const WakePhraseTile(),
           title('Shortcuts'),
           ListTile(
             leading: const Icon(Icons.dashboard_customize_outlined),
-            title: const Text('Quick settings tile'),
+            title: const T('Quick settings tile'),
             subtitle: Text(
               _tile
                   ? 'Starts a voice call from the pull-down menu.'
@@ -153,16 +166,18 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
             trailing: _tile
                 ? TextButton(
                     onPressed: () async {
-                      if (await addTile()) _say('OpenAide is in quick settings');
+                      if (await addTile()) {
+                        _say('OpenAide is in quick settings');
+                      }
                     },
-                    child: const Text('Add'),
+                    child: const T('Add'),
                   )
                 : null,
           ),
           ListTile(
             leading: const Icon(Icons.touch_app_outlined),
-            title: const Text('Icon shortcuts'),
-            subtitle: Text(
+            title: const T('Icon shortcuts'),
+            subtitle: T(
               'Long-press the OpenAide icon for Voice call, Dictate and New '
               'chat. Drag one to your home screen to keep it there.',
               style: TextStyle(color: muted),
@@ -170,8 +185,8 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
           ),
           ListTile(
             leading: const Icon(Icons.widgets_outlined),
-            title: const Text('Home-screen widget'),
-            subtitle: Text(
+            title: const T('Home-screen widget'),
+            subtitle: T(
               'Long-press your home screen, choose Widgets, then OpenAide: Ask '
               'OpenAide, Dictate and Voice call in one bar.',
               style: TextStyle(color: muted),
@@ -179,8 +194,8 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
           ),
           ListTile(
             leading: const Icon(Icons.share_outlined),
-            title: const Text('Share to OpenAide'),
-            subtitle: Text(
+            title: const T('Share to OpenAide'),
+            subtitle: T(
               'In any app, Share > OpenAide starts a chat with the '
               'text, photos or files. Select text anywhere and choose Ask '
               'OpenAide to ask about it.',
@@ -189,8 +204,8 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
           ),
           SwitchListTile(
             secondary: const Icon(Icons.alarm_on_outlined),
-            title: const Text('Phone actions'),
-            subtitle: Text(
+            title: const T('Phone actions'),
+            subtitle: T(
               'Say or type "set a timer for 10 minutes", "wake me up at 6:30", '
               '"call Mom", "text Sam saying running late", "open Spotify", '
               '"directions to the airport" or "turn on the flashlight" and '
@@ -204,7 +219,7 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
           title('App lock'),
           SwitchListTile(
             secondary: const Icon(Icons.fingerprint),
-            title: const Text('Lock OpenAide'),
+            title: const T('Lock OpenAide'),
             subtitle: Text(
               _canLock
                   ? 'Ask for your fingerprint, face or screen lock to open '

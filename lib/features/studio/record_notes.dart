@@ -14,6 +14,7 @@ import 'studio_api.dart';
 import 'studio_doc.dart';
 import 'studio_screen.dart' show StudioEditor, studioModel, studioDocsProvider;
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 String _clock(Duration d) {
   String two(int n) => n.toString().padLeft(2, '0');
@@ -194,13 +195,13 @@ class _DictateSheetState extends State<_DictateSheet> {
               children: [
                 TextButton(
                   onPressed: _finishing ? null : () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: const T('Cancel'),
                 ),
                 const Spacer(),
                 FilledButton.icon(
                   onPressed: _finishing || !_on ? null : _done,
                   icon: const Icon(Icons.check),
-                  label: const Text('Done'),
+                  label: const T('Done'),
                 ),
               ],
             ),
@@ -441,18 +442,18 @@ class _RecordNotesScreenState extends ConsumerState<RecordNotesScreen> {
     final choice = await showDialog<String>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Stop recording?'),
-        content: const Text(
+        title: const T('Stop recording?'),
+        content: const T(
           'What was said so far is saved as a transcript in the Studio.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, 'keep'),
-            child: const Text('Keep recording'),
+            child: const T('Keep recording'),
           ),
           TextButton(
             onPressed: () => Navigator.pop(d, 'stop'),
-            child: const Text('Stop and write it up'),
+            child: const T('Stop and write it up'),
           ),
         ],
       ),
@@ -472,7 +473,7 @@ class _RecordNotesScreenState extends ConsumerState<RecordNotesScreen> {
         if (!popped) _leave();
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('Record notes')),
+        appBar: AppBar(title: const T('Record notes')),
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
@@ -480,7 +481,7 @@ class _RecordNotesScreenState extends ConsumerState<RecordNotesScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (_phase == _Phase.ready) ...[
-                  Text(
+                  T(
                     'What should it become?',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
@@ -577,13 +578,13 @@ class _RecordNotesScreenState extends ConsumerState<RecordNotesScreen> {
                     ),
                     onPressed: _record,
                     icon: const Icon(Icons.fiber_manual_record),
-                    label: const Text('Record'),
+                    label: const T('Record'),
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
                     onPressed: _fromFile,
                     icon: const Icon(Icons.audio_file_outlined),
-                    label: const Text('Use an audio file instead'),
+                    label: const T('Use an audio file instead'),
                   ),
                 ] else if (recording)
                   Row(
@@ -608,7 +609,7 @@ class _RecordNotesScreenState extends ConsumerState<RecordNotesScreen> {
                           ),
                           onPressed: _stop,
                           icon: const Icon(Icons.stop),
-                          label: const Text('Stop'),
+                          label: const T('Stop'),
                         ),
                       ),
                     ],

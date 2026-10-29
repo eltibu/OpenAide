@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
+import '../../core/i18n/app_strings.dart';
+
 /// What the page may load. Scripts never run. Unless [remote], nothing is
 /// fetched from the internet either: senders put tracking pixels in
 /// pictures and styles, which tell them when and where an email was opened.
@@ -89,14 +91,14 @@ class _EmailHtmlState extends State<EmailHtml> {
             child: Row(
               children: [
                 const Expanded(
-                  child: Text(
+                  child: T(
                     "Pictures from the internet are hidden, so the sender "
                     "can't see that you opened this.",
                   ),
                 ),
                 TextButton(
                   onPressed: _showRemote,
-                  child: const Text('Show pictures'),
+                  child: const T('Show pictures'),
                 ),
               ],
             ),

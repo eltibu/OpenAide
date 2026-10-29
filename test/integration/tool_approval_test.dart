@@ -38,6 +38,30 @@ void main() {
         );
     final client = OpenWebUiClient(baseUrl: url!);
     await client.signIn(email!, password!);
+    // Tools wait for Allow: "Ask for approval" as this person's default.
+    final settings = await client.userSettings();
+    final ui = Map<String, dynamic>.of((settings['ui'] as Map?)?.cast() ?? {});
+    final params = Map<String, dynamic>.of(
+      (ui['params'] as Map?)?.cast() ?? {},
+    );
+    await client.send(
+      'POST',
+      '/api/v1/users/user/settings/update',
+      body: {
+        ...settings,
+        'ui': {
+          ...ui,
+          'params': {...params, 'tool_approval_mode': 'ask'},
+        },
+      },
+    );
+    addTearDown(
+      () => client.send(
+        'POST',
+        '/api/v1/users/user/settings/update',
+        body: {...settings, 'ui': ui},
+      ),
+    );
     final container = ProviderContainer(
       overrides: [
         sessionProvider.overrideWith(

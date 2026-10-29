@@ -14,6 +14,7 @@ import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../workspace/access_editor.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// What each scope lets an app do, as the web says it.
 const appScopes = {
@@ -255,10 +256,10 @@ class _AppsScreenState extends ConsumerState<AppsScreen> {
     final error = _error;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Apps'),
+        title: const T('Apps'),
         actions: [
           IconButton(
-            tooltip: 'Add app',
+            tooltip: tr('Add app'),
             icon: const Icon(Icons.add),
             onPressed: error == null ? () => _configure() : null,
           ),
@@ -284,7 +285,7 @@ class _AppsScreenState extends ConsumerState<AppsScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Text(
+                    child: T(
                       'Outside apps that join channels, such as a bot on your '
                       'own server. Experimental, as on the web.',
                       style: TextStyle(color: muted),
@@ -293,7 +294,7 @@ class _AppsScreenState extends ConsumerState<AppsScreen> {
                   if (apps.isEmpty)
                     Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
+                      child: T(
                         'No apps yet. Tap + to add one.',
                         style: TextStyle(color: muted),
                       ),
@@ -486,18 +487,18 @@ class _AppEditorState extends ConsumerState<AppEditor> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Uninstall ${_app!.name}?'),
-        content: const Text(
+        content: const T(
           'It is disconnected, its key is removed and it leaves its '
           'channels. You can connect it again later with a key.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Uninstall'),
+            child: const T('Uninstall'),
           ),
         ],
       ),
@@ -541,7 +542,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
-            tooltip: 'Close app settings',
+            tooltip: tr('Close app settings'),
             icon: const Icon(Icons.close),
             onPressed: _busy ? null : () => Navigator.pop(context, _changed),
           ),
@@ -562,7 +563,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
                       onPressed: _busy || _url.text.trim().isEmpty
                           ? null
                           : _fetch,
-                      child: const Text('Continue'),
+                      child: const T('Continue'),
                     )
                   : FilledButton(
                       onPressed: _busy || !ready ? null : _save,
@@ -595,7 +596,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               ),
-            Text(
+            T(
               'Connection',
               style: Theme.of(context).textTheme.titleSmall
                   ?.copyWith(color: NexusColors.accent),
@@ -605,9 +606,9 @@ class _AppEditorState extends ConsumerState<AppEditor> {
               keyboardType: TextInputType.url,
               // An installed app keeps its address.
               enabled: app == null,
-              decoration: const InputDecoration(
-                labelText: 'App URL',
-                hintText: 'https://app.example.com/openwebui',
+              decoration: InputDecoration(
+                labelText: tr('App URL'),
+                hintText: tr('https://app.example.com/openwebui'),
               ),
               onChanged: (_) => setState(() {}),
             ),
@@ -615,7 +616,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
               controller: _key,
               obscureText: _hideKey,
               decoration: InputDecoration(
-                labelText: 'API Key',
+                labelText: tr('API Key'),
                 helperText: app == null
                     ? 'Enter the API key provided by the app.'
                     : 'Leave empty to keep the current API key.',
@@ -637,7 +638,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
                         ? null
                         : _fetch,
                     icon: const Icon(Icons.refresh),
-                    label: const Text('Check for changes'),
+                    label: const T('Check for changes'),
                   ),
                 if (!_manual)
                   TextButton(
@@ -654,15 +655,15 @@ class _AppEditorState extends ConsumerState<AppEditor> {
               const SizedBox(height: 12),
               TextField(
                 controller: _name,
-                decoration: const InputDecoration(labelText: 'Name'),
+                decoration: InputDecoration(labelText: tr('Name')),
                 onChanged: (_) => setState(() {}),
               ),
               TextField(
                 controller: _slug,
                 enabled: app == null,
-                decoration: const InputDecoration(
-                  labelText: 'App handle',
-                  helperText: 'How people mention it, like @my-app',
+                decoration: InputDecoration(
+                  labelText: tr('App handle'),
+                  helperText: tr('How people mention it, like @my-app'),
                 ),
                 onChanged: (_) => setState(() {}),
               ),
@@ -670,24 +671,25 @@ class _AppEditorState extends ConsumerState<AppEditor> {
                 TextField(
                   controller: _id,
                   enabled: app == null,
-                  decoration: const InputDecoration(
-                    labelText: 'App ID',
-                    helperText: 'Left empty, the handle is used',
+                  decoration: InputDecoration(
+                    labelText: tr('App ID'),
+                    helperText: tr('Left empty, the handle is used'),
                   ),
                 ),
                 TextField(
                   controller: _publicKey,
                   minLines: 2,
                   maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Public key',
-                    helperText:
-                        'Enter the Ed25519 public key provided by the app.',
+                  decoration: InputDecoration(
+                    labelText: tr('Public key'),
+                    helperText: tr(
+                      'Enter the Ed25519 public key provided by the app.',
+                    ),
                   ),
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
                 const SizedBox(height: 12),
-                Text('Requested scopes', style: TextStyle(color: muted)),
+                T('Requested scopes', style: TextStyle(color: muted)),
                 for (final MapEntry(:key, :value) in appScopes.entries)
                   CheckboxListTile(
                     contentPadding: EdgeInsets.zero,
@@ -701,7 +703,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
                   ),
               ],
               const SizedBox(height: 16),
-              Text(
+              T(
                 'App scopes',
                 style: Theme.of(context).textTheme.titleSmall
                     ?.copyWith(color: NexusColors.accent),
@@ -719,7 +721,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
               if (_requested.isEmpty)
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text(
+                  child: T(
                     'No scopes requested.',
                     style: TextStyle(color: muted),
                   ),
@@ -737,7 +739,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(everyone ? Icons.public : Icons.lock_outline),
-                title: const Text('Access'),
+                title: const T('Access'),
                 subtitle: Text(
                   everyone
                       ? 'Everyone'
@@ -758,7 +760,7 @@ class _AppEditorState extends ConsumerState<AppEditor> {
                 ),
                 onPressed: _busy ? null : _uninstall,
                 icon: const Icon(Icons.delete_outline),
-                label: const Text('Uninstall app'),
+                label: const T('Uninstall app'),
               ),
             ],
           ],

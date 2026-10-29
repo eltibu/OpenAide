@@ -9,6 +9,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../i18n/app_strings.dart';
+
 /// Where saved copies live; a folder on the phone, or memory in tests.
 abstract class OfflineStore {
   Future<void> put(String key, String body);
@@ -155,7 +157,7 @@ class _Strip extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(
+                child: T(
                   "Can't reach the server: showing saved copies.",
                   style: Theme.of(context).textTheme.bodySmall
                       ?.copyWith(color: scheme.onSecondaryContainer),

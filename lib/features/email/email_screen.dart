@@ -19,6 +19,7 @@ import '../accounts/mail_accounts.dart';
 import 'direct_mail.dart';
 import 'email_html.dart';
 import 'email_agent.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Said when there is neither an account on the phone nor a server.
 const noMailAccount =
@@ -219,7 +220,7 @@ Future<void> actOn(
     EmailAct.trash => ('delete', 'Deleted'),
     EmailAct.spam => ('report', 'Reported as spam'),
   };
-  messenger.showSnackBar(SnackBar(content: Text(done)));
+  messenger.showSnackBar(SnackBar(content: Text(tr(done))));
   try {
     final box = await container.read(emailAgentProvider.future);
     await switch (what) {
@@ -284,7 +285,8 @@ String _ago(DateTime t) {
 }
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 String _when(BuildContext context, DateTime? t) {
   if (t == null) return '';
@@ -364,7 +366,7 @@ class EmailScreen extends ConsumerWidget {
         actions: [
           const _SourceMenu(),
           IconButton(
-            tooltip: 'Search',
+            tooltip: tr('Search'),
             onPressed: () => Navigator.push(
               context,
               MaterialPageRoute<void>(builder: (_) => const _SearchScreen()),
@@ -379,7 +381,7 @@ class EmailScreen extends ConsumerWidget {
           MaterialPageRoute<void>(builder: (_) => const ReplyEditor()),
         ),
         icon: const Icon(Icons.edit_outlined),
-        label: const Text('Write'),
+        label: const T('Write'),
       ),
       body: const TabBarView(
         children: [
@@ -447,12 +449,12 @@ class _EmailList extends ConsumerWidget {
                         builder: (_) => const AddMailAccount(),
                       ),
                     ),
-                    child: const Text('Add an account'),
+                    child: const T('Add an account'),
                   )
                 else
                   TextButton(
                     onPressed: notifier.check,
-                    child: const Text('Try again'),
+                    child: const T('Try again'),
                   ),
               ],
             ),
@@ -461,7 +463,7 @@ class _EmailList extends ConsumerWidget {
           else if (emails.isEmpty && box.error == null)
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Text('Nothing here.', style: TextStyle(color: muted)),
+              child: T('Nothing here.', style: TextStyle(color: muted)),
             ),
           for (final (i, e) in emails.indexed) ...[
             if (i > 0) const Divider(height: 1),
@@ -622,8 +624,8 @@ class _SearchScreenState extends ConsumerState<_SearchScreen> {
         autofocus: true,
         textInputAction: TextInputAction.search,
         onSubmitted: _search,
-        decoration: const InputDecoration(
-          hintText: 'Who, what, or "unread from this week"',
+        decoration: InputDecoration(
+          hintText: tr('Who, what, or "unread from this week"'),
           border: InputBorder.none,
         ),
       ),
@@ -646,7 +648,7 @@ class _SearchScreenState extends ConsumerState<_SearchScreen> {
               return emails.isEmpty
                   ? const Padding(
                       padding: EdgeInsets.all(24),
-                      child: Text('Nothing found.'),
+                      child: T('Nothing found.'),
                     )
                   : ListView.separated(
                       itemCount: emails.length,
@@ -766,17 +768,17 @@ class _EmailViewState extends ConsumerState<EmailView> {
       appBar: AppBar(
         actions: [
           IconButton(
-            tooltip: 'Archive',
+            tooltip: tr('Archive'),
             icon: const Icon(Icons.archive_outlined),
             onPressed: () => _act(EmailAct.archive),
           ),
           IconButton(
-            tooltip: 'Delete',
+            tooltip: tr('Delete'),
             icon: const Icon(Icons.delete_outline),
             onPressed: () => _act(EmailAct.trash),
           ),
           IconButton(
-            tooltip: 'Mark as unread',
+            tooltip: tr('Mark as unread'),
             icon: const Icon(Icons.mark_email_unread_outlined),
             onPressed: () {
               unawaited(markRead(ref, e, read: false));
@@ -795,9 +797,9 @@ class _EmailViewState extends ConsumerState<EmailView> {
                 value: 'star',
                 child: Text(e.starred ? 'Remove star' : 'Star'),
               ),
-              const PopupMenuItem(value: 'forward', child: Text('Forward')),
-              const PopupMenuItem(value: 'spam', child: Text('Report spam')),
-              const PopupMenuItem(value: 'again', child: Text('Load again')),
+              const PopupMenuItem(value: 'forward', child: T('Forward')),
+              const PopupMenuItem(value: 'spam', child: T('Report spam')),
+              const PopupMenuItem(value: 'again', child: T('Load again')),
             ],
           ),
         ],
@@ -868,7 +870,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
                         const SizedBox(height: 12),
                         FilledButton(
                           onPressed: _load,
-                          child: const Text('Try again'),
+                          child: const T('Try again'),
                         ),
                       ],
                     ),
@@ -931,7 +933,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
+                  T(
                     'OpenAide would reply',
                     style: Theme.of(context).textTheme.labelLarge
                         ?.copyWith(color: muted),
@@ -943,7 +945,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
                     alignment: Alignment.centerRight,
                     child: FilledButton.tonal(
                       onPressed: () => _write(text: o.suggestedReply),
-                      child: const Text('Use this reply'),
+                      child: const T('Use this reply'),
                     ),
                   ),
                 ],
@@ -1214,7 +1216,7 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Send this email?'),
+        title: const T('Send this email?'),
         content: Text(
           source == nexusMailSource
               ? 'OpenAide sends it from your Gmail to $to.'
@@ -1223,11 +1225,11 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Send'),
+            child: const T('Send'),
           ),
         ],
       ),
@@ -1274,7 +1276,7 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
           ),
           actions: [
             IconButton(
-              tooltip: 'Copy',
+              tooltip: tr('Copy'),
               onPressed: () =>
                   Clipboard.setData(ClipboardData(text: _body.text)),
               icon: const Icon(Icons.copy_outlined),
@@ -1307,7 +1309,7 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
                 controller: _to,
                 keyboardType: TextInputType.emailAddress,
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'To'),
+                decoration: InputDecoration(labelText: tr('To')),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1327,7 +1329,7 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Reply to everyone on it'),
+                title: const T('Reply to everyone on it'),
                 value: _all,
                 onChanged: (v) => setState(() => _all = v),
               ),
@@ -1335,11 +1337,11 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
               TextField(
                 controller: _to,
                 keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'To'),
+                decoration: InputDecoration(labelText: tr('To')),
               ),
               TextField(
                 controller: _subject,
-                decoration: const InputDecoration(labelText: 'Subject'),
+                decoration: InputDecoration(labelText: tr('Subject')),
               ),
               const SizedBox(height: 8),
             ],
@@ -1348,8 +1350,8 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
               maxLines: null,
               minLines: 8,
               enabled: !_sending,
-              decoration: const InputDecoration(
-                hintText: 'Write your email, or let the AI write it',
+              decoration: InputDecoration(
+                hintText: tr('Write your email, or let the AI write it'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -1369,7 +1371,7 @@ class _ReplyEditorState extends ConsumerState<ReplyEditor> {
                 OutlinedButton.icon(
                   onPressed: _sending ? null : _dictate,
                   icon: const Icon(Icons.mic_none, size: 18),
-                  label: const Text('Dictate'),
+                  label: const T('Dictate'),
                 ),
               ],
             ),
@@ -1391,7 +1393,7 @@ class _SourceTitle extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Email'),
+        const T('Email'),
         if (source != null)
           Text(
             source == nexusMailSource ? 'Through OpenAide' : source,
@@ -1415,7 +1417,7 @@ class _SourceMenu extends ConsumerWidget {
     final source = ref.watch(mailSourceProvider).value;
     final server = ref.watch(sessionProvider).value != null;
     return PopupMenuButton<String>(
-      tooltip: 'Accounts',
+      tooltip: tr('Accounts'),
       icon: const Icon(Icons.account_circle_outlined),
       onSelected: (v) {
         if (v == '+') {
@@ -1432,7 +1434,7 @@ class _SourceMenu extends ConsumerWidget {
           CheckedPopupMenuItem(
             value: nexusMailSource,
             checked: source == nexusMailSource,
-            child: const Text('Through OpenAide'),
+            child: const T('Through OpenAide'),
           ),
         for (final a in accounts?.accounts ?? const <MailAccountConfig>[])
           CheckedPopupMenuItem(
@@ -1446,7 +1448,7 @@ class _SourceMenu extends ConsumerWidget {
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.add),
-            title: Text('Add an email account'),
+            title: T('Add an email account'),
           ),
         ),
       ],
@@ -1471,7 +1473,7 @@ class _ConnectGmail extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            const T(
               'Emails open slowly here because OpenAide reads each one '
               'first. Connect your Gmail for instant email that looks like '
               'Gmail.',
@@ -1486,7 +1488,7 @@ class _ConnectGmail extends StatelessWidget {
                   ),
                 ),
                 icon: const Icon(Icons.bolt, size: 18),
-                label: const Text('Connect Gmail'),
+                label: const T('Connect Gmail'),
               ),
             ),
           ],

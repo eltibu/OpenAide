@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../settings/settings_screen.dart' show meProvider;
+import '../../core/i18n/app_strings.dart';
 
 enum OwnerView { all, created, shared }
 
@@ -28,10 +29,10 @@ bool ownerMatches(OwnerView view, Object? owner, String? me) =>
     (view == OwnerView.created) == ('$owner' == me);
 
 /// [items] as the current view shows them.
-List<T> ownerFiltered<T>(
+List<E> ownerFiltered<E>(
   WidgetRef ref,
-  Iterable<T> items,
-  Object? Function(T) owner,
+  Iterable<E> items,
+  Object? Function(E) owner,
 ) {
   final view = ref.watch(ownerViewProvider);
   final me = ref.watch(meProvider).value?['id']?.toString();
@@ -49,7 +50,7 @@ class OwnerFilterButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final view = ref.watch(ownerViewProvider);
     return PopupMenuButton<OwnerView>(
-      tooltip: 'Show',
+      tooltip: tr('Show'),
       icon: Icon(
         view == OwnerView.all ? Icons.filter_list : Icons.filter_list_alt,
       ),

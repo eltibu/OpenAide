@@ -6,9 +6,11 @@ import '../../core/theme.dart';
 import '../email/direct_mail.dart' show DirectMailStore;
 import '../providers/ai_providers_screen.dart';
 import 'mail_accounts.dart';
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// Settings > Accounts: services the app signs in to itself, on the phone,
 /// so they work without an Open WebUI server.
@@ -23,16 +25,16 @@ class AccountsScreen extends ConsumerWidget {
     void open(Widget page) =>
         Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
     return Scaffold(
-      appBar: AppBar(title: const Text('Accounts')),
+      appBar: AppBar(title: const T('Accounts')),
       body: ListView(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Text('Email', style: Theme.of(context).textTheme.titleSmall),
+            child: T('Email', style: Theme.of(context).textTheme.titleSmall),
           ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: Text(
+            child: T(
               'The app reads and sends this mail itself. The password stays '
               'on this phone, in its secure storage.',
               style: TextStyle(color: muted, fontSize: 13),
@@ -64,18 +66,18 @@ class AccountsScreen extends ConsumerWidget {
                       context: context,
                       builder: (d) => AlertDialog(
                         title: Text('Remove ${a.email}?'),
-                        content: const Text(
+                        content: const T(
                           'The app forgets its password and the mail it '
                           'kept. Nothing is deleted from the account itself.',
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(d, false),
-                            child: const Text('Cancel'),
+                            child: const T('Cancel'),
                           ),
                           FilledButton(
                             onPressed: () => Navigator.pop(d, true),
-                            child: const Text('Remove'),
+                            child: const T('Remove'),
                           ),
                         ],
                       ),
@@ -86,22 +88,22 @@ class AccountsScreen extends ConsumerWidget {
                   }
                 },
                 itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'show', child: Text('Show in Email')),
-                  PopupMenuItem(value: 'remove', child: Text('Remove')),
+                  PopupMenuItem(value: 'show', child: T('Show in Email')),
+                  PopupMenuItem(value: 'remove', child: T('Remove')),
                 ],
               ),
             ),
           ListTile(
             leading: const Icon(Icons.add),
-            title: const Text('Add an email account'),
-            subtitle: const Text('Gmail, iCloud, Yahoo, Fastmail or any IMAP'),
+            title: const T('Add an email account'),
+            subtitle: const T('Gmail, iCloud, Yahoo, Fastmail or any IMAP'),
             onTap: () => open(const AddMailAccount()),
           ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.hub_outlined),
-            title: const Text('AI providers'),
-            subtitle: const Text('OpenRouter, Claude and OpenAI'),
+            title: const T('AI providers'),
+            subtitle: const T('OpenRouter, Claude and OpenAI'),
             onTap: () => open(const AiProvidersScreen()),
           ),
         ],
@@ -251,8 +253,8 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
               enabled: widget.editing == null,
               keyboardType: TextInputType.emailAddress,
               autocorrect: false,
-              decoration: const InputDecoration(
-                labelText: 'Email address',
+              decoration: InputDecoration(
+                labelText: tr('Email address'),
                 border: OutlineInputBorder(),
               ),
               onChanged: (_) => setState(() {}),
@@ -294,8 +296,8 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
             const SizedBox(height: 12),
             TextField(
               controller: _name,
-              decoration: const InputDecoration(
-                labelText: 'Your name on sent mail (optional)',
+              decoration: InputDecoration(
+                labelText: tr('Your name on sent mail (optional)'),
                 border: OutlineInputBorder(),
               ),
             ),
@@ -304,8 +306,8 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
               key: ValueKey(_servers),
               initiallyExpanded: _servers,
               tilePadding: EdgeInsets.zero,
-              title: const Text('Mail servers'),
-              subtitle: Text(
+              title: const T('Mail servers'),
+              subtitle: T(
                 'Found by themselves for most addresses',
                 style: TextStyle(color: muted, fontSize: 12),
               ),
@@ -314,8 +316,8 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
                 TextField(
                   controller: _login,
                   autocorrect: false,
-                  decoration: const InputDecoration(
-                    labelText: 'Sign-in name (if not the address)',
+                  decoration: InputDecoration(
+                    labelText: tr('Sign-in name (if not the address)'),
                   ),
                 ),
                 Row(
@@ -325,8 +327,8 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
                       child: TextField(
                         controller: _imapHost,
                         autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'IMAP server',
+                        decoration: InputDecoration(
+                          labelText: tr('IMAP server'),
                         ),
                       ),
                     ),
@@ -335,7 +337,7 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
                       child: TextField(
                         controller: _imapPort,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Port'),
+                        decoration: InputDecoration(labelText: tr('Port')),
                       ),
                     ),
                   ],
@@ -347,8 +349,8 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
                       child: TextField(
                         controller: _smtpHost,
                         autocorrect: false,
-                        decoration: const InputDecoration(
-                          labelText: 'SMTP server',
+                        decoration: InputDecoration(
+                          labelText: tr('SMTP server'),
                         ),
                       ),
                     ),
@@ -357,14 +359,14 @@ class _AddMailAccountState extends ConsumerState<AddMailAccount> {
                       child: TextField(
                         controller: _smtpPort,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Port'),
+                        decoration: InputDecoration(labelText: tr('Port')),
                       ),
                     ),
                   ],
                 ),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('SMTP uses STARTTLS (port 587)'),
+                  title: const T('SMTP uses STARTTLS (port 587)'),
                   value: _startTls,
                   onChanged: (v) => setState(() {
                     _startTls = v;

@@ -8,9 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 const _base = '/api/v1/knowledge/external';
 
@@ -251,13 +254,13 @@ class _ExternalKnowledgeState extends ConsumerState<ExternalKnowledgeScreen> {
     return Scaffold(
       appBar: widget.embedded
           ? null
-          : AppBar(title: const Text('External knowledge')),
+          : AppBar(title: const T('External knowledge')),
       floatingActionButton: items == null
           ? null
           : FloatingActionButton.extended(
               onPressed: _edit,
               icon: const Icon(Icons.add),
-              label: const Text('Add Connection'),
+              label: const T('Add Connection'),
             ),
       body: items == null
           ? Center(
@@ -275,7 +278,7 @@ class _ExternalKnowledgeState extends ConsumerState<ExternalKnowledgeScreen> {
                 children: [
                   Padding(
                     padding: const EdgeInsets.all(16),
-                    child: Text(
+                    child: T(
                       'Knowledge bases kept in your own Qdrant, Milvus or '
                       'pgvector database. Experimental on the server.',
                       style: TextStyle(color: muted),
@@ -284,7 +287,7 @@ class _ExternalKnowledgeState extends ConsumerState<ExternalKnowledgeScreen> {
                   if (items.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Text(
+                      child: T(
                         'No external knowledge sources configured.',
                         style: TextStyle(color: muted),
                       ),
@@ -353,14 +356,21 @@ class _SourceEditorState extends ConsumerState<_SourceEditor> {
     void Function(String) set, {
     String? hint,
     bool secret = false,
-  }) => TextFormField(
-    initialValue: value,
-    obscureText: secret,
-    decoration: InputDecoration(labelText: label, hintText: hint),
-    onChanged: (v) {
-      set(v);
-      _changed();
-    },
+  }) => Hideable(
+    secret: secret,
+    builder: (obscure, eye) => TextFormField(
+      initialValue: value,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        suffixIcon: eye,
+        labelText: label,
+        hintText: hint,
+      ),
+      onChanged: (v) {
+        set(v);
+        _changed();
+      },
+    ),
   );
 
   Future<void> _test() async {
@@ -467,12 +477,12 @@ class _SourceEditorState extends ConsumerState<_SourceEditor> {
           ),
           _field('Description', _f.description, (v) => _f.description = v),
           const SizedBox(height: 12),
-          Text('Provider', style: TextStyle(color: muted)),
+          T('Provider', style: TextStyle(color: muted)),
           SegmentedButton<String>(
             segments: const [
-              ButtonSegment(value: 'qdrant', label: Text('Qdrant')),
-              ButtonSegment(value: 'milvus', label: Text('Milvus')),
-              ButtonSegment(value: 'pgvector', label: Text('pgvector')),
+              ButtonSegment(value: 'qdrant', label: T('Qdrant')),
+              ButtonSegment(value: 'milvus', label: T('Milvus')),
+              ButtonSegment(value: 'pgvector', label: T('pgvector')),
             ],
             selected: {_f.provider},
             onSelectionChanged: _editing
@@ -563,14 +573,14 @@ class _SourceEditorState extends ConsumerState<_SourceEditor> {
               Expanded(
                 child: TextField(
                   controller: _query,
-                  decoration: const InputDecoration(labelText: 'Test query'),
+                  decoration: InputDecoration(labelText: tr('Test query')),
                   onChanged: (_) => _changed(),
                 ),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
                 onPressed: _busy ? null : _test,
-                child: const Text('Test'),
+                child: const T('Test'),
               ),
             ],
           ),

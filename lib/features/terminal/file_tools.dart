@@ -9,6 +9,7 @@ import 'package:markdown_widget/markdown_widget.dart';
 
 import 'terminal_api.dart';
 import '../../core/widgets/markdown_style.dart';
+import '../../core/i18n/app_strings.dart';
 
 enum FileSort { name, size, modified }
 
@@ -173,7 +174,7 @@ class _CompareScreenState extends State<CompareScreen> {
         title: Text('${_a.name} → ${_b.name}', overflow: TextOverflow.fade),
         actions: [
           IconButton(
-            tooltip: 'Swap',
+            tooltip: tr('Swap'),
             icon: const Icon(Icons.swap_horiz),
             onPressed: () => setState(() {
               final t = _a;
@@ -190,12 +191,12 @@ class _CompareScreenState extends State<CompareScreen> {
               CheckedPopupMenuItem(
                 value: 'space',
                 checked: _ignoreSpace,
-                child: const Text('Ignore spacing'),
+                child: const T('Ignore spacing'),
               ),
               CheckedPopupMenuItem(
                 value: 'changes',
                 checked: _changesOnly,
-                child: const Text('Only changes'),
+                child: const T('Only changes'),
               ),
             ],
           ),
@@ -337,7 +338,7 @@ class _NotebookViewState extends State<NotebookView> {
   Widget build(BuildContext context) {
     final cells = _cells;
     if (cells == null) {
-      return const Center(child: Text("This notebook can't be read."));
+      return const Center(child: T("This notebook can't be read."));
     }
     final scheme = Theme.of(context).colorScheme;
     final canRun = widget.api != null && widget.path != null;
@@ -350,18 +351,18 @@ class _NotebookViewState extends State<NotebookView> {
               children: [
                 TextButton.icon(
                   icon: const Icon(Icons.play_arrow),
-                  label: const Text('Run all'),
+                  label: const T('Run all'),
                   onPressed: _running.isEmpty ? _runAll : null,
                 ),
                 if (_running.isNotEmpty)
                   TextButton.icon(
                     icon: const Icon(Icons.stop),
-                    label: const Text('Stop'),
+                    label: const T('Stop'),
                     onPressed: () => setState(() => _stopAll = true),
                   ),
                 TextButton.icon(
                   icon: const Icon(Icons.restart_alt),
-                  label: const Text('Restart'),
+                  label: const T('Restart'),
                   onPressed: _session == null ? null : _restart,
                 ),
               ],
@@ -417,7 +418,7 @@ class _NotebookViewState extends State<NotebookView> {
                                   ),
                                 )
                               : IconButton(
-                                  tooltip: 'Run cell',
+                                  tooltip: tr('Run cell'),
                                   visualDensity: VisualDensity.compact,
                                   icon: const Icon(Icons.play_arrow, size: 18),
                                   onPressed: () => _run(i),

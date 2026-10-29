@@ -13,6 +13,7 @@ import '../studio/record_notes.dart' show dictate;
 import 'access_editor.dart' show editAccess;
 import 'knowledge_api.dart';
 import 'owner_filter.dart';
+import '../../core/i18n/app_strings.dart';
 
 final knowledgeApiProvider = Provider<KnowledgeApi>(
   (ref) => KnowledgeApi(ref.watch(clientProvider)),
@@ -40,23 +41,23 @@ Future<(String, String)?> _askNameAndDescription(
           TextField(
             controller: n,
             autofocus: true,
-            decoration: const InputDecoration(labelText: 'Name'),
+            decoration: InputDecoration(labelText: tr('Name')),
           ),
           TextField(
             controller: d,
             maxLines: null,
-            decoration: const InputDecoration(labelText: 'What it\'s about'),
+            decoration: InputDecoration(labelText: tr('What it\'s about')),
           ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(c, false),
-          child: const Text('Cancel'),
+          child: const T('Cancel'),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(c, true),
-          child: const Text('Save'),
+          child: const T('Save'),
         ),
       ],
     ),
@@ -66,7 +67,8 @@ Future<(String, String)?> _askNameAndDescription(
 }
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// Knowledge bases: collections of documents models can search.
 class KnowledgeScreen extends ConsumerWidget {
@@ -78,11 +80,11 @@ class KnowledgeScreen extends ConsumerWidget {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Knowledge'),
+        title: const T('Knowledge'),
         actions: const [OwnerFilterButton()],
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'New knowledge base',
+        tooltip: tr('New knowledge base'),
         onPressed: () async {
           final v = await _askNameAndDescription(context, 'New knowledge base');
           if (v == null) return;
@@ -222,8 +224,8 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
       final ok = await showDialog<bool>(
         context: context,
         builder: (d) => AlertDialog(
-          title: const Text('Sync directory?'),
-          content: const Text(
+          title: const T('Sync directory?'),
+          content: const T(
             'This knowledge base will match the folder: new and changed '
             "files are uploaded, and files that aren't in the folder are "
             'removed from it.',
@@ -231,11 +233,11 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const Text('Sync'),
+              child: const T('Sync'),
             ),
           ],
         ),
@@ -285,31 +287,31 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Add webpage'),
+        title: const T('Add webpage'),
         content: TextField(
           controller: url,
           autofocus: true,
           keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            labelText: 'URL',
-            hintText: 'https://',
-            helperText: 'A YouTube link adds its transcript',
+          decoration: InputDecoration(
+            labelText: tr('URL'),
+            hintText: tr('https://'),
+            helperText: tr('A YouTube link adds its transcript'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Add'),
+            child: const T('Add'),
           ),
         ],
       ),
     );
     final link = url.text.trim();
-    url.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true || link.isEmpty) return;
     setState(() => _uploading.add(link));
     try {
@@ -331,11 +333,11 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
         fullscreenDialog: true,
         builder: (page) => Scaffold(
           appBar: AppBar(
-            title: const Text('Add text content'),
+            title: const T('Add text content'),
             actions: [
               // Speak the text in, as the web's mic button here.
               IconButton(
-                tooltip: 'Dictate',
+                tooltip: tr('Dictate'),
                 icon: const Icon(Icons.mic_none),
                 onPressed: () async {
                   final said = await dictate(page, ref.read(clientProvider));
@@ -356,7 +358,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                     }
                     Navigator.pop(page, true);
                   },
-                  child: const Text('Save'),
+                  child: const T('Save'),
                 ),
               ),
             ],
@@ -368,7 +370,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                 TextField(
                   controller: name,
                   autofocus: true,
-                  decoration: const InputDecoration(labelText: 'Title'),
+                  decoration: InputDecoration(labelText: tr('Title')),
                 ),
                 const SizedBox(height: 12),
                 Expanded(
@@ -377,8 +379,8 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                     expands: true,
                     maxLines: null,
                     textAlignVertical: TextAlignVertical.top,
-                    decoration: const InputDecoration(
-                      hintText: 'Write or paste the text',
+                    decoration: InputDecoration(
+                      hintText: tr('Write or paste the text'),
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -391,8 +393,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
     );
     final title = name.text.trim();
     final body = text.text;
-    name.dispose();
-    text.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true) return;
     setState(() => _uploading.add('$title.txt'));
     try {
@@ -415,28 +416,28 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
           children: [
             ListTile(
               leading: const Icon(Icons.upload_file),
-              title: const Text('Upload files'),
+              title: const T('Upload files'),
               onTap: () => Navigator.pop(sheet, 'files'),
             ),
             ListTile(
               leading: const Icon(Icons.drive_folder_upload_outlined),
-              title: const Text('Upload directory'),
+              title: const T('Upload directory'),
               onTap: () => Navigator.pop(sheet, 'dir'),
             ),
             ListTile(
               leading: const Icon(Icons.sync),
-              title: const Text('Sync directory'),
-              subtitle: const Text('Make this knowledge match a folder'),
+              title: const T('Sync directory'),
+              subtitle: const T('Make this knowledge match a folder'),
               onTap: () => Navigator.pop(sheet, 'sync'),
             ),
             ListTile(
               leading: const Icon(Icons.language),
-              title: const Text('Add webpage'),
+              title: const T('Add webpage'),
               onTap: () => Navigator.pop(sheet, 'web'),
             ),
             ListTile(
               leading: const Icon(Icons.notes),
-              title: const Text('Add text content'),
+              title: const T('Add text content'),
               onTap: () => Navigator.pop(sheet, 'text'),
             ),
           ],
@@ -462,15 +463,15 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Remove ${f.name}?'),
-        content: const Text('Models won\'t find it here any more.'),
+        content: const T('Models won\'t find it here any more.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Remove'),
+            child: const T('Remove'),
           ),
         ],
       ),
@@ -537,17 +538,17 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
         context: context,
         builder: (d) => AlertDialog(
           title: Text('Delete ${_k.name}?'),
-          content: const Text(
+          content: const T(
             'Its documents are removed from it. This can\'t be undone.',
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(d, false),
-              child: const Text('Cancel'),
+              child: const T('Cancel'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const Text('Delete'),
+              child: const T('Delete'),
             ),
           ],
         ),
@@ -588,12 +589,12 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
               PopupMenuButton<String>(
                 onSelected: _menu,
                 itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: Text('Rename')),
-                  const PopupMenuItem(value: 'access', child: Text('Access')),
+                  const PopupMenuItem(value: 'edit', child: T('Rename')),
+                  const PopupMenuItem(value: 'access', child: T('Access')),
                   // The server lets only admins export.
                   if (ref.read(sessionProvider).value?.user?['role'] == 'admin')
-                    const PopupMenuItem(value: 'export', child: Text('Export')),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                    const PopupMenuItem(value: 'export', child: T('Export')),
+                  const PopupMenuItem(value: 'delete', child: T('Delete')),
                 ],
               ),
           ],
@@ -602,7 +603,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
             ? FloatingActionButton.extended(
                 onPressed: _addMenu,
                 icon: const Icon(Icons.add),
-                label: const Text('Add'),
+                label: const T('Add'),
               )
             : null,
         body: RefreshIndicator(
@@ -623,7 +624,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                     children: [
                       TextButton(
                         onPressed: () => _open(null),
-                        child: const Text('All'),
+                        child: const T('All'),
                       ),
                       for (final f in l.path) ...[
                         Icon(Icons.chevron_right, size: 16, color: muted),
@@ -650,7 +651,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                   _uploading.isEmpty)
                 Padding(
                   padding: const EdgeInsets.all(24),
-                  child: Text(
+                  child: T(
                     'No documents yet. Add files for models to search.',
                     style: TextStyle(color: muted),
                   ),
@@ -663,7 +664,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
                   title: Text(name),
-                  subtitle: const Text('Uploading and reading…'),
+                  subtitle: const T('Uploading and reading…'),
                 ),
               for (final f in l?.folders ?? const <KnowledgeFolder>[])
                 ListTile(
@@ -693,7 +694,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
                   ),
                   trailing: _k.writable
                       ? IconButton(
-                          tooltip: 'Remove',
+                          tooltip: tr('Remove'),
                           onPressed: () => _remove(f),
                           icon: const Icon(Icons.close),
                         )

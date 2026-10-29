@@ -18,6 +18,7 @@ import '../studio/listen.dart' as listen;
 import 'call_emoji.dart';
 import 'classic_call.dart';
 import 'voice_avatar.dart';
+import '../../core/i18n/app_strings.dart';
 
 class _Host implements ClassicCallHost {
   _Host(this.ref, this.camera, this.phone)
@@ -313,21 +314,21 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
                       if (camera == null)
                         IconButton.filledTonal(
                           iconSize: 28,
-                          tooltip: 'Camera',
+                          tooltip: tr('Camera'),
                           onPressed: _startCamera,
                           icon: const Icon(Icons.videocam_outlined),
                         )
                       else ...[
                         IconButton.filledTonal(
                           iconSize: 28,
-                          tooltip: 'Stop camera',
+                          tooltip: tr('Stop camera'),
                           onPressed: _stopCamera,
                           icon: const Icon(Icons.videocam_off_outlined),
                         ),
                         if (_cameras.length > 1)
                           IconButton.filledTonal(
                             iconSize: 28,
-                            tooltip: 'Switch camera',
+                            tooltip: tr('Switch camera'),
                             onPressed: () => _startCamera(_which + 1),
                             icon: const Icon(Icons.cameraswitch_outlined),
                           ),
@@ -340,7 +341,7 @@ class _ClassicCallViewState extends ConsumerState<ClassicCallView> {
                       ),
                       IconButton.filled(
                         iconSize: 28,
-                        tooltip: 'Hang up',
+                        tooltip: tr('Hang up'),
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.red,
                         ),

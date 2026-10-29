@@ -10,6 +10,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/widgets/nexus_logo.dart';
 import 'phone_launch.dart';
+import '../../core/i18n/app_strings.dart';
 
 const _storage = FlutterSecureStorage();
 const _key = 'app_lock_after';
@@ -59,7 +60,8 @@ Future<bool> phoneCanLock() async {
 Future<bool> phoneUnlock() async {
   try {
     return await phoneChannel.invokeMethod<bool>('unlock', {
-          'reason': 'Use your fingerprint, face or screen lock to open OpenAide.',
+          'reason':
+              'Use your fingerprint, face or screen lock to open OpenAide.',
         }) ??
         false;
   } on MissingPluginException {
@@ -154,11 +156,11 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
                     const NexusLogo(size: 96),
                     const SizedBox(height: 24),
                     if (locked == true) ...[
-                      const Text('OpenAide is locked'),
+                      const T('OpenAide is locked'),
                       const SizedBox(height: 16),
                       FilledButton.icon(
                         icon: const Icon(Icons.fingerprint),
-                        label: const Text('Unlock'),
+                        label: const T('Unlock'),
                         onPressed: () => _unlock(again: true),
                       ),
                     ],

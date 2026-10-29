@@ -15,6 +15,8 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../server/server_page.dart';
 import 'orchestrator_policy.dart';
+import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 /// A connection as the web exports it: one item in a list, without who may
 /// use it or the OAuth client the server registered.
@@ -84,7 +86,8 @@ String slugId(String from) => from
     .replaceAll(RegExp(r'^-+|-+$'), '');
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 const _everyone = {
   'principal_type': 'user',
@@ -195,7 +198,7 @@ class IntegrationsScreen extends StatelessWidget {
     length: 3,
     child: Scaffold(
       appBar: AppBar(
-        title: const Text('Integrations'),
+        title: const T('Integrations'),
         bottom: const TabBar(
           tabs: [
             Tab(text: 'Tool servers'),
@@ -308,7 +311,7 @@ class _ServerListState extends ConsumerState<ServerList> {
         heroTag: _k.key,
         onPressed: _busy ? null : _edit,
         icon: const Icon(Icons.add),
-        label: const Text('Add connection'),
+        label: const T('Add connection'),
       ),
       body: RefreshIndicator(
         onRefresh: _load,
@@ -462,13 +465,20 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
     int? lines,
   }) => Padding(
     padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-    child: TextFormField(
-      initialValue: value == null ? '' : '$value',
-      obscureText: secret,
-      minLines: lines,
-      maxLines: lines == null ? 1 : null,
-      decoration: InputDecoration(labelText: label, helperText: hint),
-      onChanged: onChanged,
+    child: Hideable(
+      secret: secret,
+      builder: (obscure, eye) => TextFormField(
+        initialValue: value == null ? '' : '$value',
+        obscureText: obscure,
+        minLines: lines,
+        maxLines: lines == null ? 1 : null,
+        decoration: InputDecoration(
+          suffixIcon: eye,
+          labelText: label,
+          helperText: hint,
+        ),
+        onChanged: onChanged,
+      ),
     ),
   );
 
@@ -688,8 +698,8 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
     return [
       const Divider(),
       ListTile(
-        title: const Text('Orchestrator'),
-        subtitle: Text(
+        title: const T('Orchestrator'),
+        subtitle: T(
           'Each person gets their own terminal, made from this policy.',
           style: TextStyle(color: muted),
         ),
@@ -704,10 +714,7 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
         ListTile(
           leading: const Icon(Icons.error_outline),
           title: Text('Couldn\'t load the policy: $_policyError'),
-          trailing: TextButton(
-            onPressed: _loadPolicy,
-            child: const Text('Retry'),
-          ),
+          trailing: TextButton(onPressed: _loadPolicy, child: const T('Retry')),
         ),
       _choice('Chat', contextMode(_config, 'chat'), const {
         'default': 'One terminal per person',
@@ -760,13 +767,13 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
       ),
       if (!widget.isNew) ...[
         SwitchListTile(
-          title: const Text('Only idle terminals'),
+          title: const T('Only idle terminals'),
           value: _onlyIdle,
           onChanged: (on) => setState(() => _onlyIdle = on),
         ),
         SwitchListTile(
-          title: const Text('Reset their files'),
-          subtitle: const Text('Start from a clean image'),
+          title: const T('Reset their files'),
+          subtitle: const T('Start from a clean image'),
           value: _resetTerminals,
           onChanged: (on) => setState(() => _resetTerminals = on),
         ),
@@ -794,7 +801,7 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
         actions: [
           if (!widget.isNew)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               onPressed: () => Navigator.pop(context, ServerEditor.delete),
               icon: const Icon(Icons.delete_outline),
             ),
@@ -802,15 +809,15 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
             PopupMenuButton<String>(
               onSelected: (v) => v == 'import' ? _import() : _export(),
               itemBuilder: (_) => const [
-                PopupMenuItem(value: 'import', child: Text('Import')),
-                PopupMenuItem(value: 'export', child: Text('Export')),
+                PopupMenuItem(value: 'import', child: T('Import')),
+                PopupMenuItem(value: 'export', child: T('Export')),
               ],
             ),
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _saving ? null : _done,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -915,7 +922,7 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
                   if (!widget.isNew && _info['oauth_client_info'] != null)
                     FilledButton.tonal(
                       onPressed: _authorize,
-                      child: const Text('Sign in'),
+                      child: const T('Sign in'),
                     ),
                 ],
               ),
@@ -936,8 +943,8 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
               lines: 1,
             ),
           SwitchListTile(
-            title: const Text('Forward cookies'),
-            subtitle: const Text(
+            title: const T('Forward cookies'),
+            subtitle: const T(
               'Forward cookies from your Open WebUI request to this server.',
             ),
             value: _c['forward_cookies'] == true,
@@ -968,8 +975,8 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
               hint: widget.isNew ? 'Made from the name if left empty' : null,
             ),
             SwitchListTile(
-              title: const Text('Working directory'),
-              subtitle: const Text(
+              title: const T('Working directory'),
+              subtitle: const T(
                 'Include the current directory in tool instructions.',
               ),
               value: _config['working_directory_context'] != false,
@@ -977,8 +984,8 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
                   setState(() => _config['working_directory_context'] = on),
             ),
             SwitchListTile(
-              title: const Text('Always list shell tools'),
-              subtitle: const Text(
+              title: const T('Always list shell tools'),
+              subtitle: const T(
                 'Keep tools listed even while your shell is closed.',
               ),
               value: _config['user_shell_tools'] == 'always',
@@ -998,8 +1005,8 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
           ],
           if (_orchestrator) ..._orchestratorFields(muted),
           SwitchListTile(
-            title: const Text('Everyone can use it'),
-            subtitle: const Text('Off: only admins'),
+            title: const T('Everyone can use it'),
+            subtitle: const T('Off: only admins'),
             value: isPublicConnection(_c),
             onChanged: (on) => setState(() => setPublicConnection(_c, on)),
           ),

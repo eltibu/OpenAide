@@ -20,6 +20,7 @@ import 'model_defaults.dart';
 import '../workspace/models_screen.dart'
     show ModelEditor, modelsApiProvider, workspaceModelsProvider;
 import '../../core/widgets/search_field.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// One connection model as the admin page shows it: what the server lists
 /// now, and the changes saved for it (if any).
@@ -95,7 +96,8 @@ List<String> _csv(Object? v) => [
 ];
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 class AdminModelsScreen extends ConsumerStatefulWidget {
   const AdminModelsScreen({super.key});
@@ -196,19 +198,19 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
     final sure = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Reset All Models'),
-        content: const Text(
+        title: const T('Reset All Models'),
+        content: const T(
           'This will delete all models including custom models and cannot '
           'be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete all'),
+            child: const T('Delete all'),
           ),
         ],
       ),
@@ -357,7 +359,7 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
             onChanged: _busy ? null : (on) => _run(() => _write(m, active: on)),
           ),
           PopupMenuButton<String>(
-            tooltip: 'More',
+            tooltip: tr('More'),
             enabled: !_busy,
             onSelected: (v) => switch (v) {
               'edit' => _edit(m),
@@ -380,7 +382,7 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
               _ => null,
             },
             itemBuilder: (_) => [
-              const PopupMenuItem(value: 'edit', child: Text('Edit')),
+              const PopupMenuItem(value: 'edit', child: T('Edit')),
               PopupMenuItem(
                 value: 'hide',
                 child: Text(
@@ -397,11 +399,11 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                 value: 'pin',
                 child: Text(pinned ? 'Unpin for everyone' : 'Pin for everyone'),
               ),
-              const PopupMenuItem(value: 'copy', child: Text('Copy id')),
-              const PopupMenuItem(value: 'link', child: Text('Copy Link')),
-              const PopupMenuItem(value: 'clone', child: Text('Clone')),
+              const PopupMenuItem(value: 'copy', child: T('Copy id')),
+              const PopupMenuItem(value: 'link', child: T('Copy Link')),
+              const PopupMenuItem(value: 'clone', child: T('Clone')),
               if (m.record != null)
-                const PopupMenuItem(value: 'export', child: Text('Export')),
+                const PopupMenuItem(value: 'export', child: T('Export')),
             ],
           ),
         ],
@@ -425,19 +427,19 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
             ? [
                 TextButton(
                   onPressed: () => setState(() => _ordering = null),
-                  child: const Text('Cancel'),
+                  child: const T('Cancel'),
                 ),
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilledButton(
                     onPressed: _saveOrder,
-                    child: const Text('Save'),
+                    child: const T('Save'),
                   ),
                 ),
               ]
             : [
                 IconButton(
-                  tooltip: 'Manage Ollama models',
+                  tooltip: tr('Manage Ollama models'),
                   icon: const Icon(Icons.download_for_offline_outlined),
                   onPressed: () => Navigator.push(
                     context,
@@ -447,7 +449,7 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                   ),
                 ),
                 IconButton(
-                  tooltip: 'Reorder',
+                  tooltip: tr('Reorder'),
                   onPressed: list == null || _busy
                       ? null
                       : () => setState(() => _ordering = [...list]),
@@ -475,25 +477,22 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                   itemBuilder: (_) => const [
                     PopupMenuItem(
                       value: 'defaults',
-                      child: Text('Model Defaults'),
+                      child: T('Model Defaults'),
                     ),
                     PopupMenuDivider(),
-                    PopupMenuItem(value: 'on', child: Text('Enable all')),
-                    PopupMenuItem(value: 'off', child: Text('Disable all')),
-                    PopupMenuItem(value: 'show', child: Text('Show all')),
-                    PopupMenuItem(value: 'hide', child: Text('Hide all')),
+                    PopupMenuItem(value: 'on', child: T('Enable all')),
+                    PopupMenuItem(value: 'off', child: T('Disable all')),
+                    PopupMenuItem(value: 'show', child: T('Show all')),
+                    PopupMenuItem(value: 'hide', child: T('Hide all')),
                     PopupMenuDivider(),
-                    PopupMenuItem(value: 'import', child: Text('Import')),
-                    PopupMenuItem(value: 'export', child: Text('Export all')),
+                    PopupMenuItem(value: 'import', child: T('Import')),
+                    PopupMenuItem(value: 'export', child: T('Export all')),
                     PopupMenuItem(
                       value: 'order',
-                      child: Text('Reset order (by name)'),
+                      child: T('Reset order (by name)'),
                     ),
                     PopupMenuDivider(),
-                    PopupMenuItem(
-                      value: 'reset',
-                      child: Text('Reset All Models'),
-                    ),
+                    PopupMenuItem(value: 'reset', child: T('Reset All Models')),
                   ],
                 ),
               ],

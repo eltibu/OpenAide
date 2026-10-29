@@ -17,6 +17,7 @@ import 'file_details.dart';
 import 'side_panel.dart';
 import 'tool_permissions.dart';
 import 'voice_note.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// The paperclip: photos and videos from the gallery or camera, or any file.
 class AttachButton extends ConsumerWidget {
@@ -27,7 +28,7 @@ class AttachButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) => IconButton.outlined(
-    tooltip: 'Add photos and files',
+    tooltip: tr('Add photos and files'),
     visualDensity: VisualDensity.compact,
     style: IconButton.styleFrom(
       side: BorderSide(color: Theme.of(context).colorScheme.outlineVariant),
@@ -54,7 +55,7 @@ class AttachButton extends ConsumerWidget {
                 if (permissions) ...[
                   ListTile(
                     leading: const Icon(Icons.shield_outlined),
-                    title: const Text('Tool Permissions'),
+                    title: const T('Tool Permissions'),
                     subtitle: Text(toolApprovalModes[mode]!.$1),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.pop(context, 'permissions'),
@@ -89,34 +90,34 @@ class AttachButton extends ConsumerWidget {
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.public),
-                  title: const Text('Web page'),
+                  title: const T('Web page'),
                   onTap: () => Navigator.pop(context, 'web'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.sticky_note_2_outlined),
-                  title: const Text('Note'),
+                  title: const T('Note'),
                   onTap: () => Navigator.pop(context, 'note'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.menu_book_outlined),
-                  title: const Text('Knowledge'),
+                  title: const T('Knowledge'),
                   onTap: () => Navigator.pop(context, 'collection'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.folder_open_outlined),
-                  title: const Text('Your files'),
+                  title: const T('Your files'),
                   onTap: () => Navigator.pop(context, 'myfile'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.forum_outlined),
-                  title: const Text('Past chat'),
+                  title: const T('Past chat'),
                   onTap: () => Navigator.pop(context, 'chat'),
                 ),
                 if (onCompare != null) ...[
                   const Divider(height: 1),
                   ListTile(
                     leading: const Icon(Icons.difference_outlined),
-                    title: const Text('Compare text'),
+                    title: const T('Compare text'),
                     onTap: () => Navigator.pop(context, 'compare'),
                   ),
                 ],
@@ -769,7 +770,7 @@ class _AttachTile extends StatelessWidget {
             children: [
               Icon(icon, size: 24),
               const SizedBox(height: 6),
-              Text(label, style: Theme.of(context).textTheme.labelLarge),
+              T(label, style: Theme.of(context).textTheme.labelLarge),
             ],
           ),
         ),

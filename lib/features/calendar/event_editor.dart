@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'calendar_api.dart';
+import '../../core/i18n/app_strings.dart';
 
 /// Creating or changing an event, with the same fields as the web UI.
 /// Pops true when something was saved or deleted.
@@ -157,7 +158,7 @@ class _EventEditorState extends State<EventEditor> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Delete this event?'),
+        title: const T('Delete this event?'),
         content: Text(
           _e?.rrule != null
               ? 'Every time it repeats is deleted. This can\'t be undone.'
@@ -166,11 +167,11 @@ class _EventEditorState extends State<EventEditor> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -187,7 +188,8 @@ class _EventEditorState extends State<EventEditor> {
   }
 
   void _say(String text) =>
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(tr(text))));
 
   @override
   Widget build(BuildContext context) {
@@ -200,7 +202,7 @@ class _EventEditorState extends State<EventEditor> {
         actions: [
           if (_e != null)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               onPressed: _busy ? null : _delete,
               icon: const Icon(Icons.delete_outline),
             ),
@@ -227,8 +229,8 @@ class _EventEditorState extends State<EventEditor> {
               textInputAction: TextInputAction.done,
               style: const TextStyle(fontSize: 20),
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Event title',
+              decoration: InputDecoration(
+                hintText: tr('Event title'),
                 border: InputBorder.none,
               ),
             ),
@@ -259,7 +261,7 @@ class _EventEditorState extends State<EventEditor> {
           ),
           SwitchListTile(
             secondary: const Icon(Icons.schedule),
-            title: const Text('All day'),
+            title: const T('All day'),
             value: _allDay,
             onChanged: (v) => setState(() => _allDay = v),
           ),
@@ -291,7 +293,7 @@ class _EventEditorState extends State<EventEditor> {
                   if (_repeat == 'custom' || repeatOf(_e?.rrule) == 'custom')
                     const DropdownMenuItem(
                       value: 'custom',
-                      child: Text('Custom (as set on the server)'),
+                      child: T('Custom (as set on the server)'),
                     ),
                 ],
               ),
@@ -316,8 +318,8 @@ class _EventEditorState extends State<EventEditor> {
             leading: const Icon(Icons.place_outlined),
             title: TextField(
               controller: _location,
-              decoration: const InputDecoration(
-                hintText: 'Add location',
+              decoration: InputDecoration(
+                hintText: tr('Add location'),
                 border: InputBorder.none,
               ),
             ),
@@ -329,8 +331,8 @@ class _EventEditorState extends State<EventEditor> {
               minLines: 3,
               maxLines: null,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                hintText: 'Add description',
+              decoration: InputDecoration(
+                hintText: tr('Add description'),
                 border: InputBorder.none,
               ),
             ),

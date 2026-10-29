@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import 'access_editor.dart' show ItemMenu;
 import 'prompts_api.dart';
 import 'owner_filter.dart';
+import '../../core/i18n/app_strings.dart';
 
 final promptsApiProvider = Provider<PromptsApi>(
   (ref) => PromptsApi(ref.watch(clientProvider)),
@@ -145,7 +146,7 @@ class VariablesDialogState extends State<VariablesDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: const T('Cancel'),
       ),
       FilledButton(
         onPressed: () {
@@ -263,11 +264,11 @@ class PromptsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Prompts'),
+        title: const T('Prompts'),
         actions: const [OwnerFilterButton()],
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'New prompt',
+        tooltip: tr('New prompt'),
         onPressed: edit,
         child: const Icon(Icons.add),
       ),
@@ -278,7 +279,7 @@ class PromptsScreen extends ConsumerWidget {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-              child: Text(
+              child: T(
                 'Type / in a chat to use one.',
                 style: TextStyle(color: muted),
               ),
@@ -307,9 +308,9 @@ class PromptsScreen extends ConsumerWidget {
                 // Copy Prompt, as on the web.
                 onLongPress: () {
                   Clipboard.setData(ClipboardData(text: p.content));
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Prompt copied')),
-                  );
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: T('Prompt copied')));
                 },
                 trailing: Switch(
                   value: p.active,
@@ -373,7 +374,7 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
         command.isEmpty ||
         _content.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Name, command and text are needed')),
+        const SnackBar(content: T('Name, command and text are needed')),
       );
       return;
     }
@@ -403,15 +404,15 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete /${_p!.command}?'),
-        content: const Text('This can\'t be undone.'),
+        content: const T('This can\'t be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -434,17 +435,17 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
       title: Text(_p == null ? 'New prompt' : 'Edit prompt'),
       actions: [
         IconButton(
-          tooltip: 'Copy content',
+          tooltip: tr('Copy content'),
           icon: const Icon(Icons.copy),
           onPressed: () {
             Clipboard.setData(ClipboardData(text: _content.text));
             ScaffoldMessenger.of(context)
-                .showSnackBar(const SnackBar(content: Text('Copied')));
+                .showSnackBar(const SnackBar(content: T('Copied')));
           },
         ),
         if (_p != null)
           IconButton(
-            tooltip: 'Delete',
+            tooltip: tr('Delete'),
             onPressed: _busy ? null : _delete,
             icon: const Icon(Icons.delete_outline),
           ),
@@ -478,14 +479,14 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
           onChanged: (v) {
             if (_p == null && !_commandEdited) _command.text = _slug(v);
           },
-          decoration: const InputDecoration(labelText: 'Name'),
+          decoration: InputDecoration(labelText: tr('Name')),
         ),
         const SizedBox(height: 12),
         TextField(
           controller: _command,
           onChanged: (_) => _commandEdited = true,
-          decoration: const InputDecoration(
-            labelText: 'Command',
+          decoration: InputDecoration(
+            labelText: tr('Command'),
             prefixText: '/',
           ),
         ),
@@ -495,14 +496,14 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
           minLines: 8,
           maxLines: null,
           textCapitalization: TextCapitalization.sentences,
-          decoration: const InputDecoration(
-            labelText: 'Prompt',
+          decoration: InputDecoration(
+            labelText: tr('Prompt'),
             alignLabelWithHint: true,
             border: OutlineInputBorder(),
           ),
         ),
         const SizedBox(height: 8),
-        Text(
+        T(
           'Use {{CLIPBOARD}}, {{USER_NAME}}, {{CURRENT_DATE}} and the like, '
           'or {{name}} to be asked for a value when you use it.',
           style: TextStyle(color: context.nexus.muted, fontSize: 12),

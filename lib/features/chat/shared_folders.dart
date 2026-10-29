@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import 'chat_controller.dart';
+import '../../core/i18n/app_strings.dart';
 
 class SharedFolder {
   const SharedFolder({
@@ -182,10 +183,7 @@ class _SharedFolderScreenState extends ConsumerState<SharedFolderScreen> {
           if (_error != null)
             ListTile(
               title: Text("Couldn't load the chats: $_error"),
-              trailing: TextButton(
-                onPressed: _load,
-                child: const Text('Retry'),
-              ),
+              trailing: TextButton(onPressed: _load, child: const T('Retry')),
             ),
           if (_loading)
             const Padding(
@@ -193,11 +191,11 @@ class _SharedFolderScreenState extends ConsumerState<SharedFolderScreen> {
               child: Center(child: CircularProgressIndicator()),
             )
           else if (_more && _error == null)
-            TextButton(onPressed: _load, child: const Text('Load more'))
+            TextButton(onPressed: _load, child: const T('Load more'))
           else if (_chats.isEmpty && subfolders.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Text('No chats here yet.', style: TextStyle(color: muted)),
+              child: T('No chats here yet.', style: TextStyle(color: muted)),
             ),
         ],
       ),

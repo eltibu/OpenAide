@@ -6,6 +6,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/i18n/app_strings.dart';
+
 enum ParamKind { slider, integer, toggle, choice, text, list, tags }
 
 class ParamSpec {
@@ -313,8 +315,8 @@ class AdvancedParamsEditor extends StatelessWidget {
           tilePadding: EdgeInsets.zero,
           childrenPadding: EdgeInsets.zero,
           initiallyExpanded: ollamaSet,
-          title: const Text('Ollama settings'),
-          subtitle: const Text('Only models served by Ollama use these'),
+          title: const T('Ollama settings'),
+          subtitle: const T('Only models served by Ollama use these'),
           children: [
             for (final p in advancedParams)
               if (p.ollama)
@@ -352,13 +354,10 @@ Future<String?> _ask(
         onSubmitted: (x) => Navigator.pop(d, x),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(d),
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: () => Navigator.pop(d), child: const T('Cancel')),
         FilledButton(
           onPressed: () => Navigator.pop(d, text.text),
-          child: const Text('Save'),
+          child: const T('Save'),
         ),
       ],
     ),
@@ -426,7 +425,7 @@ class _ParamRow extends StatelessWidget {
       trailing: value == null
           ? const Icon(Icons.edit_outlined)
           : IconButton(
-              tooltip: 'Back to default',
+              tooltip: tr('Back to default'),
               icon: const Icon(Icons.close),
               onPressed: () => _set(null),
             ),
@@ -585,7 +584,7 @@ class _CustomParams extends StatelessWidget {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Text(
+          child: T(
             'Custom parameters',
             style: Theme.of(context).textTheme.bodyLarge,
           ),
@@ -597,7 +596,7 @@ class _CustomParams extends StatelessWidget {
             subtitle: Text('${e.value}', style: TextStyle(color: muted)),
             onTap: () => _edit(context, e.key),
             trailing: IconButton(
-              tooltip: 'Remove',
+              tooltip: tr('Remove'),
               icon: const Icon(Icons.close),
               onPressed: () => onChanged({...value}..remove(e.key)),
             ),
@@ -607,7 +606,7 @@ class _CustomParams extends StatelessWidget {
           child: TextButton.icon(
             onPressed: () => _edit(context),
             icon: const Icon(Icons.add),
-            label: const Text('Add custom parameter'),
+            label: const T('Add custom parameter'),
           ),
         ),
       ],

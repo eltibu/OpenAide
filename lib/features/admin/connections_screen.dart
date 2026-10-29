@@ -11,9 +11,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show modelsProvider;
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// One kind of model server and how its settings are named.
 class ConnectionKind {
@@ -182,7 +184,7 @@ class _ConnectionsScreenState extends ConsumerState<ConnectionsScreen> {
     final heading = Theme.of(context).textTheme.titleSmall
         ?.copyWith(color: Theme.of(context).colorScheme.primary);
     return Scaffold(
-      appBar: AppBar(title: const Text('Model connections')),
+      appBar: AppBar(title: const T('Model connections')),
       body: !_loaded
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -236,7 +238,7 @@ class _ConnectionsScreenState extends ConsumerState<ConnectionsScreen> {
                       child: TextButton.icon(
                         onPressed: () => _edit(k, null),
                         icon: const Icon(Icons.add),
-                        label: const Text('Add connection'),
+                        label: const T('Add connection'),
                       ),
                     ),
                   ),
@@ -450,7 +452,7 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
         actions: [
           if (widget.connection != null)
             IconButton(
-              tooltip: 'Delete',
+              tooltip: tr('Delete'),
               onPressed: () => Navigator.pop(context, 'delete'),
               icon: const Icon(Icons.delete_outline),
             ),
@@ -464,7 +466,7 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
                 }
                 if (_apply()) Navigator.pop(context, _c);
               },
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -475,31 +477,31 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
           TextField(
             controller: _url,
             keyboardType: TextInputType.url,
-            decoration: const InputDecoration(labelText: 'URL'),
+            decoration: InputDecoration(labelText: tr('URL')),
             onChanged: (_) => setState(() {}),
           ),
           if (openAi)
             DropdownButtonFormField<String>(
               initialValue: _provider,
-              decoration: const InputDecoration(labelText: 'Provider'),
+              decoration: InputDecoration(labelText: tr('Provider')),
               items: const [
-                DropdownMenuItem(value: '', child: Text('Default')),
-                DropdownMenuItem(value: 'azure', child: Text('Azure OpenAI')),
-                DropdownMenuItem(value: 'llama.cpp', child: Text('llama.cpp')),
-                DropdownMenuItem(value: 'lmstudio', child: Text('LM Studio')),
-                DropdownMenuItem(value: 'litellm', child: Text('LiteLLM')),
+                DropdownMenuItem(value: '', child: T('Default')),
+                DropdownMenuItem(value: 'azure', child: T('Azure OpenAI')),
+                DropdownMenuItem(value: 'llama.cpp', child: T('llama.cpp')),
+                DropdownMenuItem(value: 'lmstudio', child: T('LM Studio')),
+                DropdownMenuItem(value: 'litellm', child: T('LiteLLM')),
               ],
               onChanged: (v) => setState(() => _provider = v ?? ''),
             ),
           if (openAi && _azure)
             TextField(
               controller: _apiVersion,
-              decoration: const InputDecoration(labelText: 'API Version'),
+              decoration: InputDecoration(labelText: tr('API Version')),
             ),
           if (openAi)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('API type'),
+              title: const T('API type'),
               subtitle: Text(_responses ? 'Responses' : 'Chat Completions'),
               value: _responses,
               onChanged: (on) => setState(() => _responses = on),
@@ -507,17 +509,17 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
           if (openAi)
             DropdownButtonFormField<String>(
               initialValue: _authType,
-              decoration: const InputDecoration(labelText: 'Auth'),
+              decoration: InputDecoration(labelText: tr('Auth')),
               items: const [
-                DropdownMenuItem(value: 'bearer', child: Text('Bearer key')),
-                DropdownMenuItem(value: 'none', child: Text('None')),
+                DropdownMenuItem(value: 'bearer', child: T('Bearer key')),
+                DropdownMenuItem(value: 'none', child: T('None')),
                 DropdownMenuItem(
                   value: 'session',
-                  child: Text('The user\'s session'),
+                  child: T('The user\'s session'),
                 ),
                 DropdownMenuItem(
                   value: 'system_oauth',
-                  child: Text('The user\'s OAuth sign-in'),
+                  child: T('The user\'s OAuth sign-in'),
                 ),
               ],
               onChanged: (v) => setState(() => _authType = v ?? 'bearer'),
@@ -525,10 +527,10 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
           if (direct)
             DropdownButtonFormField<String>(
               initialValue: _authType == 'none' ? 'none' : 'bearer',
-              decoration: const InputDecoration(labelText: 'Auth'),
+              decoration: InputDecoration(labelText: tr('Auth')),
               items: const [
-                DropdownMenuItem(value: 'bearer', child: Text('Bearer key')),
-                DropdownMenuItem(value: 'none', child: Text('None')),
+                DropdownMenuItem(value: 'bearer', child: T('Bearer key')),
+                DropdownMenuItem(value: 'none', child: T('None')),
               ],
               onChanged: (v) => setState(() => _authType = v ?? 'bearer'),
             ),
@@ -537,7 +539,7 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
               controller: _key,
               obscureText: _hidden,
               decoration: InputDecoration(
-                labelText: 'Key',
+                labelText: tr('Key'),
                 suffixIcon: IconButton(
                   tooltip: _hidden ? 'Show' : 'Hide',
                   onPressed: () => setState(() => _hidden = !_hidden),
@@ -547,22 +549,22 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
             ),
           TextField(
             controller: _prefix,
-            decoration: const InputDecoration(
-              labelText: 'Prefix ID',
-              helperText: 'Put before each model ID to tell servers apart',
+            decoration: InputDecoration(
+              labelText: tr('Prefix ID'),
+              helperText: tr('Put before each model ID to tell servers apart'),
             ),
           ),
           TextField(
             controller: _models,
-            decoration: const InputDecoration(
-              labelText: 'Model IDs (comma separated)',
-              helperText: 'Empty offers every model the server has',
+            decoration: InputDecoration(
+              labelText: tr('Model IDs (comma separated)'),
+              helperText: tr('Empty offers every model the server has'),
             ),
           ),
           TextField(
             controller: _tags,
-            decoration: const InputDecoration(
-              labelText: 'Tags (comma separated)',
+            decoration: InputDecoration(
+              labelText: tr('Tags (comma separated)'),
             ),
           ),
           if (!direct)
@@ -570,24 +572,24 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
               controller: _headers,
               minLines: 1,
               maxLines: 6,
-              decoration: const InputDecoration(
-                labelText: 'Headers',
-                helperText: 'JSON, sent with every request',
+              decoration: InputDecoration(
+                labelText: tr('Headers'),
+                helperText: tr('JSON, sent with every request'),
               ),
             ),
           if (!direct)
             TextField(
               controller: _passthrough,
-              decoration: const InputDecoration(
-                labelText: 'Passthrough params (comma separated)',
-                helperText: 'Request fields sent to the server as they are',
+              decoration: InputDecoration(
+                labelText: tr('Passthrough params (comma separated)'),
+                helperText: tr('Request fields sent to the server as they are'),
               ),
             ),
           if (openAi)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Forward cookies'),
-              subtitle: const Text(
+              title: const T('Forward cookies'),
+              subtitle: const T(
                 'Forward cookies from your Open WebUI request to this server.',
               ),
               value: _cookies,
@@ -596,8 +598,8 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
           if (!direct)
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Local'),
-              subtitle: const Text(
+              title: const T('Local'),
+              subtitle: const T(
                 'On this network, rather than an outside service',
               ),
               value: _local,
@@ -612,7 +614,7 @@ class _ConnectionEditorState extends ConsumerState<ConnectionEditor> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.wifi_tethering),
-            label: const Text('Verify connection'),
+            label: const T('Verify connection'),
           ),
         ],
       ),

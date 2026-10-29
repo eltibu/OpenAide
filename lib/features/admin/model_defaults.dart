@@ -11,6 +11,7 @@ import '../../core/theme.dart';
 import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart' show modelsProvider, serverConfigProvider;
 import '../workspace/models_api.dart';
+import '../../core/i18n/app_strings.dart';
 import '../workspace/models_screen.dart'
     show PromptSuggestionsEditor, modelsApiProvider, readSuggestions;
 
@@ -127,7 +128,7 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
         ..invalidate(serverConfigProvider)
         ..invalidate(modelsProvider);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Models configuration saved')),
+        const SnackBar(content: T('Models configuration saved')),
       );
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -145,13 +146,13 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
     };
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Model Defaults'),
+        title: const T('Model Defaults'),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton(
               onPressed: _config == null || _busy ? null : _save,
-              child: const Text('Save'),
+              child: const T('Save'),
             ),
           ),
         ],
@@ -168,14 +169,14 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
           : ListView(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 40),
               children: [
-                Text(
+                T(
                   "What every model starts with, unless it's given its own "
                   'in its editor.',
                   style: TextStyle(color: muted),
                 ),
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
-                  title: const Text('Capabilities'),
+                  title: const T('Capabilities'),
                   subtitle: Text(
                     '${_caps.values.where((v) => v == true).length} on',
                   ),
@@ -193,7 +194,7 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
                 ),
                 ExpansionTile(
                   tilePadding: EdgeInsets.zero,
-                  title: const Text('Model Parameters'),
+                  title: const T('Model Parameters'),
                   subtitle: Text(
                     _params.isEmpty
                         ? 'All on default'

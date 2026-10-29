@@ -23,6 +23,7 @@ import '../settings/audio_settings.dart' show ttsVoicesProvider;
 import '../voice/voice_avatar.dart';
 import 'model_translations.dart';
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
+import '../../core/i18n/app_strings.dart';
 
 final modelsApiProvider = Provider<ModelsApi>(
   (ref) => ModelsApi(ref.watch(clientProvider)),
@@ -33,7 +34,8 @@ final workspaceModelsProvider = FutureProvider<List<WorkspaceModel>>(
 );
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 /// The server's filters and actions a model can use (everyone may list
 /// them, as the web's model editor does).
@@ -66,11 +68,11 @@ class ModelsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Models'),
+        title: const T('Models'),
         actions: [
           const OwnerFilterButton(),
           PopupMenuButton<String>(
-            tooltip: 'Actions',
+            tooltip: tr('Actions'),
             onSelected: (v) async {
               final items = list.value;
               if (items == null) return;
@@ -93,16 +95,16 @@ class ModelsScreen extends ConsumerWidget {
               ref.invalidate(modelsProvider);
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'on', child: Text('Enable All')),
-              PopupMenuItem(value: 'off', child: Text('Disable All')),
-              PopupMenuItem(value: 'show', child: Text('Show All')),
-              PopupMenuItem(value: 'hide', child: Text('Hide All')),
+              PopupMenuItem(value: 'on', child: T('Enable All')),
+              PopupMenuItem(value: 'off', child: T('Disable All')),
+              PopupMenuItem(value: 'show', child: T('Show All')),
+              PopupMenuItem(value: 'hide', child: T('Hide All')),
             ],
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        tooltip: 'New model',
+        tooltip: tr('New model'),
         onPressed: edit,
         child: const Icon(Icons.add),
       ),
@@ -458,7 +460,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
@@ -572,12 +574,12 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       child: DropdownButtonFormField<String>(
         initialValue: _voice,
         isExpanded: true,
-        decoration: const InputDecoration(
-          labelText: 'Speaking voice',
-          helperText: 'Replies from this model are read aloud in it.',
+        decoration: InputDecoration(
+          labelText: tr('Speaking voice'),
+          helperText: tr('Replies from this model are read aloud in it.'),
         ),
         items: [
-          const DropdownMenuItem(value: '', child: Text('Default')),
+          const DropdownMenuItem(value: '', child: T('Default')),
           for (final (id, name) in voices)
             DropdownMenuItem(value: id, child: Text(name)),
           if (_voice.isNotEmpty && !voices.any((v) => v.$1 == _voice))
@@ -611,13 +613,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
         DropdownButtonFormField<String>(
           initialValue: _locale,
           isExpanded: true,
-          decoration: const InputDecoration(
-            labelText: 'Editing language',
+          decoration: InputDecoration(
+            labelText: tr('Editing language'),
             prefixIcon: Icon(Icons.translate),
-            helperText: 'Translate the name and description; * has one.',
+            helperText: tr('Translate the name and description; * has one.'),
           ),
           items: [
-            const DropdownMenuItem(value: '', child: Text('Default')),
+            const DropdownMenuItem(value: '', child: T('Default')),
             for (final (code, title) in editingLanguages)
               DropdownMenuItem(
                 value: code,
@@ -636,7 +638,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
           TextField(
             controller: _locName,
             decoration: InputDecoration(
-              labelText: 'Name in this language',
+              labelText: tr('Name in this language'),
               hintText: _name.text,
             ),
           ),
@@ -644,7 +646,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
             controller: _locDescription,
             maxLines: null,
             decoration: InputDecoration(
-              labelText: 'Description in this language',
+              labelText: tr('Description in this language'),
               hintText: _description.text,
             ),
           ),
@@ -657,7 +659,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   Widget _avatarSetting() => ListTile(
     contentPadding: const EdgeInsets.symmetric(horizontal: 20),
     leading: const Icon(Icons.face_retouching_natural),
-    title: const Text('Voice avatar'),
+    title: const T('Voice avatar'),
     subtitle: Text(_avatarConfig == null ? 'Default' : 'Custom avatar'),
     trailing: const Icon(Icons.chevron_right),
     onTap: () async {
@@ -682,12 +684,12 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       child: DropdownButtonFormField<String>(
         initialValue: _terminal,
         isExpanded: true,
-        decoration: const InputDecoration(
-          labelText: 'Default terminal',
-          helperText: 'Chats with this model start with this terminal.',
+        decoration: InputDecoration(
+          labelText: tr('Default terminal'),
+          helperText: tr('Chats with this model start with this terminal.'),
         ),
         items: [
-          const DropdownMenuItem(value: '', child: Text('None')),
+          const DropdownMenuItem(value: '', child: T('None')),
           for (final t in terminals)
             DropdownMenuItem(value: t.id, child: Text(t.name)),
           if (_terminal.isNotEmpty && !terminals.any((t) => t.id == _terminal))
@@ -723,7 +725,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
             ),
           if (!_isNew && !_connection)
             IconButton(
-              tooltip: 'Clone',
+              tooltip: tr('Clone'),
               onPressed: _loading
                   ? null
                   : () => Navigator.pushReplacement(
@@ -775,13 +777,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                             const SizedBox(width: 12),
                             TextButton.icon(
                               icon: const Icon(Icons.photo_outlined),
-                              label: const Text('Upload profile image'),
+                              label: const T('Upload profile image'),
                               onPressed: _pickImage,
                             ),
                             if (_image != null &&
                                 _image != '/static/favicon.png')
                               IconButton(
-                                tooltip: 'Reset image',
+                                tooltip: tr('Reset image'),
                                 icon: const Icon(Icons.close),
                                 onPressed: () => setState(
                                   () => _image = '/static/favicon.png',
@@ -796,13 +798,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                         onChanged: (v) {
                           if (_isNew && !_idEdited) _id.text = modelIdFrom(v);
                         },
-                        decoration: const InputDecoration(labelText: 'Name'),
+                        decoration: InputDecoration(labelText: tr('Name')),
                       ),
                       TextField(
                         controller: _id,
                         enabled: _isNew,
                         onChanged: (_) => _idEdited = true,
-                        decoration: const InputDecoration(labelText: 'Id'),
+                        decoration: InputDecoration(labelText: tr('Id')),
                       ),
                       if (!_connection)
                         DropdownButtonFormField<String>(
@@ -810,8 +812,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                               ? _base
                               : null,
                           isExpanded: true,
-                          decoration: const InputDecoration(
-                            labelText: 'Base model',
+                          decoration: InputDecoration(
+                            labelText: tr('Base model'),
                           ),
                           items: [
                             for (final m in bases)
@@ -828,8 +830,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                       TextField(
                         controller: _description,
                         maxLines: null,
-                        decoration: const InputDecoration(
-                          labelText: 'Description',
+                        decoration: InputDecoration(
+                          labelText: tr('Description'),
                         ),
                       ),
                       _translations(),
@@ -838,8 +840,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                         controller: _system,
                         minLines: 4,
                         maxLines: null,
-                        decoration: const InputDecoration(
-                          labelText: 'System prompt',
+                        decoration: InputDecoration(
+                          labelText: tr('System prompt'),
                           alignLabelWithHint: true,
                           border: OutlineInputBorder(),
                         ),
@@ -877,7 +879,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                 _terminalPicker(),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                  child: Text(
+                  child: T(
                     'Abilities',
                     style: TextStyle(color: context.nexus.muted),
                   ),
@@ -892,7 +894,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: ExpansionTile(
                     tilePadding: EdgeInsets.zero,
-                    title: const Text('Model parameters'),
+                    title: const T('Model parameters'),
                     subtitle: Text(
                       _params.isEmpty
                           ? 'All on default'
@@ -938,7 +940,7 @@ class _WorkspaceModelMenu extends ConsumerWidget {
     final pinned = ref.watch(pinnedModelsProvider).contains(model.id);
     final hidden = model.meta['hidden'] == true;
     return PopupMenuButton<String>(
-      tooltip: 'More',
+      tooltip: tr('More'),
       onSelected: (v) async {
         try {
           switch (v) {
@@ -980,7 +982,7 @@ class _WorkspaceModelMenu extends ConsumerWidget {
           value: 'pin',
           child: Text(pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'),
         ),
-        const PopupMenuItem(value: 'link', child: Text('Copy Link')),
+        const PopupMenuItem(value: 'link', child: T('Copy Link')),
       ],
     );
   }
@@ -1035,28 +1037,28 @@ class PromptSuggestionsEditor extends StatelessWidget {
           children: [
             TextField(
               controller: t1,
-              decoration: const InputDecoration(labelText: 'Title'),
+              decoration: InputDecoration(labelText: tr('Title')),
             ),
             TextField(
               controller: t2,
-              decoration: const InputDecoration(labelText: 'Subtitle'),
+              decoration: InputDecoration(labelText: tr('Subtitle')),
             ),
             TextField(
               controller: content,
               minLines: 2,
               maxLines: 6,
-              decoration: const InputDecoration(labelText: 'Prompt'),
+              decoration: InputDecoration(labelText: tr('Prompt')),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Save'),
+            child: const T('Save'),
           ),
         ],
       ),
@@ -1073,13 +1075,13 @@ class PromptSuggestionsEditor extends StatelessWidget {
     final list = value;
     return ExpansionTile(
       tilePadding: EdgeInsets.zero,
-      title: const Text('Prompt suggestions'),
+      title: const T('Prompt suggestions'),
       subtitle: Text(list == null ? 'Default' : 'Custom · ${list.length}'),
       children: [
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Use default'),
-          subtitle: const Text("The server's starter prompts"),
+          title: const T('Use default'),
+          subtitle: const T("The server's starter prompts"),
           value: list == null,
           onChanged: (on) => onChanged(on ? null : []),
         ),
@@ -1107,7 +1109,7 @@ class PromptSuggestionsEditor extends StatelessWidget {
                 }
               },
               trailing: IconButton(
-                tooltip: 'Remove prompt suggestion',
+                tooltip: tr('Remove prompt suggestion'),
                 icon: const Icon(Icons.close),
                 onPressed: () => onChanged([...list]..removeAt(i)),
               ),
@@ -1116,7 +1118,7 @@ class PromptSuggestionsEditor extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               icon: const Icon(Icons.add),
-              label: const Text('Add prompt suggestion'),
+              label: const T('Add prompt suggestion'),
               onPressed: () async {
                 final added = await _edit(context);
                 if (added != null) onChanged([...list, added]);

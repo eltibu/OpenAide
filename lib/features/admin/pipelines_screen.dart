@@ -9,9 +9,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../workspace/tools_skills.dart' show ValvesScreen;
+import '../../core/i18n/app_strings.dart';
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 const _base = '/api/v1/pipelines';
 
@@ -91,23 +93,23 @@ class _PipelinesScreenState extends ConsumerState<PipelinesScreen> {
     final url = await showDialog<String>(
       context: context,
       builder: (d) => AlertDialog(
-        title: const Text('Install from GitHub URL'),
+        title: const T('Install from GitHub URL'),
         content: TextField(
           controller: controller,
           autofocus: true,
           keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            hintText: 'https://github.com/…/pipeline.py',
+          decoration: InputDecoration(
+            hintText: tr('https://github.com/…/pipeline.py'),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, controller.text.trim()),
-            child: const Text('Install'),
+            child: const T('Install'),
           ),
         ],
       ),
@@ -151,11 +153,11 @@ class _PipelinesScreenState extends ConsumerState<PipelinesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -180,17 +182,17 @@ class _PipelinesScreenState extends ConsumerState<PipelinesScreen> {
     final pipelines = _pipelines;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pipelines'),
+        title: const T('Pipelines'),
         actions: [
           if (_idx != null)
             PopupMenuButton<String>(
               enabled: !_busy,
               icon: const Icon(Icons.add),
-              tooltip: 'Install',
+              tooltip: tr('Install'),
               onSelected: (v) => v == 'url' ? _addFromUrl() : _upload(),
               itemBuilder: (_) => const [
-                PopupMenuItem(value: 'url', child: Text('From a GitHub URL')),
-                PopupMenuItem(value: 'file', child: Text('Upload a .py file')),
+                PopupMenuItem(value: 'url', child: T('From a GitHub URL')),
+                PopupMenuItem(value: 'file', child: T('Upload a .py file')),
               ],
             ),
         ],
@@ -213,7 +215,7 @@ class _PipelinesScreenState extends ConsumerState<PipelinesScreen> {
           : servers.isEmpty
           ? Padding(
               padding: const EdgeInsets.all(24),
-              child: Text(
+              child: T(
                 'No Pipelines server is connected. Add one under Model '
                 'connections (OpenAI-compatible) and it shows here.',
                 style: TextStyle(color: muted),
@@ -228,8 +230,8 @@ class _PipelinesScreenState extends ConsumerState<PipelinesScreen> {
                     child: DropdownButtonFormField<int>(
                       initialValue: _idx,
                       isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Pipelines server',
+                      decoration: InputDecoration(
+                        labelText: tr('Pipelines server'),
                       ),
                       items: [
                         for (final s in servers)
@@ -252,7 +254,7 @@ class _PipelinesScreenState extends ConsumerState<PipelinesScreen> {
                   else if (pipelines.isEmpty)
                     Padding(
                       padding: const EdgeInsets.all(16),
-                      child: Text(
+                      child: T(
                         'No pipelines on this server yet.',
                         style: TextStyle(color: muted),
                       ),
@@ -285,7 +287,7 @@ class _PipelinesScreenState extends ConsumerState<PipelinesScreen> {
                               ),
                             ),
                       trailing: IconButton(
-                        tooltip: 'Delete',
+                        tooltip: tr('Delete'),
                         onPressed: _busy ? null : () => _delete(p),
                         icon: const Icon(Icons.delete_outline),
                       ),

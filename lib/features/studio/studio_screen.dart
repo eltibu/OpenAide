@@ -26,6 +26,7 @@ import 'studio_doc.dart';
 import 'studio_export.dart';
 import '../../core/widgets/markdown_style.dart';
 import '../../core/widgets/search_field.dart';
+import '../../core/i18n/app_strings.dart';
 
 final studioApiProvider = Provider<StudioApi>(
   (ref) => StudioApi(ref.watch(clientProvider)),
@@ -36,7 +37,8 @@ final studioDocsProvider = FutureProvider<List<StudioDocument>>(
 );
 
 void _say(BuildContext context, String text) =>
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(tr(text))));
 
 String _when(BuildContext context, DateTime t) {
   final l = MaterialLocalizations.of(context);
@@ -90,8 +92,8 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.mic_none),
-              title: const Text('Record notes'),
-              subtitle: const Text(
+              title: const T('Record notes'),
+              subtitle: const T(
                 'Meeting minutes, class notes or a dictated document',
               ),
               onTap: () => Navigator.pop(context, 'record'),
@@ -125,8 +127,8 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
             const Divider(),
             ListTile(
               leading: const Icon(Icons.file_open_outlined),
-              title: const Text('Open a file'),
-              subtitle: const Text('Word, Excel, PowerPoint, CSV or text'),
+              title: const T('Open a file'),
+              subtitle: const T('Word, Excel, PowerPoint, CSV or text'),
               onTap: () => Navigator.pop(context, 'open'),
             ),
           ],
@@ -146,7 +148,7 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.auto_awesome),
-              title: const Text('Make it with AI'),
+              title: const T('Make it with AI'),
               subtitle: Text('Say what it is, the AI makes a first $noun'),
               onTap: () => Navigator.pop(context, 'ai'),
             ),
@@ -228,15 +230,15 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
     final muted = context.nexus.muted;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Studio'),
+        title: const T('Studio'),
         actions: [
           IconButton(
-            tooltip: 'Record notes',
+            tooltip: tr('Record notes'),
             onPressed: _record,
             icon: const Icon(Icons.mic_none),
           ),
           IconButton(
-            tooltip: 'Open a file',
+            tooltip: tr('Open a file'),
             onPressed: _openFile,
             icon: const Icon(Icons.file_open_outlined),
           ),
@@ -245,7 +247,7 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _new,
         icon: const Icon(Icons.add),
-        label: const Text('New'),
+        label: const T('New'),
       ),
       body: Column(
         children: [
@@ -415,10 +417,11 @@ class GenerateSheetState extends State<GenerateSheet> {
           autofocus: true,
           minLines: 3,
           maxLines: 8,
-          decoration: const InputDecoration(
-            labelText: 'What is it about?',
-            hintText:
-                'Who it is for, what it should cover, anything to include',
+          decoration: InputDecoration(
+            labelText: tr('What is it about?'),
+            hintText: tr(
+              'Who it is for, what it should cover, anything to include',
+            ),
             alignLabelWithHint: true,
             border: OutlineInputBorder(),
           ),
@@ -426,9 +429,9 @@ class GenerateSheetState extends State<GenerateSheet> {
         const SizedBox(height: 8),
         TextField(
           controller: _language,
-          decoration: const InputDecoration(
-            labelText: 'Language (optional)',
-            hintText: 'English, Spanish, both...',
+          decoration: InputDecoration(
+            labelText: tr('Language (optional)'),
+            hintText: tr('English, Spanish, both...'),
           ),
         ),
         const SizedBox(height: 16),
@@ -441,7 +444,7 @@ class GenerateSheetState extends State<GenerateSheet> {
             );
           },
           icon: const Icon(Icons.auto_awesome),
-          label: const Text('Make it'),
+          label: const T('Make it'),
         ),
       ],
     ),
@@ -513,8 +516,12 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     _load();
   }
 
+  /// Set while the page closes: the last save runs without redrawing.
+  bool _closing = false;
+
   @override
   void dispose() {
+    _closing = true;
     _saveTimer?.cancel();
     // Whatever was typed last is kept.
     if (!_loading && _error == null) unawaited(_save());
@@ -599,7 +606,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     }
     _saved = markdown;
     _savedTitle = title;
-    if (mounted) setState(() => _saving = true);
+    if (mounted && !_closing) setState(() => _saving = true);
     try {
       await _api.save(
         widget.id,
@@ -804,7 +811,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     _changed();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Section removed'),
+        content: const T('Section removed'),
         action: SnackBarAction(
           label: 'Undo',
           onPressed: () {
@@ -921,18 +928,18 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
       context: context,
       builder: (d) => AlertDialog(
         title: Text('Delete this ${studioNoun(_kind)}?'),
-        content: const Text(
+        content: const T(
           'It is removed from the server, with its versions. Export it first '
           'if you may want it again.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(d, false),
-            child: const Text('Cancel'),
+            child: const T('Cancel'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(d, true),
-            child: const Text('Delete'),
+            child: const T('Delete'),
           ),
         ],
       ),
@@ -965,8 +972,8 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
       keyboardType: TextInputType.text,
       textInputAction: TextInputAction.done,
       style: Theme.of(context).textTheme.titleLarge,
-      decoration: const InputDecoration(
-        hintText: 'Title',
+      decoration: InputDecoration(
+        hintText: tr('Title'),
         border: InputBorder.none,
         isDense: true,
       ),
@@ -981,7 +988,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
         actions: [
           if (_kind == 'slides')
             IconButton(
-              tooltip: 'Present',
+              tooltip: tr('Present'),
               onPressed: _loading || busy
                   ? null
                   : () => Navigator.push(
@@ -995,7 +1002,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
               icon: const Icon(Icons.play_arrow_outlined),
             ),
           IconButton(
-            tooltip: 'Versions',
+            tooltip: tr('Versions'),
             onPressed: _loading || busy ? null : _showVersions,
             icon: const Icon(Icons.history),
           ),
@@ -1009,31 +1016,31 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
             itemBuilder: (_) => [
               ...switch (_kind) {
                 'sheet' => const [
-                  PopupMenuItem(value: 'xlsx', child: Text('Export to Excel')),
+                  PopupMenuItem(value: 'xlsx', child: T('Export to Excel')),
                   PopupMenuItem(
                     value: 'csv',
-                    child: Text('Export CSV (first sheet)'),
+                    child: T('Export CSV (first sheet)'),
                   ),
                 ],
                 'slides' => const [
                   PopupMenuItem(
                     value: 'pptx',
-                    child: Text('Export to PowerPoint'),
+                    child: T('Export to PowerPoint'),
                   ),
-                  PopupMenuItem(value: 'pdf', child: Text('Export to PDF')),
+                  PopupMenuItem(value: 'pdf', child: T('Export to PDF')),
                 ],
                 _ => const [
-                  PopupMenuItem(value: 'docx', child: Text('Export to Word')),
-                  PopupMenuItem(value: 'pdf', child: Text('Export to PDF')),
+                  PopupMenuItem(value: 'docx', child: T('Export to Word')),
+                  PopupMenuItem(value: 'pdf', child: T('Export to PDF')),
                 ],
               },
-              const PopupMenuItem(value: 'md', child: Text('Export Markdown')),
+              const PopupMenuItem(value: 'md', child: T('Export Markdown')),
               const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'model',
                 child: Text('AI model: $modelName'),
               ),
-              const PopupMenuItem(value: 'delete', child: Text('Delete')),
+              const PopupMenuItem(value: 'delete', child: T('Delete')),
             ],
           ),
         ],
@@ -1043,7 +1050,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
           : FloatingActionButton.extended(
               onPressed: _aiDocument,
               icon: const Icon(Icons.auto_awesome),
-              label: const Text('Edit all with AI'),
+              label: const T('Edit all with AI'),
             ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -1106,10 +1113,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                       const SizedBox(width: 12),
-                      Text(
-                        'The AI is making it…',
-                        style: TextStyle(color: muted),
-                      ),
+                      T('The AI is making it…', style: TextStyle(color: muted)),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -1192,8 +1196,8 @@ class _SectionCard extends StatelessWidget {
                             ? text.titleMedium
                             : text.titleSmall)
                         ?.copyWith(fontWeight: FontWeight.w600),
-                decoration: const InputDecoration(
-                  hintText: 'Heading',
+                decoration: InputDecoration(
+                  hintText: tr('Heading'),
                   border: InputBorder.none,
                   isDense: true,
                 ),
@@ -1204,8 +1208,8 @@ class _SectionCard extends StatelessWidget {
               maxLines: null,
               minLines: 2,
               style: text.bodyLarge,
-              decoration: const InputDecoration(
-                hintText: 'Write here',
+              decoration: InputDecoration(
+                hintText: tr('Write here'),
                 border: InputBorder.none,
                 isDense: true,
               ),
@@ -1223,40 +1227,40 @@ class _SectionCard extends StatelessWidget {
                   ),
                   onPressed: onAi,
                   icon: const Icon(Icons.auto_awesome, size: 18),
-                  label: const Text('Edit with AI'),
+                  label: const T('Edit with AI'),
                 ),
                 IconButton(
-                  tooltip: 'Dictate',
+                  tooltip: tr('Dictate'),
                   visualDensity: VisualDensity.compact,
                   onPressed: onDictate,
                   icon: const Icon(Icons.mic_none),
                 ),
                 IconButton(
-                  tooltip: 'Move up',
+                  tooltip: tr('Move up'),
                   visualDensity: VisualDensity.compact,
                   onPressed: first ? null : onUp,
                   icon: const Icon(Icons.arrow_upward),
                 ),
                 IconButton(
-                  tooltip: 'Move down',
+                  tooltip: tr('Move down'),
                   visualDensity: VisualDensity.compact,
                   onPressed: last ? null : onDown,
                   icon: const Icon(Icons.arrow_downward),
                 ),
                 IconButton(
-                  tooltip: 'Duplicate',
+                  tooltip: tr('Duplicate'),
                   visualDensity: VisualDensity.compact,
                   onPressed: onCopy,
                   icon: const Icon(Icons.copy_all_outlined),
                 ),
                 IconButton(
-                  tooltip: 'Add a section below',
+                  tooltip: tr('Add a section below'),
                   visualDensity: VisualDensity.compact,
                   onPressed: onAdd,
                   icon: const Icon(Icons.add_box_outlined),
                 ),
                 IconButton(
-                  tooltip: 'Remove',
+                  tooltip: tr('Remove'),
                   visualDensity: VisualDensity.compact,
                   onPressed: onRemove,
                   icon: const Icon(Icons.delete_outline),
@@ -1280,13 +1284,13 @@ class _VersionsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
     return Scaffold(
-      appBar: AppBar(title: const Text('Versions')),
+      appBar: AppBar(title: const T('Versions')),
       body: ListView(
         children: [
           if (versions.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),
-              child: Text(
+              child: T(
                 'No versions yet. Each change you make is kept here.',
                 style: TextStyle(color: muted),
               ),
@@ -1322,7 +1326,7 @@ class _VersionsScreen extends StatelessWidget {
                                 Navigator.pop(context);
                                 Navigator.pop(context, v);
                               },
-                              child: const Text('Restore'),
+                              child: const T('Restore'),
                             ),
                           ),
                       ],

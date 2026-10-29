@@ -65,6 +65,9 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            // Hands-free listening, like models on the phone, is for 64-bit
+            // ARM only; this keeps the other chips' copies out of the APK.
+            excludes += listOf("lib/armeabi-v7a/libvosk.so", "lib/x86/libvosk.so", "lib/x86_64/libvosk.so")
         }
     }
 
@@ -91,6 +94,9 @@ android {
 dependencies {
     // FileProvider, used to hand a downloaded update to the installer.
     implementation("androidx.core:core-ktx:1.13.1")
+    // Hands-free "Hey OpenAide": offline speech on the phone (Apache 2.0).
+    implementation("com.alphacephei:vosk-android:0.3.75@aar")
+    implementation("net.java.dev.jna:jna:5.18.1@aar")
 }
 
 kotlin {
