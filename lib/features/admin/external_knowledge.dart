@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context)
@@ -355,14 +356,21 @@ class _SourceEditorState extends ConsumerState<_SourceEditor> {
     void Function(String) set, {
     String? hint,
     bool secret = false,
-  }) => TextFormField(
-    initialValue: value,
-    obscureText: secret,
-    decoration: InputDecoration(labelText: label, hintText: hint),
-    onChanged: (v) {
-      set(v);
-      _changed();
-    },
+  }) => Hideable(
+    secret: secret,
+    builder: (obscure, eye) => TextFormField(
+      initialValue: value,
+      obscureText: obscure,
+      decoration: InputDecoration(
+        suffixIcon: eye,
+        labelText: label,
+        hintText: hint,
+      ),
+      onChanged: (v) {
+        set(v);
+        _changed();
+      },
+    ),
   );
 
   Future<void> _test() async {

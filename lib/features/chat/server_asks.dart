@@ -21,6 +21,7 @@ import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../voice/voice_avatar.dart' show activeAvatar;
 import 'chat_controller.dart' show serverConfigProvider, userSettingsProvider;
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 /// What the app answers for events it can't do (running JavaScript, or a
 /// tool that lives in a browser), so the server isn't left waiting.
@@ -430,15 +431,19 @@ class _AskDialogState extends State<AskDialog> {
                     onChanged: (v) => setState(() => _picked = v),
                   )
                 else
-                  TextField(
-                    controller: _text,
-                    autofocus: true,
-                    obscureText: kind == 'password',
-                    minLines: 1,
-                    maxLines: kind == 'password' ? 1 : 6,
-                    decoration: InputDecoration(
-                      hintText: '${_body['placeholder'] ?? ''}',
-                      border: const OutlineInputBorder(),
+                  Hideable(
+                    secret: kind == 'password',
+                    builder: (obscure, eye) => TextField(
+                      controller: _text,
+                      autofocus: true,
+                      obscureText: obscure,
+                      minLines: 1,
+                      maxLines: kind == 'password' ? 1 : 6,
+                      decoration: InputDecoration(
+                        suffixIcon: eye,
+                        hintText: '${_body['placeholder'] ?? ''}',
+                        border: const OutlineInputBorder(),
+                      ),
                     ),
                   ),
               ],

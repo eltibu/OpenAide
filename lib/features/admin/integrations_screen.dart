@@ -16,6 +16,7 @@ import '../../core/theme.dart';
 import '../server/server_page.dart';
 import 'orchestrator_policy.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 /// A connection as the web exports it: one item in a list, without who may
 /// use it or the OAuth client the server registered.
@@ -464,13 +465,20 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
     int? lines,
   }) => Padding(
     padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-    child: TextFormField(
-      initialValue: value == null ? '' : '$value',
-      obscureText: secret,
-      minLines: lines,
-      maxLines: lines == null ? 1 : null,
-      decoration: InputDecoration(labelText: label, helperText: hint),
-      onChanged: onChanged,
+    child: Hideable(
+      secret: secret,
+      builder: (obscure, eye) => TextFormField(
+        initialValue: value == null ? '' : '$value',
+        obscureText: obscure,
+        minLines: lines,
+        maxLines: lines == null ? 1 : null,
+        decoration: InputDecoration(
+          suffixIcon: eye,
+          labelText: label,
+          helperText: hint,
+        ),
+        onChanged: onChanged,
+      ),
     ),
   );
 

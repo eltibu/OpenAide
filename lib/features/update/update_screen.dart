@@ -5,6 +5,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/widgets/nexus_logo.dart';
 import 'updater.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 /// Settings page: current build, update channel, optional GitHub token,
 /// check and install.
@@ -129,15 +130,18 @@ class _UpdateScreenState extends ConsumerState<UpdateScreen> {
             style: theme.textTheme.bodySmall,
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: _token,
-            obscureText: true,
-            autocorrect: false,
-            decoration: InputDecoration(
-              labelText: tr('github_pat_…'),
-              border: OutlineInputBorder(),
+          Hideable(
+            builder: (obscure, eye) => TextField(
+              controller: _token,
+              obscureText: obscure,
+              autocorrect: false,
+              decoration: InputDecoration(
+                suffixIcon: eye,
+                labelText: tr('github_pat_…'),
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => _saveToken(),
             ),
-            onSubmitted: (_) => _saveToken(),
           ),
           const SizedBox(height: 8),
           Align(

@@ -16,6 +16,7 @@ import 'ai_keys.dart';
 import 'local_models.dart';
 import 'local_models_screen.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 class AiProvidersScreen extends StatelessWidget {
   const AiProvidersScreen({super.key});
@@ -289,17 +290,20 @@ class _ProviderCardState extends ConsumerState<_ProviderCard> {
                 (!saved &&
                     _p != AiProvider.openRouter &&
                     _p != AiProvider.copilot)) ...[
-              TextField(
-                controller: _key,
-                obscureText: true,
-                autocorrect: false,
-                enabled: !_busy,
-                onSubmitted: (v) => v.trim().isEmpty ? null : _check(v),
-                decoration: InputDecoration(
-                  labelText: tr('API key'),
-                  hintText: _hint,
-                  border: const OutlineInputBorder(),
-                  isDense: true,
+              Hideable(
+                builder: (obscure, eye) => TextField(
+                  controller: _key,
+                  obscureText: obscure,
+                  autocorrect: false,
+                  enabled: !_busy,
+                  onSubmitted: (v) => v.trim().isEmpty ? null : _check(v),
+                  decoration: InputDecoration(
+                    suffixIcon: eye,
+                    labelText: tr('API key'),
+                    hintText: _hint,
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
               ),
               const SizedBox(height: 8),

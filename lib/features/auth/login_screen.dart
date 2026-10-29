@@ -8,6 +8,7 @@ import '../../core/widgets/nexus_logo.dart';
 import 'sign_in_steps.dart';
 import 'sso_login_screen.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key, this.onBack});
@@ -171,12 +172,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 ),
                 const SizedBox(height: 16),
                 if (_mode == 'key')
-                  TextField(
-                    controller: _apiKey,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                      labelText: tr('API key (Settings → Account)'),
-                      border: OutlineInputBorder(),
+                  Hideable(
+                    builder: (obscure, eye) => TextField(
+                      controller: _apiKey,
+                      obscureText: obscure,
+                      decoration: InputDecoration(
+                        suffixIcon: eye,
+                        labelText: tr('API key (Settings → Account)'),
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   )
                 else ...[
@@ -203,24 +207,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _password,
-                    obscureText: true,
-                    onSubmitted: (_) => _submit(),
-                    decoration: InputDecoration(
-                      labelText: tr('Password'),
-                      border: OutlineInputBorder(),
+                  Hideable(
+                    builder: (obscure, eye) => TextField(
+                      controller: _password,
+                      obscureText: obscure,
+                      onSubmitted: (_) => _submit(),
+                      decoration: InputDecoration(
+                        suffixIcon: eye,
+                        labelText: tr('Password'),
+                        border: OutlineInputBorder(),
+                      ),
                     ),
                   ),
                   if (_signUp && _mode == 'email') ...[
                     const SizedBox(height: 12),
-                    TextField(
-                      controller: _confirm,
-                      obscureText: true,
-                      onSubmitted: (_) => _submit(),
-                      decoration: InputDecoration(
-                        labelText: tr('Confirm Password'),
-                        border: OutlineInputBorder(),
+                    Hideable(
+                      builder: (obscure, eye) => TextField(
+                        controller: _confirm,
+                        obscureText: obscure,
+                        onSubmitted: (_) => _submit(),
+                        decoration: InputDecoration(
+                          suffixIcon: eye,
+                          labelText: tr('Confirm Password'),
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
                   ],

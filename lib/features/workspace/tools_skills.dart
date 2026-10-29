@@ -13,6 +13,7 @@ import 'access_editor.dart' show ItemMenu;
 import '../chat/chat_controller.dart' show skillsProvider;
 import 'owner_filter.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context)
@@ -505,18 +506,23 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
                       return withDefault(
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: TextField(
-                            controller: _text[e.key],
-                            obscureText: secret,
-                            keyboardType:
-                                p['type'] == 'integer' || p['type'] == 'number'
-                                ? TextInputType.number
-                                : null,
-                            maxLines: secret ? 1 : null,
-                            decoration: InputDecoration(
-                              labelText: label,
-                              helperText: help,
-                              helperMaxLines: 3,
+                          child: Hideable(
+                            secret: secret,
+                            builder: (obscure, eye) => TextField(
+                              controller: _text[e.key],
+                              obscureText: obscure,
+                              keyboardType:
+                                  p['type'] == 'integer' ||
+                                      p['type'] == 'number'
+                                  ? TextInputType.number
+                                  : null,
+                              maxLines: secret ? 1 : null,
+                              decoration: InputDecoration(
+                                suffixIcon: eye,
+                                labelText: label,
+                                helperText: help,
+                                helperMaxLines: 3,
+                              ),
                             ),
                           ),
                         ),

@@ -30,6 +30,7 @@ import 'user_extras.dart';
 import '../workspace/code_editor.dart';
 import '../../core/widgets/search_field.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 final adminApiProvider = Provider<AdminApi>(
   (ref) => AdminApi(ref.watch(clientProvider)),
@@ -484,12 +485,15 @@ class _UserEditorState extends ConsumerState<UserEditor> {
           // Changing a password signs that person out everywhere, so your
           // own isn't changed from here.
           if (!self)
-            TextField(
-              controller: _password,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: _isNew ? 'Password' : 'New password',
-                helperText: _isNew ? null : 'Leave empty to keep theirs',
+            Hideable(
+              builder: (obscure, eye) => TextField(
+                controller: _password,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  suffixIcon: eye,
+                  labelText: _isNew ? 'Password' : 'New password',
+                  helperText: _isNew ? null : 'Leave empty to keep theirs',
+                ),
               ),
             ),
           if (!_isNew) ...[

@@ -20,6 +20,7 @@ import 'agent_store.dart';
 import 'agent_tools.dart';
 import 'mcp_servers.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/widgets/hideable.dart';
 
 void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context)
@@ -328,10 +329,15 @@ class _SearchDialogState extends ConsumerState<_SearchDialog> {
           ),
         ),
         if (_engine.needsKey)
-          TextField(
-            controller: _key,
-            obscureText: true,
-            decoration: InputDecoration(labelText: tr('API key')),
+          Hideable(
+            builder: (obscure, eye) => TextField(
+              controller: _key,
+              obscureText: obscure,
+              decoration: InputDecoration(
+                suffixIcon: eye,
+                labelText: tr('API key'),
+              ),
+            ),
           ),
         if (_engine.needsUrl)
           TextField(
@@ -699,12 +705,15 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
           ),
           const SizedBox(height: 8),
           if (_auth == 'key')
-            TextField(
-              controller: _key,
-              obscureText: true,
-              decoration: InputDecoration(
-                labelText: tr('Key or token'),
-                helperText: tr('Sent as "Authorization: Bearer <key>"'),
+            Hideable(
+              builder: (obscure, eye) => TextField(
+                controller: _key,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  suffixIcon: eye,
+                  labelText: tr('Key or token'),
+                  helperText: tr('Sent as "Authorization: Bearer <key>"'),
+                ),
               ),
             ),
           if (_auth == 'oauth') ...[
@@ -728,11 +737,14 @@ class _McpEditorState extends ConsumerState<McpEditorScreen> {
                   controller: _clientId,
                   decoration: InputDecoration(labelText: tr('Client ID')),
                 ),
-                TextField(
-                  controller: _clientSecret,
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: tr('Client secret (optional)'),
+                Hideable(
+                  builder: (obscure, eye) => TextField(
+                    controller: _clientSecret,
+                    obscureText: obscure,
+                    decoration: InputDecoration(
+                      suffixIcon: eye,
+                      labelText: tr('Client secret (optional)'),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -930,12 +942,15 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditorScreen> {
           decoration: InputDecoration(labelText: tr('Name (optional)')),
         ),
         const SizedBox(height: 8),
-        TextField(
-          controller: _key,
-          obscureText: true,
-          decoration: InputDecoration(
-            labelText: tr('Key (optional)'),
-            helperText: tr('Sent as "Authorization: Bearer <key>"'),
+        Hideable(
+          builder: (obscure, eye) => TextField(
+            controller: _key,
+            obscureText: obscure,
+            decoration: InputDecoration(
+              suffixIcon: eye,
+              labelText: tr('Key (optional)'),
+              helperText: tr('Sent as "Authorization: Bearer <key>"'),
+            ),
           ),
         ),
         const SizedBox(height: 12),
