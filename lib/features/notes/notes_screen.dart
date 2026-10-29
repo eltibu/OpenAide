@@ -185,8 +185,9 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
   Widget _tile(Note n) {
     final muted = context.nexus.muted;
     final snippet = n.markdown
+        .replaceAll(RegExp(r'<[^>]*>'), '')
         .replaceAll(RegExp(r'\[[ xX]\]'), '')
-        .replaceAll(RegExp(r'[#*_>`\[\]-]'), '')
+        .replaceAll(RegExp(r'[#*_>`~\[\]-]'), '')
         .replaceAll(RegExp(r'\s+'), ' ')
         .trim();
     return ListTile(

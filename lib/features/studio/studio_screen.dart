@@ -320,7 +320,8 @@ class _StudioScreenState extends ConsumerState<StudioScreen> {
                               d.markdown
                                   .replaceAll(sheetMarker, '')
                                   .replaceAll(slidesMarker, '')
-                                  .replaceAll(RegExp(r'[#*_>`|-]'), ' ')
+                                  .replaceAll(RegExp(r'<[^>]*>'), ' ')
+                                  .replaceAll(RegExp(r'[#*_>`~|-]'), ' ')
                                   .replaceAll(RegExp(r'\s+'), ' ')
                                   .trim(),
                             ].where((s) => s.isNotEmpty).join(' · '),
