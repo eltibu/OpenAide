@@ -15,6 +15,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_extras.dart' show titleFromTask;
 import '../chat/file_details.dart' show FileDetailsScreen;
+import '../studio/record_notes.dart' show dictate;
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import '../workspace/access_editor.dart' show editAccess;
 import 'notes_api.dart';
@@ -236,6 +237,21 @@ class _Heading extends StatelessWidget {
 }
 
 /// One note, written in Markdown and saved as you type, with a preview.
+/// [v] with [said] put in where the cursor is (or over the selection, or
+/// at the end), with a space before it when it would run into a word.
+TextEditingValue insertSaid(TextEditingValue v, String said) {
+  final at = v.selection.isValid ? v.selection.start : v.text.length;
+  final end = v.selection.isValid ? v.selection.end : at;
+  final before = v.text.substring(0, at);
+  final gap = before.isEmpty || before.endsWith('\n') || before.endsWith(' ')
+      ? ''
+      : ' ';
+  return TextEditingValue(
+    text: '$before$gap$said${v.text.substring(end)}',
+    selection: TextSelection.collapsed(offset: at + gap.length + said.length),
+  );
+}
+
 class NoteEditorScreen extends ConsumerStatefulWidget {
   const NoteEditorScreen({super.key, required this.api, required this.id});
   final NotesApi api;
@@ -310,6 +326,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   void _say(String text) =>
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(tr(text))));
+
+  Future<void> _record() async {
+    final said = (await dictate(context, ref.read(clientProvider)))?.trim();
+    if (said == null || said.isEmpty || !mounted) return;
+    _body.value = insertSaid(_body.value, said);
+    _changed();
+  }
 
   String get _name =>
       _title.text.trim().isEmpty ? 'Untitled' : _title.text.trim();
@@ -577,6 +600,13 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
               ),
             ),
           ],
+          // The web's Record: say it, and the words go in where you are.
+          if (_loaded && !_preview)
+            IconButton(
+              tooltip: tr('Record'),
+              icon: const Icon(Icons.mic_none),
+              onPressed: _record,
+            ),
           IconButton(
             tooltip: _preview ? 'Edit' : 'Preview',
             isSelected: _preview,
