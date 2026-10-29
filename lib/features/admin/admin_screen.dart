@@ -19,6 +19,7 @@ import 'admin_api.dart';
 import 'admin_models_screen.dart';
 import 'analytics_screen.dart';
 import 'banners_screen.dart';
+import 'visible_controls.dart';
 import 'config_editor.dart';
 import 'evaluations_screen.dart';
 import 'connections_screen.dart';
@@ -127,6 +128,12 @@ class AdminScreen extends StatelessWidget {
             title: const T('Banners'),
             subtitle: const T('Notices shown to everyone'),
             onTap: () => open(const BannersScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.visibility_outlined),
+            title: const T('Visible controls'),
+            subtitle: const T('Which controls people who aren\'t admins see'),
+            onTap: () => open(const VisibleControlsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.auto_awesome_outlined),
