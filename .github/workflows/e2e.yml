@@ -38,6 +38,10 @@ jobs:
       TERM_PORT: '18100'
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The nightly run starts from the default branch's copy of this
+          # file but tests the shared branch, where the app work lands.
+          ref: ${{ github.event_name == 'schedule' && 'claude/project-thread-io206b' || '' }}
       # Pinned to a commit (v2.23.0), as in Build.
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
@@ -70,11 +74,18 @@ jobs:
             --file-reporter "json:$RUNNER_TEMP/e2e.json" --reporter expanded
       - name: Screen crawl (every page and button)
         # Needs the Linux desktop libraries (GTK 3) and a virtual display.
-        # Skipped with a note when the PC doesn't have them.
+        # Installs them once when the runner may use sudo without a
+        # password; otherwise skipped with a note saying what to install.
         if: ${{ !cancelled() }}
         run: |
+          PKGS="libgtk-3-dev libsecret-1-dev xvfb gnome-keyring dbus-x11 ninja-build clang cmake pkg-config"
           if ! pkg-config --exists gtk+-3.0 || ! command -v xvfb-run >/dev/null; then
-            echo "::notice::Screen crawl skipped: install libgtk-3-dev and xvfb on the runner to turn it on."
+            sudo -n true 2>/dev/null \
+              && { sudo -n apt-get install -y -q $PKGS || { sudo -n apt-get update -q && sudo -n apt-get install -y -q $PKGS; }; } \
+              || true
+          fi
+          if ! pkg-config --exists gtk+-3.0 || ! command -v xvfb-run >/dev/null; then
+            echo "::notice::Screen crawl skipped: run once on the runner: sudo apt-get install -y $PKGS"
             exit 0
           fi
           tool/e2e/crawl.sh
