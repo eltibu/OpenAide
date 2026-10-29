@@ -76,8 +76,12 @@ bool lockDue(int? after, Duration? away) =>
 
 /// Covers the app while it is locked.
 class AppLockGate extends ConsumerStatefulWidget {
-  const AppLockGate({super.key, required this.child});
+  const AppLockGate({super.key, required this.child, this.holdChild = false});
   final Widget child;
+
+  /// Builds [child] only once unlocked, so it can't start anything (the
+  /// panel over other apps starts listening as it opens) while locked.
+  final bool holdChild;
 
   @override
   ConsumerState<AppLockGate> createState() => _AppLockGateState();
@@ -145,7 +149,7 @@ class _AppLockGateState extends ConsumerState<AppLockGate>
     final locked = _locked;
     return Stack(
       children: [
-        widget.child,
+        if (!widget.holdChild || locked == false) widget.child,
         if (locked != false)
           Positioned.fill(
             child: Scaffold(
