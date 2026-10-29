@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../../core/api/openwebui_client.dart';
+import '../../core/net/local_network.dart';
 
 /// A terminal server (an Open Terminal: a shell and a file system). One the
 /// admin connected is reached through Open WebUI's own proxy, signed in as
@@ -101,12 +102,20 @@ Future<List<TerminalServer>> terminalServers(OpenWebUiClient client) async {
 
 /// The files and shells of one terminal server.
 class TerminalApi {
+  // Commands, files and keys go only over https (or to this phone), even
+  // through your own server: a terminal is never reached unencrypted.
   TerminalApi(OpenWebUiClient client, this.server)
     : client = server.url == null
-          ? client
+          ? OpenWebUiClient(
+              baseUrl: client.baseUrl,
+              token: client.token,
+              cookie: client.cookie,
+              httpClient: EncryptedOnlyClient(client.httpClient),
+            )
           : OpenWebUiClient(
               baseUrl: server.url!,
               token: (server.key ?? '').isEmpty ? null : server.key,
+              httpClient: EncryptedOnlyClient(),
             );
 
   final OpenWebUiClient client;

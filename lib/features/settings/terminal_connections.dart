@@ -16,6 +16,7 @@ import '../chat/chat_controller.dart';
 import '../terminal/terminal_api.dart';
 import 'settings_screen.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/net/local_network.dart';
 
 /// [list] with only the one at [index] switched on, as on the web.
 List<Map<String, dynamic>> onlyEnabled(
@@ -28,6 +29,8 @@ List<Map<String, dynamic>> onlyEnabled(
 /// Whether the terminal at [url] answers with [key]: null when it does,
 /// else what went wrong.
 Future<String?> checkTerminal(String url, String key) async {
+  final uri = Uri.tryParse(url);
+  if (uri != null && !isEncrypted(uri)) return '${UnencryptedAddress(uri)}';
   try {
     await TerminalApi(
       OpenWebUiClient(baseUrl: url),
