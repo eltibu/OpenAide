@@ -250,12 +250,24 @@ jobs:
           # and public builds, and of every build once the repo is public:
           # anyone holding the APK can read it.
           NEXUS_UPDATE_TOKEN: ${{ env.BUILT_IN_TOKEN == 'true' && secrets.NEXUS_UPDATE_TOKEN || '' }}
+          # Sign-in registrations (repo variables, not secrets: client IDs
+          # ship inside every app). Empty keeps that sign-in hidden.
+          NEXUS_GITHUB_CLIENT_ID: ${{ vars.NEXUS_GITHUB_CLIENT_ID }}
+          NEXUS_MICROSOFT_CLIENT_ID: ${{ vars.NEXUS_MICROSOFT_CLIENT_ID }}
+          NEXUS_GOOGLE_CLIENT_ID: ${{ vars.NEXUS_GOOGLE_CLIENT_ID }}
+          # A desktop client's secret is public by Google's own rules for
+          # installed apps; it may be kept as a variable or a secret.
+          NEXUS_GOOGLE_CLIENT_SECRET: ${{ vars.NEXUS_GOOGLE_CLIENT_SECRET || secrets.NEXUS_GOOGLE_CLIENT_SECRET }}
         run: |
           set -o pipefail
           flutter build apk --release \
             --build-name=0.1.${{ github.run_number }} \
             --build-number=${{ github.run_number }} \
-            --dart-define=NEXUS_UPDATE_TOKEN="$NEXUS_UPDATE_TOKEN" 2>&1 | tee build.log || {
+            --dart-define=NEXUS_UPDATE_TOKEN="$NEXUS_UPDATE_TOKEN" \
+            --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID" \
+            --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET" 2>&1 | tee build.log || {
             grep -E "^e: |error:|What went wrong|Exception|FAILURE" -A4 build.log \
               | head -40 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1

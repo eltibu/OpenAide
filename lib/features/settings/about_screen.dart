@@ -328,6 +328,15 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
                     subtitle: Text(snap.data!),
                   ),
           ),
+          ListTile(
+            leading: const Icon(Icons.coffee_outlined),
+            title: const T('Support OpenAide'),
+            subtitle: const T('Buy me a coffee'),
+            onTap: () => launchUrl(
+              Uri.parse('https://buymeacoffee.com/eltibu'),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
             child: T(
