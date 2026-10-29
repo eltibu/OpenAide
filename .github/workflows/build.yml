@@ -256,8 +256,8 @@ jobs:
           NEXUS_MICROSOFT_CLIENT_ID: ${{ vars.NEXUS_MICROSOFT_CLIENT_ID }}
           NEXUS_GOOGLE_CLIENT_ID: ${{ vars.NEXUS_GOOGLE_CLIENT_ID }}
           # A desktop client's secret is public by Google's own rules for
-          # installed apps, so it is a variable too.
-          NEXUS_GOOGLE_CLIENT_SECRET: ${{ vars.NEXUS_GOOGLE_CLIENT_SECRET }}
+          # installed apps; it may be kept as a variable or a secret.
+          NEXUS_GOOGLE_CLIENT_SECRET: ${{ vars.NEXUS_GOOGLE_CLIENT_SECRET || secrets.NEXUS_GOOGLE_CLIENT_SECRET }}
         run: |
           set -o pipefail
           flutter build apk --release \
