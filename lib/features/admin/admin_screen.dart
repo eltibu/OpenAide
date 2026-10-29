@@ -19,6 +19,7 @@ import 'admin_api.dart';
 import 'admin_models_screen.dart';
 import 'analytics_screen.dart';
 import 'banners_screen.dart';
+import 'ui_translations.dart';
 import 'visible_controls.dart';
 import 'config_editor.dart';
 import 'evaluations_screen.dart';
@@ -129,6 +130,12 @@ class AdminScreen extends StatelessWidget {
             title: const T('Banners'),
             subtitle: const T('Notices shown to everyone'),
             onTap: () => open(const BannersScreen()),
+          ),
+          ListTile(
+            leading: const Icon(Icons.translate),
+            title: const T('UI translations'),
+            subtitle: const T('Your own wording for any text, per language'),
+            onTap: () => open(const UiTranslationsScreen()),
           ),
           ListTile(
             leading: const Icon(Icons.visibility_outlined),

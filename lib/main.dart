@@ -58,6 +58,11 @@ class NexusApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
+    // The server's own wording (Admin > UI translations), as on the web.
+    final i18n = ref.watch(serverConfigProvider).value?['i18n'];
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => AppStrings.instance.setAdminWords(i18n),
+    );
     // A new language redraws the app where it is.
     return ListenableBuilder(
       listenable: AppStrings.instance,

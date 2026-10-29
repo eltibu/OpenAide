@@ -34,7 +34,28 @@ class AppStrings extends ChangeNotifier {
   /// start (tests leave it unset and stay in English).
   Directory? dir;
 
-  String tr(String s) => _words[s] ?? s;
+  /// The server's own wording (Admin > UI translations), by language,
+  /// which wins over everything else, as on the web.
+  Map<String, Map<String, String>> _admin = const {};
+
+  String tr(String s) => _admin[code ?? 'en-US']?[s] ?? _words[s] ?? s;
+
+  /// Takes the server's wording from /api/config (`i18n`).
+  void setAdminWords(Object? i18n) {
+    final next = <String, Map<String, String>>{
+      if (i18n is Map)
+        for (final e in i18n.entries)
+          if (e.value is Map)
+            '${e.key}': {
+              for (final w in (e.value as Map).entries)
+                if (w.value is String && '${w.value}'.trim().isNotEmpty)
+                  '${w.key}': w.value as String,
+            },
+    };
+    if (jsonEncode(next) == jsonEncode(_admin)) return;
+    _admin = next;
+    notifyListeners();
+  }
 
   /// For [MaterialApp.locale]; null keeps the phone's.
   Locale? get locale {
