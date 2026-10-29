@@ -430,9 +430,7 @@ class _SkillImportState extends ConsumerState<SkillImportScreen> {
       return;
     }
     setState(() => _busy = true);
-    await _preview([
-      for (final f in picked) (await f.readAsBytes(), f.name),
-    ]);
+    await _preview([for (final f in picked) (await f.readAsBytes(), f.name)]);
   }
 
   /// As the web: the server reads the link, and what it found is looked

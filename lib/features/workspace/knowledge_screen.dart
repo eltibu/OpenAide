@@ -1,4 +1,3 @@
-import 'dart:io';
 
 import '../../core/widgets/empty_state.dart';
 
@@ -8,6 +7,7 @@ import 'package:flutter/services.dart' show Uint8List;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/phone_folder.dart';
 import '../../core/theme.dart';
 import '../studio/record_notes.dart' show dictate;
 import 'access_editor.dart' show editAccess;
@@ -218,7 +218,13 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
   /// A folder from the phone, as the web's Upload directory and Sync
   /// directory.
   Future<void> _addFolder({required bool sync}) async {
-    final from = await FilePicker.getDirectoryPath();
+    final PhoneFolder? from;
+    try {
+      from = await pickPhoneFolder();
+    } catch (e) {
+      if (mounted) _say(context, "Couldn't read that folder: $e");
+      return;
+    }
     if (from == null || !mounted) return;
     if (sync) {
       final ok = await showDialog<bool>(
@@ -258,7 +264,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
     try {
       final r = await _api.addFolder(
         _k.id,
-        Directory(from),
+        from,
         sync: sync,
         under: [for (final f in _listing?.path ?? const []) f.name].join('/'),
         underId: _folder,

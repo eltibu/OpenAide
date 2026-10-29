@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:xterm/xterm.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/phone_folder.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show userSettingsProvider;
 import '../chat/file_details.dart' show PdfViewScreen;
@@ -563,25 +564,16 @@ class _FileBrowserState extends State<FileBrowser>
   Future<void> _uploadFolder() async {
     final dir = _dir;
     if (dir == null) return;
-    final from = await FilePicker.getDirectoryPath();
-    if (from == null) return;
-    final root = Directory(from);
-    final name = root.uri.pathSegments.where((p) => p.isNotEmpty).last;
-    List<File> files;
+    final PhoneFolder? from;
     try {
-      files = [
-        for (final f in root.listSync(recursive: true, followLinks: false))
-          if (f is File &&
-              !f.path
-                  .substring(from.length)
-                  .split('/')
-                  .any((p) => p.startsWith('.')))
-            f,
-      ];
+      from = await pickPhoneFolder();
     } catch (e) {
       _toast("Couldn't read that folder: $e");
       return;
     }
+    if (from == null) return;
+    final name = from.name;
+    final files = from.files;
     if (files.isEmpty) {
       _toast(
         "Nothing in $name could be read. Android may keep this "
@@ -593,8 +585,7 @@ class _FileBrowserState extends State<FileBrowser>
     var sent = 0;
     final made = <String>{};
     for (final f in files) {
-      final rel = f.path.substring(from.length).replaceFirst(RegExp('^/'), '');
-      final parts = rel.split('/');
+      final parts = f.path.split('/');
       var target = joinPath(dir, name);
       for (final p in [null, ...parts.take(parts.length - 1)]) {
         if (p != null) target = joinPath(target, p);
@@ -607,7 +598,7 @@ class _FileBrowserState extends State<FileBrowser>
         }
       }
       try {
-        await widget.api.upload(target, await f.readAsBytes(), parts.last);
+        await widget.api.upload(target, await f.read(), parts.last);
         sent++;
       } catch (e) {
         if (mounted) _toast('${parts.last}: $e');

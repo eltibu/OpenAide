@@ -47,9 +47,7 @@ void main() {
         ..write(jsonEncode(reply));
       await req.response.close();
     });
-    final client = OpenWebUiClient(
-      baseUrl: 'http://127.0.0.1:${server.port}',
-    );
+    final client = OpenWebUiClient(baseUrl: 'http://127.0.0.1:${server.port}');
     Future<void> settle() async {
       for (var i = 0; i < 10; i++) {
         await tester.runAsync(

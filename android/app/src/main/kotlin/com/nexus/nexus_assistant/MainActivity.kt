@@ -21,6 +21,7 @@ open class MainActivity : FlutterActivity() {
     private var launches: PhoneLaunch? = null
     private var actions: PhoneActions? = null
     private var localLlm: LocalLlm? = null
+    private var folders: FolderPicker? = null
     private var speech: MediaPlayer? = null
     private var speechDone: MethodChannel.Result? = null
 
@@ -95,6 +96,10 @@ open class MainActivity : FlutterActivity() {
         val doer = actions ?: PhoneActions(this).also { actions = it }
         MethodChannel(messenger, "nexus/actions").setMethodCallHandler(doer)
 
+        // Upload Folder, see FolderPicker.
+        val picker = folders ?: FolderPicker(this).also { folders = it }
+        MethodChannel(messenger, "nexus/folders").setMethodCallHandler(picker)
+
         // Copy formatted text: the reply as HTML, with its plain text.
         MethodChannel(messenger, "nexus/clipboard")
             .setMethodCallHandler { call, result ->
@@ -162,6 +167,9 @@ open class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == FolderPicker.PICK_REQUEST) {
+            folders?.onPicked(resultCode, data)
+        }
         if (requestCode == PhoneLaunch.UNLOCK_REQUEST) {
             launches?.onUnlockResult(resultCode == RESULT_OK)
         }

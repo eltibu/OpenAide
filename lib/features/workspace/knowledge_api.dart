@@ -1,9 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:crypto/crypto.dart';
 
 import '../../core/api/openwebui_client.dart';
+import '../../core/phone_folder.dart';
 import '../notes/notes_api.dart' show fromServerTime;
 
 class Knowledge {
@@ -253,7 +253,7 @@ class KnowledgeApi {
   /// its checksum so the next sync knows it.
   Future<void> uploadInto(String id, FolderFile f, {String? folderId}) async {
     final file = await client.uploadFile(
-      await f.file.readAsBytes(),
+      await f.read(),
       f.filename,
       metadata: {
         'knowledge_id': id,
@@ -272,7 +272,7 @@ class KnowledgeApi {
   /// in it). Returns what happened.
   Future<FolderSync> addFolder(
     String id,
-    Directory root, {
+    PhoneFolder root, {
     required bool sync,
     String under = '',
     String? underId,
@@ -287,7 +287,7 @@ class KnowledgeApi {
         : '$under/$path';
     final manifest = [
       for (final f in files)
-        FolderFile(f.file, place(f.path), f.filename, f.checksum, f.size),
+        FolderFile(f.read, place(f.path), f.filename, f.checksum, f.size),
     ];
     progress?.call('Comparing with the knowledge base…');
     final diff = await syncDiff(id, manifest);
@@ -354,13 +354,13 @@ class KnowledgeApi {
 /// size, as the web's sync compares them.
 class FolderFile {
   const FolderFile(
-    this.file,
+    this.read,
     this.path,
     this.filename,
     this.checksum,
     this.size,
   );
-  final File file;
+  final Future<List<int>> Function() read;
   final String path;
   final String filename;
   final String checksum;
@@ -386,26 +386,16 @@ class FolderSync {
       '${failed > 0 ? '; $failed failed to upload' : ''}.';
 }
 
-/// Every file in [root] and its folders, skipping hidden ones, as the web
+/// Every file in [root] and its folders with its checksum, as the web
 /// reads a picked folder.
-Future<List<FolderFile>> readFolder(Directory root) async {
-  final name = root.uri.pathSegments.where((p) => p.isNotEmpty).last;
-  final base = root.path.endsWith('/') ? root.path : '${root.path}/';
-  final out = <FolderFile>[];
-  await for (final e in root.list(recursive: true, followLinks: false)) {
-    if (e is! File || !e.path.startsWith(base)) continue;
-    final parts = e.path.substring(base.length).split('/');
-    if (parts.any((p) => p.startsWith('.'))) continue;
-    final bytes = await e.readAsBytes();
-    out.add(
+Future<List<FolderFile>> readFolder(PhoneFolder root) async => [
+  for (final f in root.files)
+    if (await f.read() case final bytes)
       FolderFile(
-        e,
-        [name, ...parts.take(parts.length - 1)].join('/'),
-        parts.last,
+        f.read,
+        [root.name, if (f.folder.isNotEmpty) f.folder].join('/'),
+        f.name,
         sha256.convert(bytes).toString(),
         bytes.length,
       ),
-    );
-  }
-  return out;
-}
+];
