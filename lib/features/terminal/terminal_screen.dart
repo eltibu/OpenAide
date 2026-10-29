@@ -11,7 +11,10 @@ import 'package:xterm/xterm.dart';
 import '../../core/auth/session.dart';
 import '../../core/phone_folder.dart';
 import '../../core/theme.dart';
-import '../chat/chat_controller.dart' show userSettingsProvider;
+import '../chat/chat_controller.dart'
+    show serverConfigProvider, userSettingsProvider;
+import '../settings/settings_screen.dart' show meProvider;
+import '../settings/tool_servers.dart' show directIntegrationsOn;
 import '../chat/file_details.dart' show PdfViewScreen;
 import '../server/server_page.dart';
 import 'file_tools.dart';
@@ -42,6 +45,31 @@ final allTerminalsProvider = FutureProvider<List<TerminalServer>>((ref) async {
     // Settings unreachable: the admin's terminals still work.
   }
   return [...system, ...userTerminals(ui)];
+});
+
+/// The terminals a chat can use, as the web's terminal menu: the admin's
+/// (System), then your own (Direct) when the server allows them.
+final chatTerminalsProvider = FutureProvider<List<TerminalServer>>((ref) async {
+  final system = await ref.watch(terminalServersProvider.future);
+  Map<String, dynamic>? config;
+  Map? ui;
+  Map? me;
+  try {
+    config = await ref.watch(serverConfigProvider.future);
+    ui = (await ref.watch(userSettingsProvider.future))['ui'] as Map?;
+    me = await ref.watch(meProvider.future);
+  } catch (_) {
+    return system;
+  }
+  final allowed =
+      me?['role'] == 'admin' ||
+      ((me?['permissions'] as Map?)?['features']
+              as Map?)?['direct_tool_servers'] !=
+          false;
+  return [
+    ...system,
+    if (directIntegrationsOn(config) && allowed) ...userTerminals(ui),
+  ];
 });
 
 /// A terminal server's shell and files, like the web UI's terminal panel:

@@ -17,7 +17,7 @@ import '../providers/ai_keys.dart';
 import '../agent/agent_tools.dart';
 import '../providers/provider_chat.dart';
 import '../studio/listen.dart' show transcribe;
-import '../terminal/terminal_screen.dart' show terminalServersProvider;
+import '../terminal/terminal_screen.dart' show chatTerminalsProvider;
 import '../voice/realtime_call.dart' show BridgeSubmission;
 import '../settings/direct_connections.dart';
 import '../settings/tool_servers.dart';
@@ -447,7 +447,7 @@ class ChatController extends Notifier<ChatState> {
         .firstOrNull
         ?.meta;
     final tid = meta?['terminalId'];
-    final terminals = ref.read(terminalServersProvider).value ?? const [];
+    final terminals = ref.read(chatTerminalsProvider).value ?? const [];
     state = state.copyWith(
       modelId: id,
       terminalId: tid is String && terminals.any((t) => t.id == tid)
@@ -2193,6 +2193,7 @@ class ChatController extends Notifier<ChatState> {
           : const [],
       await read(userTerminalsDataProvider),
       terminal: model?.capabilities['terminal'] != false,
+      terminalId: state.terminalId ?? model?.terminalId,
     );
   }
 

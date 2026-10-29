@@ -19,7 +19,8 @@ import '../update/update_screen.dart';
 import '../terminal/file_links.dart' show FileRef;
 import '../terminal/file_open.dart';
 import '../terminal/terminal_api.dart' show TerminalServer;
-import '../terminal/terminal_screen.dart' show terminalServersProvider;
+import '../terminal/terminal_screen.dart'
+    show chatTerminalsProvider, terminalServersProvider;
 import 'artifacts_view.dart';
 import '../workspace/prompts_api.dart' show Prompt;
 import '../workspace/prompts_screen.dart';
@@ -53,7 +54,10 @@ import 'tool_auth.dart';
 import 'tool_approval.dart';
 import 'voice_note.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
-import '../settings/tool_servers.dart' show chatToolsProvider;
+import '../settings/tool_servers.dart'
+    show chatToolsProvider, directIntegrationsOn;
+import '../settings/terminal_connections.dart' show TerminalConnectionsScreen;
+import '../admin/integrations_screen.dart' show IntegrationsScreen;
 import '../notes/notes_api.dart' show NotesApi, noteIdIn;
 import '../notes/notes_screen.dart' show NoteEditorScreen;
 import '../admin/ollama_pulls.dart';
@@ -1512,7 +1516,7 @@ class _ComposerState extends ConsumerState<_Composer> {
         (ref.read(serverConfigProvider).value?['features']
             as Map?)?['enable_context_compaction'] ==
         true;
-    final terminals = ref.read(terminalServersProvider).value ?? const [];
+    final terminals = ref.read(chatTerminalsProvider).value ?? const [];
     final me = ref.read(meProvider).value ?? const {};
     final canCreateSkill =
         model?.capabilities['builtin_tools'] != false &&
@@ -2615,7 +2619,7 @@ class _FeaturesButton extends ConsumerWidget {
     final features = availableFeatures(model, config);
     final tools = ref.watch(chatToolsProvider).value ?? const [];
     final skills = ref.watch(skillsProvider).value ?? const [];
-    final terminals = ref.watch(terminalServersProvider).value ?? const [];
+    final terminals = ref.watch(chatTerminalsProvider).value ?? const [];
     if (features.isEmpty &&
         tools.isEmpty &&
         skills.isEmpty &&
@@ -2741,11 +2745,27 @@ class _TerminalChip extends ConsumerWidget {
 
   Future<void> _pick(BuildContext context, WidgetRef ref) async {
     final chat = ref.read(chatControllerProvider.notifier);
+    final me = ref.read(meProvider).value;
+    final admin = me?['role'] == 'admin';
+    final canAddOwn =
+        directIntegrationsOn(ref.read(serverConfigProvider).value) &&
+        (admin ||
+            ((me?['permissions'] as Map?)?['features']
+                    as Map?)?['direct_tool_servers'] !=
+                false);
     final choice = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (context) {
         final current = terminal?.id ?? (sandbox ? 'sandbox' : '');
+        final system = [
+          for (final t in terminals)
+            if (!t.direct) t,
+        ];
+        final mine = [
+          for (final t in terminals)
+            if (t.direct) t,
+        ];
         Widget option(String id, IconData icon, String title, String sub) =>
             ListTile(
               leading: Icon(icon),
@@ -2776,13 +2796,37 @@ class _TerminalChip extends ConsumerWidget {
                     'Sandbox',
                     'The code interpreter runs code safely on the server',
                   ),
-                for (final t in terminals)
-                  option(
-                    t.id,
-                    Icons.cloud_outlined,
-                    t.name,
-                    'A real terminal: commands and files on that machine',
-                  ),
+                // As the web's terminal menu: the admin's terminals, then
+                // your own, each with Add Terminal.
+                for (final direct in [false, true])
+                  if (direct
+                      ? canAddOwn || mine.isNotEmpty
+                      : admin || system.isNotEmpty) ...[
+                    ListTile(
+                      dense: true,
+                      title: T(
+                        direct ? 'Direct' : 'System',
+                        style: TextStyle(color: context.nexus.muted),
+                      ),
+                      trailing: (direct ? canAddOwn : admin)
+                          ? IconButton(
+                              tooltip: tr('Add Terminal'),
+                              icon: const Icon(Icons.add),
+                              onPressed: () => Navigator.pop(
+                                context,
+                                direct ? ':add-own' : ':add-system',
+                              ),
+                            )
+                          : null,
+                    ),
+                    for (final t in direct ? mine : system)
+                      option(
+                        t.id,
+                        direct ? Icons.computer : Icons.cloud_outlined,
+                        t.name,
+                        'A real terminal: commands and files on that machine',
+                      ),
+                  ],
                 if (terminals.isNotEmpty) ...[
                   const Divider(),
                   ListTile(
@@ -2805,6 +2849,18 @@ class _TerminalChip extends ConsumerWidget {
     if (choice == null || !context.mounted) return;
     final server = terminal ?? terminals.firstOrNull;
     switch (choice) {
+      case ':add-own' || ':add-system':
+        await Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => choice == ':add-own'
+                ? const TerminalConnectionsScreen()
+                : const IntegrationsScreen(),
+          ),
+        );
+        ref
+          ..invalidate(terminalServersProvider)
+          ..invalidate(chatTerminalsProvider);
       case ':files' || ':shell':
         showChatPanel(
           context,
@@ -2862,7 +2918,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
     final features = availableFeatures(model, config);
     final tools = ref.watch(chatToolsProvider).value ?? const <Pickable>[];
     final skills = ref.watch(skillsProvider).value ?? const <Pickable>[];
-    final terminals = ref.watch(terminalServersProvider).value ?? const [];
+    final terminals = ref.watch(chatTerminalsProvider).value ?? const [];
     final activeTools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
     final activeSkills = state.skillIds ?? const <String>{};
     final terminalId = state.terminalId ?? model?.terminalId ?? '';

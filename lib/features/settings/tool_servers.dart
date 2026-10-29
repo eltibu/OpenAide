@@ -355,17 +355,20 @@ final chatToolsProvider = FutureProvider<List<Pickable>>((ref) async {
 });
 
 /// What goes as tool_servers with a message: the servers picked from
-/// [toolIds], and your terminals when the model may use a terminal.
+/// [toolIds], and your own terminal when it is the chat's [terminalId] and
+/// the model may use a terminal, as the web.
 List<Map<String, dynamic>> chatToolServers(
   Set<String> toolIds,
   List<Map<String, dynamic>> servers,
   List<Map<String, dynamic>> terminals, {
   bool terminal = true,
+  String? terminalId,
 }) => [
   for (final (i, s) in servers.indexed)
     if (toolIds.contains('$directServerPrefix$i')) s,
-  if (terminal)
-    for (final t in terminals) {...t, 'is_terminal': true},
+  if (terminal && terminalId != null)
+    for (final t in terminals)
+      if (t['url'] == terminalId) {...t, 'is_terminal': true},
 ];
 
 /// Calls [name] (an operation id) on a tool server, as the web does: path
