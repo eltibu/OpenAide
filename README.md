@@ -20,7 +20,18 @@
 
 > **Status:** early (0.1.x). New versions come out often, and some screens are still rough. Bug reports are very welcome.
 
-<!-- SCREENSHOTS -->
+<p align="center">
+  <img src="docs/images/screens/chat.png" alt="Chat" width="24%">
+  <img src="docs/images/screens/call.png" alt="Voice call" width="24%">
+  <img src="docs/images/screens/drawer.png" alt="Side menu" width="24%">
+  <img src="docs/images/screens/doc.png" alt="Studio" width="24%">
+</p>
+<p align="center">
+  <img src="docs/images/screens/email.png" alt="Email" width="24%">
+  <img src="docs/images/screens/cal.png" alt="Calendar" width="24%">
+  <img src="docs/images/screens/settings.png" alt="Settings" width="24%">
+</p>
+<p align="center"><sub>Chat · Voice call · Side menu · Studio · Email · Calendar · Settings</sub></p>
 
 ## Features
 
