@@ -20,6 +20,7 @@ import 'features/chat/chat_screen.dart';
 import 'features/chat/in_app_toasts.dart';
 import 'features/chat/server_asks.dart';
 import 'features/phone/app_lock.dart';
+import 'features/phone/assist_panel.dart';
 import 'features/standalone/local_chats.dart';
 import 'features/standalone/standalone_screen.dart';
 
@@ -37,6 +38,15 @@ Future<void> main() async {
   // Settings > General > Language.
   await AppStrings.instance.start();
   runApp(const ProviderScope(child: NexusApp()));
+}
+
+/// The assistant as a panel over other apps: Android's AssistActivity runs
+/// this instead of [main] (see AssistEntry.kt).
+@pragma('vm:entry-point')
+Future<void> assistMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await AppStrings.instance.start();
+  runApp(const ProviderScope(child: AssistPanelApp()));
 }
 
 class NexusApp extends ConsumerWidget {

@@ -63,6 +63,9 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
           .showSnackBar(SnackBar(content: Text(tr(text))));
 
   Future<void> _set(Map<String, dynamic> fields) async {
+    if (fields.containsKey(assistantOpensKey)) {
+      await setAssistPanel(fields[assistantOpensKey] == 'panel');
+    }
     try {
       await ref.read(settingsApiProvider).patchUi(fields);
     } catch (e) {
@@ -131,15 +134,22 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
               style: TextStyle(color: muted),
             ),
           ),
-          pick(opens == 'call', 'Start a voice call', () {
+          pick(opens == 'call', tr('Start a voice call'), () {
             _set({assistantOpensKey: 'call'});
           }),
-          pick(opens == 'dictate', 'Dictate a message', () {
+          pick(opens == 'dictate', tr('Dictate a message'), () {
             _set({assistantOpensKey: 'dictate'});
           }),
-          pick(opens == 'new', 'Open a new chat', () {
+          pick(opens == 'new', tr('Open a new chat'), () {
             _set({assistantOpensKey: 'chat'});
           }),
+          pick(
+            opens == 'panel',
+            tr('Ask in a panel over the app you\'re in'),
+            () {
+              _set({assistantOpensKey: 'panel'});
+            },
+          ),
           title('Shortcuts'),
           ListTile(
             leading: const Icon(Icons.dashboard_customize_outlined),

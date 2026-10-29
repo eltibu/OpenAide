@@ -15,7 +15,7 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 import java.io.File
 
-class MainActivity : FlutterActivity() {
+open class MainActivity : FlutterActivity() {
     private var voice: VoiceAudio? = null
     private var notifier: ReplyNotifier? = null
     private var launches: PhoneLaunch? = null

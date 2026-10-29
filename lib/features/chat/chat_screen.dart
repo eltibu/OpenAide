@@ -96,6 +96,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     // The phone's assistant button, Share, shortcuts and the tile.
     listenForLaunches(_launched);
     _askIfNotifying();
+    // Android keeps its own copy of whether the assistant opens as a panel.
+    ref
+        .read(userSettingsProvider.future)
+        .then((s) => setAssistPanel(assistantOpens(s['ui'] as Map?) == 'panel'))
+        .ignore();
     // Closed-app checks get the current sign-in each start.
     backgroundChecksOn().then((on) {
       if (!on || !mounted) return;
@@ -147,7 +152,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           context,
           MaterialPageRoute<void>(builder: (_) => const CallScreen()),
         );
-      case 'dictate':
+      case 'dictate' || 'panel':
         ref.read(dictateRequestProvider.notifier).start();
       case 'share':
         if (launch.text.trim().isNotEmpty) {
