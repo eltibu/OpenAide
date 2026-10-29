@@ -50,7 +50,10 @@ Future<void> assistMain() async {
 }
 
 class NexusApp extends ConsumerWidget {
-  const NexusApp({super.key});
+  const NexusApp({super.key, this.navigatorObservers = const []});
+
+  /// For the end-to-end tests, which follow the pages they open.
+  final List<NavigatorObserver> navigatorObservers;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -61,6 +64,7 @@ class NexusApp extends ConsumerWidget {
       builder: (context, _) => MaterialApp(
         title: 'OpenAide',
         debugShowCheckedModeBanner: false,
+        navigatorObservers: navigatorObservers,
         // Settings > Phone and assistant > App lock.
         builder: (context, child) => AppStringsScope(
           child: AppLockGate(child: OfflineStrip(child: child!)),

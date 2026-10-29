@@ -18,6 +18,13 @@ void main() {
       final client = OpenWebUiClient(baseUrl: url!);
       await client.signIn(email!, password!);
       final model = (await client.models()).first.id;
+      // Start from no email chat, whatever ran on this server before.
+      final old = ((await client.userSettings())['ui'] as Map?)?[emailChatKey];
+      if (old is String) {
+        try {
+          await client.deleteChat(old);
+        } catch (_) {}
+      }
       final agent = EmailAgent(client, model: model, options: const {});
 
       final inbox = await agent.list();

@@ -278,8 +278,14 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
             label: c.name,
             badge: c.unread,
             onTap: () async {
+              // The menu closes when the channel opens, so its ref is gone
+              // by the time the channel is left; the container isn't.
+              final container = ProviderScope.containerOf(
+                context,
+                listen: false,
+              );
               await openPlace(context, (_) => ChannelScreen(channel: c));
-              ref.invalidate(channelListProvider);
+              container.invalidate(channelListProvider);
             },
           ),
     ];
@@ -1147,7 +1153,7 @@ Future<String?> _askText(
       ],
     ),
   );
-  text.dispose();
+  // Not disposed: the dialog's text field still builds while it closes.
   final trimmed = value?.trim();
   return trimmed == null || trimmed.isEmpty ? null : trimmed;
 }

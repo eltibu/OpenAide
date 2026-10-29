@@ -311,7 +311,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
       ),
     );
     final link = url.text.trim();
-    url.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true || link.isEmpty) return;
     setState(() => _uploading.add(link));
     try {
@@ -393,8 +393,7 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
     );
     final title = name.text.trim();
     final body = text.text;
-    name.dispose();
-    text.dispose();
+    // Not disposed: the dialog's text field still builds while it closes.
     if (ok != true) return;
     setState(() => _uploading.add('$title.txt'));
     try {

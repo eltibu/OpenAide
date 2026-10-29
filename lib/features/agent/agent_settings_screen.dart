@@ -861,6 +861,10 @@ class _ToolServerEditorState extends ConsumerState<ToolServerEditorScreen> {
   }
 
   Future<void> _test() async {
+    if (Uri.tryParse(_url.text.trim())?.host.isEmpty ?? true) {
+      setState(() => _status = 'Enter the server address (https://...)');
+      return;
+    }
     setState(() {
       _busy = true;
       _status = 'Connecting…';
@@ -1052,7 +1056,8 @@ Future<String?> _ask(BuildContext context, String title, String text) {
         ),
       ],
     ),
-  ).whenComplete(c.dispose);
+  );
+  // c is not disposed: the dialog's text field still builds while it closes.
 }
 
 /// Notes the model saved on the phone.
