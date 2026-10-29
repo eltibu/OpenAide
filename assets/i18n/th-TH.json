@@ -127,6 +127,7 @@
 "Exclude": "ยกเว้น",
 "Expand input": "ขยายช่องป้อนข้อความ",
 "Export": "ส่งออก",
+"Export as CSV": "ส่งออกเป็น CSV",
 "Export chat (.json)": "ส่งออกการสนทนา (.json)",
 "Female": "หญิง",
 "Files": "ไฟล์",

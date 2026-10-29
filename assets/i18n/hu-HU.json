@@ -127,6 +127,7 @@
 "Exclude": "Kizárás",
 "Expand input": "Beviteli mező kibontása",
 "Export": "Exportálás",
+"Export as CSV": "Exportálás CSV-ként",
 "Export chat (.json)": "Beszélgetés exportálása (.json)",
 "Female": "Nő",
 "Files": "Fájlok",

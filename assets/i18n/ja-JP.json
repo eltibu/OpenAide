@@ -127,6 +127,7 @@
 "Exclude": "除外",
 "Expand input": "入力欄を拡大",
 "Export": "エクスポート",
+"Export as CSV": "CSVとしてエクスポート",
 "Export chat (.json)": "チャットをエクスポート(.json)",
 "Female": "女性",
 "Files": "ファイル",

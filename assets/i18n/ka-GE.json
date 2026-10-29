@@ -127,6 +127,7 @@
 "Exclude": "გამორიცხვა",
 "Expand input": "შეყვანის ველის გაფართოება",
 "Export": "გატანა",
+"Export as CSV": "CSV ფორმატში გატანა",
 "Export chat (.json)": "ჩატის გატანა (.json)",
 "Female": "მდედრობითი",
 "Files": "ფაილი",

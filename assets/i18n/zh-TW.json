@@ -122,6 +122,7 @@
 "Exclude": "排除",
 "Expand input": "展開輸入框",
 "Export": "匯出",
+"Export as CSV": "匯出為 CSV",
 "Export chat (.json)": "匯出對話紀錄（.json）",
 "Female": "女性",
 "Files": "檔案",

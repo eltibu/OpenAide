@@ -127,6 +127,7 @@
 "Exclude": "미포함",
 "Expand input": "입력창 확장",
 "Export": "내보내기",
+"Export as CSV": "CSV로 내보내기",
 "Export chat (.json)": "채팅 내보내기 (.json)",
 "Female": "여성",
 "Files": "파일",

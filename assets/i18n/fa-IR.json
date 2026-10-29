@@ -127,6 +127,7 @@
 "Exclude": "مستثنی کردن",
 "Expand input": "گسترش کادر ورودی",
 "Export": "خروجی گرفتن",
+"Export as CSV": "خروجی گرفتن به صورت CSV",
 "Export chat (.json)": "خروجی گرفتن گفتگو (json)",
 "Female": "زن",
 "Files": "پرونده‌ها",

@@ -111,6 +111,7 @@
 "Exclude": "استبعاد",
 "Expand input": "توسيع حقل الإدخال",
 "Export": "تصدير",
+"Export as CSV": "تصدير بصيغة CSV",
 "Export chat (.json)": "تصدير المحادثة (.json)",
 "Female": "أنثى",
 "Files": "الملفات",

@@ -105,6 +105,7 @@
 "Exclude": "排除",
 "Expand input": "展开输入框",
 "Export": "导出",
+"Export as CSV": "导出为 CSV",
 "Export chat (.json)": "导出对话（.json）",
 "Female": "女性",
 "Files": "文件",

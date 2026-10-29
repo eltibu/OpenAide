@@ -125,6 +125,7 @@
 "Exclude": "Jätä pois",
 "Expand input": "Laajenna syöttökenttä",
 "Export": "Vie",
+"Export as CSV": "Vie CSV-tiedostona",
 "Export chat (.json)": "Vie keskustelu (.json)",
 "Female": "Nainen",
 "Files": "Tiedostot",

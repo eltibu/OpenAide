@@ -19,6 +19,46 @@ void _say(BuildContext context, String text) =>
     ScaffoldMessenger.of(context)
         .showSnackBar(SnackBar(content: Text(tr(text))));
 
+/// Ratings as the web's CSV export: one row each, the same columns.
+String feedbacksCsv(Object? feedbacks) {
+  if (feedbacks is! List || feedbacks.isEmpty) return '';
+  String cell(Object? v) {
+    final s = v == null ? '' : '$v';
+    return s.contains(',') || s.contains('"') || s.contains('\n')
+        ? '"${s.replaceAll('"', '""')}"'
+        : s;
+  }
+
+  const head = [
+    'id',
+    'user_id',
+    'chat_id',
+    'model_id',
+    'sibling_model_ids',
+    'rating',
+    'reason',
+    'comment',
+    'created_at',
+    'updated_at',
+  ];
+  return [
+    head.join(','),
+    for (final f in feedbacks.whereType<Map>())
+      [
+        f['id'],
+        f['user_id'],
+        (f['meta'] as Map?)?['chat_id'] ?? '',
+        (f['data'] as Map?)?['model_id'] ?? '',
+        (((f['data'] as Map?)?['sibling_model_ids'] as List?) ?? []).join(';'),
+        (f['data'] as Map?)?['rating'] ?? '',
+        (f['data'] as Map?)?['reason'] ?? '',
+        (f['data'] as Map?)?['comment'] ?? '',
+        f['created_at'],
+        f['updated_at'],
+      ].map(cell).join(','),
+  ].join('\n');
+}
+
 class EvaluationsScreen extends StatelessWidget {
   const EvaluationsScreen({super.key});
 
@@ -274,16 +314,24 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
     await _reload();
   }
 
-  Future<void> _export() async {
+  /// Every rating (for the model picked above, if one is), as JSON or CSV.
+  Future<void> _export({bool csv = false}) async {
     try {
       final data = await ref
           .read(clientProvider)
-          .send('GET', '$_base/feedbacks/all/export');
+          .send(
+            'GET',
+            '$_base/feedbacks/all/export',
+            query: {'model_id': ?_model},
+          );
       final name =
-          'feedback-history-export-${DateTime.now().millisecondsSinceEpoch}.json';
+          'feedback-history-export-${DateTime.now().millisecondsSinceEpoch}'
+          '.${csv ? 'csv' : 'json'}';
       final saved = await FilePicker.saveFile(
         fileName: name,
-        bytes: Uint8List.fromList(utf8.encode(jsonEncode(data))),
+        bytes: Uint8List.fromList(
+          utf8.encode(csv ? feedbacksCsv(data) : jsonEncode(data)),
+        ),
       );
       if (saved != null && mounted) _say(context, 'Saved $name');
     } catch (e) {
@@ -332,9 +380,14 @@ class _FeedbackViewState extends ConsumerState<FeedbackView> {
                     ),
                   ),
                   PopupMenuButton<String>(
-                    onSelected: (v) => v == 'export' ? _export() : _deleteAll(),
+                    onSelected: (v) => switch (v) {
+                      'export' => _export(),
+                      'csv' => _export(csv: true),
+                      _ => _deleteAll(),
+                    },
                     itemBuilder: (_) => const [
                       PopupMenuItem(value: 'export', child: T('Export all')),
+                      PopupMenuItem(value: 'csv', child: T('Export as CSV')),
                       PopupMenuItem(value: 'delete', child: T('Delete all')),
                     ],
                   ),

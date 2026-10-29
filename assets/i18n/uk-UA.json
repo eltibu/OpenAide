@@ -127,6 +127,7 @@
 "Exclude": "Виключити",
 "Expand input": "Розгорнути поле введення",
 "Export": "Експорт",
+"Export as CSV": "Експорт у форматі CSV",
 "Export chat (.json)": "Експорт чату (.json)",
 "Female": "Жіноча",
 "Files": "Файли",
