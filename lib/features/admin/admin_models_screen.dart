@@ -16,6 +16,7 @@ import '../chat/chat_controller.dart' show modelsProvider;
 import '../chat/model_pins.dart' show modelLink;
 import '../workspace/models_api.dart';
 import 'manage_ollama.dart';
+import 'provider_models.dart';
 import 'model_defaults.dart';
 import '../workspace/models_screen.dart'
     show ModelEditor, modelsApiProvider, workspaceModelsProvider;
@@ -302,6 +303,37 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
     );
   }
 
+  /// llama.cpp and LM Studio connections, as the web's Manage Models.
+  Future<void> _providers() async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final connections = providerConnections(
+        await ref.read(clientProvider).send('GET', '/openai/config') as Map?,
+      );
+      if (!mounted) return;
+      if (connections.isEmpty) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: T(
+              'No llama.cpp or LM Studio connection. Set the provider on '
+              'one in Admin > Connections.',
+            ),
+          ),
+        );
+        return;
+      }
+      await Navigator.push(
+        context,
+        MaterialPageRoute<void>(
+          builder: (_) => ProviderModelsScreen(connections: connections),
+        ),
+      );
+      _load();
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
   Future<void> _resetOrder() => _saveConfig({'MODEL_ORDER_LIST': <String>[]});
 
   Future<void> _saveOrder() async {
@@ -466,6 +498,7 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                     'export' => _export(),
                     'order' => _resetOrder(),
                     'reset' => _resetAll(),
+                    'providers' => _providers(),
                     'defaults' => Navigator.push(
                       context,
                       MaterialPageRoute<void>(
@@ -478,6 +511,10 @@ class _AdminModelsScreenState extends ConsumerState<AdminModelsScreen> {
                     PopupMenuItem(
                       value: 'defaults',
                       child: T('Model Defaults'),
+                    ),
+                    PopupMenuItem(
+                      value: 'providers',
+                      child: T('Model providers'),
                     ),
                     PopupMenuDivider(),
                     PopupMenuItem(value: 'on', child: T('Enable all')),
