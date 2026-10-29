@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../workspace/tools_skills.dart' show ValvesScreen;
 import 'advanced_params.dart';
 import 'chat_controller.dart';
+import 'read_aloud.dart' show readAloudOnProvider;
 import '../settings/tool_servers.dart' show chatToolsProvider;
 import '../../core/i18n/app_strings.dart';
 
@@ -101,6 +102,14 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
           'Only for this chat, and saved with it. Anything left on '
           'default follows Settings and the model.',
           style: TextStyle(color: muted),
+        ),
+        const SizedBox(height: 8),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const T('Read replies aloud'),
+          subtitle: const T('In every chat, until you turn it off'),
+          value: ref.watch(readAloudOnProvider),
+          onChanged: (v) => ref.read(readAloudOnProvider.notifier).set(v),
         ),
         heading('System prompt'),
         TextField(

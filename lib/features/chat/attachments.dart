@@ -62,25 +62,30 @@ class AttachButton extends ConsumerWidget {
                   ),
                   const Divider(height: 1),
                 ],
-                ListTile(
-                  leading: const Icon(Icons.photo_library_outlined),
-                  title: const T('Photos and videos'),
-                  onTap: () => Navigator.pop(context, 'gallery'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.photo_camera_outlined),
-                  title: const T('Take a photo'),
-                  onTap: () => Navigator.pop(context, 'camera'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.videocam_outlined),
-                  title: const T('Record a video'),
-                  onTap: () => Navigator.pop(context, 'video'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.insert_drive_file_outlined),
-                  title: const T('Files'),
-                  onTap: () => Navigator.pop(context, 'files'),
+                // Camera, photos and files as big tiles, as in the Claude
+                // app; everything else is a list below.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(
+                    children: [
+                      for (final (value, icon, label) in const [
+                        ('camera', Icons.photo_camera_outlined, 'Camera'),
+                        ('gallery', Icons.photo_library_outlined, 'Photos'),
+                        ('video', Icons.videocam_outlined, 'Video'),
+                        ('files', Icons.insert_drive_file_outlined, 'Files'),
+                      ])
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: _AttachTile(
+                              icon: icon,
+                              label: label,
+                              onTap: () => Navigator.pop(context, value),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
                 const Divider(height: 1),
                 ListTile(
@@ -735,4 +740,41 @@ class _PhotoView extends StatelessWidget {
   }
 
   return (side(size['width']), side(size['height']));
+}
+
+/// One of the big Camera, Photos, Video and Files tiles atop the + sheet.
+class _AttachTile extends StatelessWidget {
+  const _AttachTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: SizedBox(
+          height: 76,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 24),
+              const SizedBox(height: 6),
+              T(label, style: Theme.of(context).textTheme.labelLarge),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }

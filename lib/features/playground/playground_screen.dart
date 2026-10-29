@@ -332,23 +332,22 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
                 icon: const Icon(Icons.copy),
                 label: const T('Copy JSON'),
               ),
-              PopupMenuButton<String>(
-                tooltip: tr('Export'),
-                onSelected: _export,
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'json', child: T('Export chat (.json)')),
-                  PopupMenuItem(value: 'txt', child: T('Plain text (.txt)')),
-                ],
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.download_outlined, size: 18),
-                      SizedBox(width: 8),
-                      T('Export'),
-                    ],
+              // A text button like its neighbours, with the formats on tap.
+              MenuAnchor(
+                menuChildren: [
+                  MenuItemButton(
+                    onPressed: () => _export('json'),
+                    child: const T('Export chat (.json)'),
                   ),
+                  MenuItemButton(
+                    onPressed: () => _export('txt'),
+                    child: const T('Plain text (.txt)'),
+                  ),
+                ],
+                builder: (context, menu, _) => TextButton.icon(
+                  onPressed: () => menu.isOpen ? menu.close() : menu.open(),
+                  icon: const Icon(Icons.download_outlined),
+                  label: const T('Export'),
                 ),
               ),
               TextButton.icon(
