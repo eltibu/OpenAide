@@ -1105,3 +1105,238 @@ Future<Uint8List> slidesToPdf(
       );
   }
 }
+
+/// A comment kept in a Word, Excel or PowerPoint file, as the web's file
+/// previews show them.
+class OfficeComment {
+  const OfficeComment({
+    required this.text,
+    this.author,
+    this.date,
+    this.where,
+    this.slide,
+    this.reply = false,
+    this.resolved = false,
+  });
+  final String text;
+  final String? author;
+  final String? date;
+
+  /// What it's on: the quoted words, a cell such as "Sheet1!B2", or
+  /// "Slide 3".
+  final String? where;
+
+  /// For PowerPoint: the slide it's on, from 1.
+  final int? slide;
+
+  /// An answer to the comment before it.
+  final bool reply;
+  final bool resolved;
+}
+
+/// The comments in an Office file, threads in order (each followed by its
+/// replies). Empty for files without any, or that aren't Office files.
+List<OfficeComment> officeComments(String name, Uint8List bytes) {
+  final ext = name.split('.').last.toLowerCase();
+  try {
+    final pkg = _Package(bytes);
+    return switch (ext) {
+      'pptx' || 'pptm' => _slideComments(pkg),
+      'docx' || 'docm' => _wordComments(pkg),
+      'xlsx' || 'xlsm' => _sheetComments(pkg),
+      _ => const [],
+    };
+  } catch (_) {
+    return const [];
+  }
+}
+
+String? _mainPart(_Package pkg, String root) => pkg
+    .rels('')
+    .values
+    .where((p) => pkg.xml(p)?.rootElement.localName == root)
+    .firstOrNull;
+
+String _texts(XmlNode n) => _all(n, 't').map((t) => t.innerText).join();
+
+List<OfficeComment> _slideComments(_Package pkg) {
+  final main = _mainPart(pkg, 'presentation');
+  if (main == null) return const [];
+  final rels = pkg.rels(main);
+  final authors = <String, String>{};
+  for (final p in rels.values) {
+    final doc = pkg.xml(p);
+    final root = doc?.rootElement.localName;
+    if (root != 'cmAuthorLst' && root != 'authorLst') continue;
+    for (final a in _all(doc!, root == 'cmAuthorLst' ? 'cmAuthor' : 'author')) {
+      authors['${_attr(a, 'id')}'] = _attr(a, 'name') ?? '';
+    }
+  }
+  final out = <OfficeComment>[];
+  var n = 0;
+  for (final id in _all(pkg.xml(main)!, 'sldId')) {
+    final path = rels[_rid(id)];
+    if (path == null || pkg.xml(path) == null) continue;
+    n++;
+    final lists = [
+      for (final p in pkg.rels(path).values)
+        if (pkg.xml(p)?.rootElement case final r? when r.localName == 'cmLst')
+          r,
+    ];
+    // Modern threads replace the older copy kept for old PowerPoints.
+    bool modern(XmlElement r) =>
+        (r.namespaceUri ?? '').contains('powerpoint/2018');
+    final use = lists.any(modern) ? lists.where(modern) : lists;
+    for (final list in use) {
+      for (final c in _kids(list, 'cm')) {
+        final isModern = modern(list);
+        out.add(
+          OfficeComment(
+            text: isModern
+                ? _texts(_kid(c, 'txBody') ?? c).trim()
+                : (_kid(c, 'text')?.innerText ?? '').trim(),
+            author: authors[_attr(c, 'authorId')],
+            date: _attr(c, isModern ? 'created' : 'dt'),
+            where: 'Slide $n',
+            slide: n,
+            resolved: _attr(c, 'status') == 'resolved',
+          ),
+        );
+        for (final r in _all(c, 'reply')) {
+          out.add(
+            OfficeComment(
+              text: _texts(r).trim(),
+              author: authors[_attr(r, 'authorId')],
+              date: _attr(r, 'created'),
+              slide: n,
+              reply: true,
+            ),
+          );
+        }
+      }
+    }
+  }
+  return out;
+}
+
+List<OfficeComment> _wordComments(_Package pkg) {
+  final main = _mainPart(pkg, 'document');
+  if (main == null) return const [];
+  final rels = pkg.rels(main).values;
+  XmlDocument? part(String root) => rels
+      .map(pkg.xml)
+      .where((d) => d?.rootElement.localName == root)
+      .firstOrNull;
+  final comments = part('comments');
+  if (comments == null) return const [];
+
+  // The words each comment is on.
+  final quotes = <String, StringBuffer>{};
+  final open = <String>{};
+  for (final e in pkg.xml(main)!.descendants.whereType<XmlElement>()) {
+    final id = _attr(e, 'id');
+    if (e.localName == 'commentRangeStart' && id != null) {
+      open.add(id);
+      quotes[id] = StringBuffer();
+    } else if (e.localName == 'commentRangeEnd') {
+      open.remove(id);
+    } else if (e.localName == 't' && open.isNotEmpty) {
+      for (final o in open) {
+        quotes[o]!.write(e.innerText);
+      }
+    }
+  }
+
+  // Replies and resolved ones (Word 2013 and later), by last paragraph.
+  final done = <String>{};
+  final parentOf = <String, String>{};
+  final ex = part('commentsEx');
+  if (ex != null) {
+    for (final c in _all(ex, 'commentEx')) {
+      final para = _attr(c, 'paraId');
+      if (para == null) continue;
+      if (_attr(c, 'done') == '1') done.add(para);
+      final parent = _attr(c, 'paraIdParent');
+      if (parent != null) parentOf[para] = parent;
+    }
+  }
+
+  final threads = <String, List<OfficeComment>>{};
+  for (final c in _kids(comments.rootElement, 'comment')) {
+    final para = _all(c, 'p').lastOrNull;
+    final pid = para == null ? null : _attr(para, 'paraId');
+    final quote = quotes['${_attr(c, 'id')}']?.toString().trim();
+    final parent = pid == null ? null : parentOf[pid];
+    final comment = OfficeComment(
+      text: [for (final p in _all(c, 'p')) _texts(p)].join('\n').trim(),
+      author: _attr(c, 'author'),
+      date: _attr(c, 'date'),
+      where: quote == null || quote.isEmpty ? null : '"$quote"',
+      reply: parent != null && threads.containsKey(parent),
+      resolved: pid != null && done.contains(pid),
+    );
+    if (comment.reply) {
+      threads[parent]!.add(comment);
+    } else {
+      threads[pid ?? '${threads.length}'] = [comment];
+    }
+  }
+  return [for (final t in threads.values) ...t];
+}
+
+List<OfficeComment> _sheetComments(_Package pkg) {
+  final main = _mainPart(pkg, 'workbook');
+  if (main == null) return const [];
+  final rels = pkg.rels(main);
+  final people = <String, String>{};
+  for (final p in rels.values) {
+    final doc = pkg.xml(p);
+    if (doc?.rootElement.localName != 'personList') continue;
+    for (final person in _all(doc!, 'person')) {
+      people['${_attr(person, 'id')}'] = _attr(person, 'displayName') ?? '';
+    }
+  }
+  final out = <OfficeComment>[];
+  for (final s in _all(pkg.xml(main)!, 'sheet')) {
+    final path = rels[_rid(s)];
+    if (path == null) continue;
+    final sheet = _attr(s, 'name') ?? '';
+    final parts = [
+      for (final p in pkg.rels(path).values) ?pkg.xml(p)?.rootElement,
+    ];
+    // Threaded comments replace the plain note Excel keeps beside them.
+    final threadedRefs = <String>{};
+    for (final t in parts.where((r) => r.localName == 'ThreadedComments')) {
+      for (final c in _kids(t, 'threadedComment')) {
+        final ref = _attr(c, 'ref') ?? '';
+        threadedRefs.add(ref);
+        out.add(
+          OfficeComment(
+            text: (_kid(c, 'text')?.innerText ?? '').trim(),
+            author: people[_attr(c, 'personId')],
+            date: _attr(c, 'dT'),
+            where: '$sheet!$ref',
+            reply: _attr(c, 'parentId') != null,
+            resolved: _attr(c, 'done') == '1',
+          ),
+        );
+      }
+    }
+    for (final notes in parts.where((r) => r.localName == 'comments')) {
+      final authors = [for (final a in _all(notes, 'author')) a.innerText];
+      for (final c in _all(notes, 'comment')) {
+        final ref = _attr(c, 'ref') ?? '';
+        if (threadedRefs.contains(ref)) continue;
+        final who = int.tryParse(_attr(c, 'authorId') ?? '');
+        out.add(
+          OfficeComment(
+            text: _texts(_kid(c, 'text') ?? c).trim(),
+            author: who != null && who < authors.length ? authors[who] : null,
+            where: '$sheet!$ref',
+          ),
+        );
+      }
+    }
+  }
+  return out;
+}
