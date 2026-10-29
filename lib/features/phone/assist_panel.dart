@@ -15,6 +15,7 @@ import '../../core/theme.dart';
 import '../../core/widgets/markdown_style.dart';
 import '../chat/chat_controller.dart';
 import '../studio/record_notes.dart' show dictate;
+import 'app_lock.dart';
 import 'phone_launch.dart';
 
 /// The panel's own small app, run by AssistActivity (see assistMain).
@@ -32,7 +33,10 @@ class AssistPanelApp extends ConsumerWidget {
       theme: nexusTheme(Brightness.light),
       darkTheme: nexusTheme(Brightness.dark),
       locale: AppStrings.instance.locale,
-      builder: (context, child) => AppStringsScope(child: child!),
+      // App lock covers the panel too: it reaches the same chats and phone
+      // actions as the app.
+      builder: (context, child) =>
+          AppStringsScope(child: AppLockGate(holdChild: true, child: child!)),
       color: Colors.transparent,
       home: AssistPanel(listenFirst: listenFirst),
     ),

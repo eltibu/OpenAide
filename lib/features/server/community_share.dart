@@ -79,7 +79,10 @@ class _CommunityPageState extends State<_CommunityPage> {
           },
           // Early, so the page finds its "opener"; and again once loaded,
           // in case it asked before the stand-in was there.
-          onPageStarted: (_) => _web.runJavaScript(script),
+          onPageStarted: (url) async {
+            if (Uri.tryParse(url)?.host != site) return;
+            await _web.runJavaScript(script);
+          },
           onPageFinished: (url) async {
             if (Uri.tryParse(url)?.host != site) return;
             await _web.runJavaScript(script);

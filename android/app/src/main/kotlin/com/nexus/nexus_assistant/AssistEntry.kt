@@ -28,8 +28,13 @@ class AssistEntry : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val target = if (overlayOn(this)) AssistActivity::class.java else MainActivity::class.java
+        // Only the action goes on: any app can start this screen, so what it
+        // put in the intent (shared files, a chat to open) must not reach the
+        // panel, which other apps can't start themselves.
+        val action = intent?.action.takeIf { it == Intent.ACTION_VOICE_COMMAND }
+            ?: Intent.ACTION_ASSIST
         startActivity(
-            Intent(intent).setClass(this, target).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            Intent(action).setClass(this, target).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
         )
         finish()
     }

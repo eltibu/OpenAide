@@ -105,8 +105,12 @@ class _UsageSyncScreenState extends ConsumerState<UsageSyncScreen> {
           onProgress: (p) {
             if (mounted) setState(() => _progress = p);
           },
-          onPageStarted: (_) => _web.runJavaScript(shim).ignore(),
-          onPageFinished: (_) => _web.runJavaScript(shim).ignore(),
+          onPageStarted: (url) {
+            if (_onCommunity(url)) _web.runJavaScript(shim).ignore();
+          },
+          onPageFinished: (url) {
+            if (_onCommunity(url)) _web.runJavaScript(shim).ignore();
+          },
         ),
       )
       ..loadRequest(Uri.parse(communityUrl));
@@ -116,7 +120,13 @@ class _UsageSyncScreenState extends ConsumerState<UsageSyncScreen> {
     'window.__openaideSync && window.__openaideSync(${jsonEncode(data)});',
   );
 
+  /// Only the community site gets the stand-in and its answers: a page it
+  /// links to must not ask for your stats.
+  static bool _onCommunity(String? url) =>
+      Uri.tryParse(url ?? '')?.host == Uri.parse(communityUrl).host;
+
   Future<void> _received(JavaScriptMessage message) async {
+    if (!_onCommunity(await _web.currentUrl())) return;
     final Map m;
     try {
       m = jsonDecode(message.message) as Map;
