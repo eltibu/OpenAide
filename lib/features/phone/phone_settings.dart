@@ -11,6 +11,7 @@ import '../settings/settings_screen.dart';
 import 'app_lock.dart';
 import 'phone_actions.dart';
 import 'phone_launch.dart';
+import 'wake_phrase.dart';
 import '../../core/i18n/app_strings.dart';
 
 class PhoneSettings extends ConsumerStatefulWidget {
@@ -150,6 +151,7 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
               _set({assistantOpensKey: 'panel'});
             },
           ),
+          const WakePhraseTile(),
           title('Shortcuts'),
           ListTile(
             leading: const Icon(Icons.dashboard_customize_outlined),

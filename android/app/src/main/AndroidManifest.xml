@@ -11,6 +11,8 @@
     <!-- Calls and recordings keep going with the phone locked. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Hands-free: open the assistant over other apps when it hears you. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Phone actions: timers and alarms, and finding who to call or text. -->
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
@@ -103,6 +105,11 @@
         </activity>
         <service
             android:name=".MicService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+        <!-- Hands-free: listens for "Hey OpenAide" on the phone. -->
+        <service
+            android:name=".WakeService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
         <!-- Settings > Notifications > While the app is closed. -->

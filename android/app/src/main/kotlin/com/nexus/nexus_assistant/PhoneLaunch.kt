@@ -166,6 +166,24 @@ class PhoneLaunch(private val activity: Activity) : MethodChannel.MethodCallHand
                 AssistEntry.setOverlay(activity, call.argument<Boolean>("on") ?: false)
                 result.success(null)
             }
+            // Hands-free "Hey OpenAide" (WakeService).
+            "wakeState" -> result.success(
+                mapOf(
+                    "on" to WakeService.isOn(activity),
+                    "model" to WakeService.modelPath(activity),
+                    "canOpen" to WakeService.canOpen(activity),
+                ),
+            )
+            "wake" -> {
+                WakeService.set(activity, call.argument<Boolean>("on") ?: false, call.argument<String>("model"))
+                result.success(null)
+            }
+            "openOverOtherApps" -> {
+                activity.startActivity(
+                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${activity.packageName}")),
+                )
+                result.success(null)
+            }
             // From that panel: the chat in the full app, or just close.
             "openApp" -> {
                 val open = Intent(activity, MainActivity::class.java).apply {

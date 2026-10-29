@@ -144,10 +144,12 @@ open class MainActivity : FlutterActivity() {
     override fun onResume() {
         super.onResume()
         BackgroundCheck.appVisible = true
+        WakeService.appOnScreen(this, true)
     }
 
     override fun onPause() {
         BackgroundCheck.appVisible = false
+        WakeService.appOnScreen(this, false)
         super.onPause()
     }
 
