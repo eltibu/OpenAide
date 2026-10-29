@@ -23,8 +23,7 @@ class ApiException implements Exception {
 }
 
 /// The server answers only over plain http and is on the internet, so a
-/// sign-in would cross the internet unencrypted. Signing in goes ahead only
-/// once the person says so for [host].
+/// sign-in would cross the internet unencrypted: it's refused.
 class InsecureServer implements Exception {
   const InsecureServer(this.host);
   final String host;
@@ -71,7 +70,8 @@ class OpenWebUiClient {
     this.cookie,
     http.Client? httpClient,
   }) : baseUrl = _normalize(baseUrl),
-       _http = httpClient ?? http.Client();
+       // Never plain http across the internet, whatever was saved before.
+       _http = httpClient ?? EncryptedOnlyClient(null, true);
 
   final String baseUrl;
   String? token;
@@ -80,6 +80,9 @@ class OpenWebUiClient {
   /// pass a login gate (reverse-proxy portal) in front of Open WebUI.
   final String? cookie;
   final http.Client _http;
+
+  /// The connection underneath, for a client that shares it.
+  http.Client get httpClient => _http;
 
   /// Normalizes a typed address the same way the client does.
   static String normalizeUrl(String url) => _normalize(url);
@@ -220,12 +223,10 @@ class OpenWebUiClient {
   /// Finds the Open WebUI base URL for what the user typed: tries it as
   /// given, then without any path (people often paste a chat or /auth link),
   /// and https before http when no scheme was typed. Plain http is used
-  /// for the home network, and for internet hosts only when they are in
-  /// [allowInsecure].
+  /// only on the home network, never across the internet.
   static Future<String> discover(
     String input, {
     http.Client? httpClient,
-    Set<String> allowInsecure = const {},
   }) async {
     final typed = input.trim();
     final hasScheme =
@@ -255,8 +256,7 @@ class OpenWebUiClient {
           // Only the public config was read so far: nothing secret has
           // gone over plain http yet.
           final host = Uri.parse(base).host.toLowerCase();
-          if (isInsecureRemote(Uri.parse(base)) &&
-              !allowInsecure.contains(host)) {
+          if (isInsecureRemote(Uri.parse(base))) {
             refused ??= host;
             continue;
           }

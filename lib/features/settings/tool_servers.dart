@@ -23,6 +23,7 @@ import '../chat/request_options.dart' show Pickable;
 import '../terminal/terminal_api.dart';
 import 'settings_screen.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/net/local_network.dart';
 
 const userToolServersKey = 'toolServers';
 
@@ -209,7 +210,7 @@ Future<Map<String, dynamic>> toolServerData(
   http.Client? httpClient,
 }) async {
   final token = toolServerToken(server, sessionToken);
-  final client = httpClient ?? http.Client();
+  final client = EncryptedOnlyClient(httpClient);
   final auth = {
     if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
   };
@@ -383,7 +384,7 @@ Future<List<Object?>> runToolServer(
   String? sessionId,
   http.Client? httpClient,
 }) async {
-  final client = httpClient ?? http.Client();
+  final client = EncryptedOnlyClient(httpClient);
   try {
     final found = _operations(spec)
         .where((o) => o.$4['operationId'] == name)
@@ -522,7 +523,7 @@ Future<void> answerTerminalRequest(
     call.reply({'error': 'Terminal Not Found'});
     return;
   }
-  final client = httpClient ?? http.Client();
+  final client = EncryptedOnlyClient(httpClient);
   try {
     final res = await client.get(
       Uri.parse('$base$path'),

@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../api/sse.dart';
+import '../net/local_network.dart';
 
 const mcpProtocolVersion = '2025-06-18';
 
@@ -54,7 +55,7 @@ class McpClient {
     this.token,
     this.headers = const {},
     http.Client? httpClient,
-  }) : _client = httpClient ?? http.Client(),
+  }) : _client = EncryptedOnlyClient(httpClient),
        _ownsClient = httpClient == null;
 
   final String url;
@@ -414,7 +415,7 @@ Future<McpAuthServer> discoverMcpAuth(
   String? authenticate,
   http.Client? httpClient,
 }) async {
-  final client = httpClient ?? http.Client();
+  final client = EncryptedOnlyClient(httpClient);
   try {
     final base = Uri.parse(serverUrl);
     Future<Map?> getJson(Uri u) async {
@@ -489,7 +490,7 @@ Future<({String id, String? secret})> registerMcpClient(
   String redirect, {
   http.Client? httpClient,
 }) async {
-  final client = httpClient ?? http.Client();
+  final client = EncryptedOnlyClient(httpClient);
   try {
     final r = await client
         .post(
@@ -546,7 +547,7 @@ Future<McpTokens> mcpToken(
   String? clientSecret,
   http.Client? httpClient,
 }) async {
-  final client = httpClient ?? http.Client();
+  final client = EncryptedOnlyClient(httpClient);
   try {
     final r = await client
         .post(

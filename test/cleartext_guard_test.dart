@@ -50,20 +50,12 @@ void main() {
     );
   });
 
-  test('plain http to the internet needs the person to agree', () async {
+  test('plain http to the internet is always refused', () async {
     await expectLater(
       OpenWebUiClient.discover('chat.example.com', httpClient: _httpOnly),
       throwsA(
         isA<InsecureServer>().having((e) => e.host, 'host', 'chat.example.com'),
       ),
-    );
-    expect(
-      await OpenWebUiClient.discover(
-        'chat.example.com',
-        httpClient: _httpOnly,
-        allowInsecure: {'chat.example.com'},
-      ),
-      'http://chat.example.com',
     );
   });
 

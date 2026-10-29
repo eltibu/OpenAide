@@ -99,46 +99,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  /// Plain http to an internet server: only once the person agrees.
-  Future<bool> _okToSendUnencrypted(String host) async {
-    final notifier = ref.read(sessionProvider.notifier);
-    if (notifier.insecureOk.contains(host)) return true;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const T('Connect without encryption?'),
-        content: Text(
-          '$host is reached over plain http. Your password, sign-in and '
-          'chats would cross the internet unencrypted, and anyone on the '
-          'way could read them. Use https:// if the server has it.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const T('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const T('Connect anyway'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return false;
-    notifier.insecureOk.add(host);
-    return true;
-  }
-
-  Future<void> _allowAndRetry(InsecureServer e) async {
-    if (await _okToSendUnencrypted(e.host)) _submit();
-  }
-
   Future<void> _signInWithBrowser() async {
     if (_url.text.trim().isEmpty) return;
     final base = OpenWebUiClient.normalizeUrl(_url.text);
     final uri = Uri.parse(base);
-    if (isInsecureRemote(uri) &&
-        !await _okToSendUnencrypted(uri.host.toLowerCase())) {
+    // Plain http over the internet is never used: it would show the
+    // sign-in to anyone on the way.
+    if (isInsecureRemote(uri)) {
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const T('This address isn\'t encrypted'),
+          content: Text('${InsecureServer(uri.host.toLowerCase())}'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const T('OK'),
+            ),
+          ],
+        ),
+      );
       return;
     }
     if (!mounted) return;
@@ -350,16 +330,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     '${session.error}',
                     style: TextStyle(color: theme.colorScheme.error),
                   ),
-                  if (session.error case final InsecureServer e)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: session.isLoading
-                            ? null
-                            : () => _allowAndRetry(e),
-                        child: const T('Connect anyway, unencrypted'),
-                      ),
-                    ),
                 ],
               ],
             ),

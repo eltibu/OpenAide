@@ -31,6 +31,9 @@ it before you talk about it publicly.
 Open WebUI servers at home are often reached as `http://192.168.x.x`, so
 the app accepts plain HTTP on the home network (private addresses,
 `localhost`, names like `nas` or `server.local`). For a server on the
-internet it signs in over HTTPS only, unless you tap *Connect anyway* after
-a warning: over plain HTTP your password and chats can be read by anyone on
-the way.
+internet it uses HTTPS only, with no way around it: over plain HTTP your
+password and chats could be read by anyone on the way.
+
+Terminals, tool servers and MCP servers are reached over HTTPS only, on any
+network, including terminals reached through your own server. The one
+exception is a server on the phone itself (`localhost`).
