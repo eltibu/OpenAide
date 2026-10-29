@@ -398,6 +398,16 @@ final adminConfigSections = <ConfigSection>[
       'AUTH_TYPE': ['api_key', 'bearer'],
     },
     help: 'Speech to text, text to speech and live voice.',
+    actions: [
+      // The server's own Whisper downloads the model named here.
+      ConfigAction(
+        label: 'Update model',
+        path: '/api/v1/audio/config/update',
+        icon: Icons.download_outlined,
+        showIf: _localWhisper,
+        bodyFrom: _sameAsPage,
+      ),
+    ],
   ),
   ConfigSection(
     title: 'Images',
@@ -531,6 +541,11 @@ final adminConfigSections = <ConfigSection>[
     help: 'Models handing parts of a task to helpers.',
   ),
 ];
+
+bool _localWhisper(Map<String, dynamic> d) =>
+    (d['stt'] as Map?)?['ENGINE'] == '';
+
+Map<String, dynamic> _sameAsPage(Map<String, dynamic> d) => d;
 
 Object? _deepCopy(Object? v) => v == null ? null : jsonDecode(jsonEncode(v));
 

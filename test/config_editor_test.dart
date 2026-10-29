@@ -80,6 +80,7 @@ void main() {
         'SEARXNG_QUERY_URL': 'http://s',
         'BRAVE_SEARCH_API_KEY': 'secret',
         'WEB_SEARCH_DOMAIN_FILTER_LIST': ['a.com'],
+        'BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL': false,
       },
     });
     final section = adminConfigSections.firstWhere(
@@ -96,6 +97,10 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Enable web search'), findsOneWidget);
+    expect(
+      find.text('Bypass web search embedding and retrieval'),
+      findsOneWidget,
+    );
     expect(find.text('Searxng query URL'), findsOneWidget);
     // Another engine's key stays out of the way until asked for.
     expect(find.text('Brave search API key'), findsNothing);
@@ -169,6 +174,36 @@ void main() {
     expect(
       ((client.saved.single as Map)['ollama_config'] as Map)['url'],
       'http://m',
+    );
+  });
+
+  testWidgets('Update model has the server fetch its Whisper model', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 4000);
+    tester.view.devicePixelRatio = 2;
+    addTearDown(tester.view.reset);
+    final client = _FakeClient({
+      'tts': {'ENGINE': ''},
+      'stt': {'ENGINE': '', 'WHISPER_MODEL': 'base'},
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [clientProvider.overrideWithValue(client)],
+        child: MaterialApp(
+          theme: nexusTheme(Brightness.light),
+          home: ConfigEditorScreen(
+            section: adminConfigSections.firstWhere((s) => s.title == 'Audio'),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Update model'));
+    await tester.pumpAndSettle();
+    expect(
+      ((client.saved.single as Map)['stt'] as Map)['WHISPER_MODEL'],
+      'base',
     );
   });
 }
