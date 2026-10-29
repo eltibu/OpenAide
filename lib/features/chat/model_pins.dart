@@ -5,11 +5,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/models/model_info.dart';
 import '../settings/settings_screen.dart'
     show meProvider, settingsApiProvider, uiSettingsProvider;
+import '../server/community_share.dart' show communitySharingOn;
 import '../workspace/models_screen.dart' show ModelEditor, modelsApiProvider;
 import '../../core/i18n/app_strings.dart';
 import 'chat_controller.dart'
@@ -118,6 +120,14 @@ class ModelMoreMenu extends ConsumerWidget {
               ClipboardData(text: modelLink(url, model.id)),
             );
             messenger.showSnackBar(const SnackBar(content: T('Link copied')));
+          case 'reviews':
+            await launchUrl(
+              Uri.parse(
+                'https://openwebui.com/models?q='
+                '${Uri.encodeQueryComponent(model.id)}',
+              ),
+              mode: LaunchMode.externalApplication,
+            );
           case 'edit':
             try {
               final m = await ref.read(modelsApiProvider).get(model.id);
@@ -144,6 +154,9 @@ class ModelMoreMenu extends ConsumerWidget {
           child: Text(pinned ? 'Hide from Sidebar' : 'Keep in Sidebar'),
         ),
         const PopupMenuItem(value: 'link', child: T('Copy Link')),
+        // As the web, when the server has community sharing on.
+        if (communitySharingOn(ref.read(serverConfigProvider).value))
+          const PopupMenuItem(value: 'reviews', child: T('Community Reviews')),
       ],
     );
   }

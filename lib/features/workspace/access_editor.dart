@@ -14,6 +14,8 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../channels/channel_manage.dart' show pickPerson;
 import '../channels/channels_api.dart';
+import '../chat/chat_controller.dart' show serverConfigProvider;
+import '../server/community_share.dart';
 import 'version_history.dart';
 import '../../core/i18n/app_strings.dart';
 
@@ -130,6 +132,64 @@ Future<void> exportItem(
   }
 }
 
+/// Where an item kind is shared on Open WebUI Community, as on the web.
+String? communityPath(String kind) => switch (kind) {
+  'model' => '/post?type=model',
+  'prompt' => '/prompts/create',
+  'tool' => '/tools/create',
+  'skill' => '/post?type=skill',
+  _ => null,
+};
+
+/// The item as the web hands it to the community page: a skill as its
+/// export bundle (with its files), the rest as the server keeps them.
+Future<String> communityPayload(
+  WidgetRef ref, {
+  required String kind,
+  required String id,
+}) async {
+  final client = ref.read(clientProvider);
+  if (kind == 'skill') {
+    final exported = await client.send(
+      'GET',
+      '/api/v1/skills/export',
+      query: {'format': 'json', 'ids': id},
+    );
+    final first = exported is List ? exported.first : exported;
+    final m = (first as Map?) ?? const {};
+    return jsonEncode({
+      'id': m['id'],
+      'name': m['name'],
+      'description': m['description'],
+      'files': m['files'],
+    });
+  }
+  return jsonEncode(await client.send('GET', itemPath(kind, id)));
+}
+
+/// Share: the item goes to Open WebUI Community's upload page, as on the
+/// web (only when the server has community sharing on).
+Future<void> shareItemToCommunity(
+  BuildContext context,
+  WidgetRef ref, {
+  required String kind,
+  required String id,
+}) async {
+  try {
+    final payload = await communityPayload(ref, kind: kind, id: id);
+    if (!context.mounted) return;
+    await shareToCommunity(
+      context,
+      path: communityPath(kind)!,
+      payload: payload,
+    );
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+}
+
 /// Access and Export for an item's editor, as the web's item menu.
 class ItemMenu extends ConsumerWidget {
   const ItemMenu({
@@ -157,6 +217,7 @@ class ItemMenu extends ConsumerWidget {
     onSelected: (v) => switch (v) {
       'access' => editAccess(context, ref, kind: kind, id: id, name: name),
       'export' => exportItem(context, ref, kind: kind, id: id, name: name),
+      'share' => shareItemToCommunity(context, ref, kind: kind, id: id),
       'clone' => onClone?.call(),
       String v when v.startsWith('extra:') =>
         extra[int.parse(v.substring(6))].$2(),
@@ -177,6 +238,9 @@ class ItemMenu extends ConsumerWidget {
       if (onClone != null)
         const PopupMenuItem(value: 'clone', child: T('Clone')),
       const PopupMenuItem(value: 'export', child: T('Export')),
+      if (communityPath(kind) != null &&
+          communitySharingOn(ref.read(serverConfigProvider).value))
+        const PopupMenuItem(value: 'share', child: T('Share')),
       for (final (i, (label, _)) in extra.indexed)
         PopupMenuItem(value: 'extra:$i', child: Text(label)),
       const PopupMenuItem(value: 'history', child: T('Version history')),

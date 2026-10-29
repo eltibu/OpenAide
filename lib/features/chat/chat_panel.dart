@@ -307,6 +307,11 @@ class _Overview extends ConsumerWidget {
             onTap: state.streaming || shown.contains(m.id)
                 ? null
                 : () => ref.read(chatControllerProvider.notifier).showAnswer(m),
+            onFavorite: state.streaming
+                ? null
+                : () => ref
+                      .read(chatControllerProvider.notifier)
+                      .toggleFavorite(m),
           ),
         );
       },
@@ -322,8 +327,10 @@ class _Node extends StatelessWidget {
     required this.shown,
     required this.last,
     this.onTap,
+    this.onFavorite,
   });
   final ChatMessage message;
+  final VoidCallback? onFavorite;
   final String name;
   final Map<String, dynamic>? user;
   final bool shown;
@@ -422,6 +429,26 @@ class _Node extends StatelessWidget {
                                 ),
                             ],
                           ),
+                        ),
+                        // The web's heart: marks a message to find again.
+                        Builder(
+                          builder: (context) {
+                            final on = message.extra['favorite'] == true;
+                            return IconButton(
+                              visualDensity: VisualDensity.compact,
+                              tooltip: tr(
+                                on
+                                    ? 'Remove from favorites'
+                                    : 'Add to favorites',
+                              ),
+                              icon: Icon(
+                                on ? Icons.favorite : Icons.favorite_border,
+                                size: 16,
+                                color: on ? Colors.red : muted,
+                              ),
+                              onPressed: onFavorite,
+                            );
+                          },
                         ),
                       ],
                     ),

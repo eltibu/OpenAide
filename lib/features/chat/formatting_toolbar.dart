@@ -104,11 +104,20 @@ bool formattingToolbarWanted(TextEditingValue v) {
 }
 
 class FormattingToolbar extends StatelessWidget {
-  const FormattingToolbar({super.key, required this.controller});
+  const FormattingToolbar({
+    super.key,
+    required this.controller,
+    this.onChanged,
+  });
   final TextEditingController controller;
 
-  void _apply(TextEditingValue Function(TextEditingValue) f) =>
-      controller.value = f(controller.value);
+  /// After a button changed the text (a TextField's onChanged doesn't run).
+  final VoidCallback? onChanged;
+
+  void _apply(TextEditingValue Function(TextEditingValue) f) {
+    controller.value = f(controller.value);
+    onChanged?.call();
+  }
 
   Future<void> _emoji(BuildContext context) async {
     final picked = await showModalBottomSheet<String>(

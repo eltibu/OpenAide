@@ -824,8 +824,10 @@ class ChatController extends Notifier<ChatState> {
       state = state.copyWith(
         chat: chat,
         variables: chat.variables,
-        modelId: chat.models.firstOrNull ?? state.modelId,
-        compareIds: chat.models.skip(1).toList(),
+        // A note's chat starts with no model (""): keep the one picked.
+        modelId:
+            chat.models.where((m) => m.isNotEmpty).firstOrNull ?? state.modelId,
+        compareIds: chat.models.skip(1).where((m) => m.isNotEmpty).toList(),
         params: {
           for (final e in ((chat.extra['params'] as Map?) ?? const {}).entries)
             if (e.value != null) '${e.key}': e.value,
@@ -919,6 +921,25 @@ class ChatController extends Notifier<ChatState> {
     if (at != null) ref.read(atModelProvider.notifier).set(null);
     await _reply(chat, user, modelId, also: also);
     return true;
+  }
+
+  /// The heart on a message in the Overview, saved with the chat.
+  Future<void> toggleFavorite(ChatMessage message) async {
+    final chat = state.chat;
+    if (chat == null) return;
+    message.extra['favorite'] = message.extra['favorite'] != true;
+    state = state.copyWith(chat: chat);
+    if (chat.id.isEmpty || state.temporary) return;
+    try {
+      await ref.read(clientProvider).patchChat(chat.id, {
+        'history': {
+          'currentId': chat.currentId,
+          'messages': {message.id: message.toJson()},
+        },
+      });
+    } catch (e) {
+      state = state.copyWith(error: '$e');
+    }
   }
 
   /// The web's Generate message pair (Ctrl+Shift+Enter): your message and

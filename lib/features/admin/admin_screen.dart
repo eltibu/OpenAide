@@ -12,6 +12,7 @@ import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show serverConfigProvider;
 import '../server/community_share.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
@@ -811,6 +812,15 @@ class FunctionsScreen extends ConsumerWidget {
                           () => ref
                               .read(adminApiProvider)
                               .toggleFunctionGlobal(f.id),
+                        ),
+                      ),
+                    if (fundingUrl(f.json) case final url?)
+                      ListTile(
+                        leading: const Icon(Icons.favorite_border),
+                        title: const T('Support'),
+                        onTap: () => launchUrl(
+                          Uri.parse(url),
+                          mode: LaunchMode.externalApplication,
                         ),
                       ),
                     ListTile(

@@ -15,6 +15,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_extras.dart' show titleFromTask;
 import '../chat/file_details.dart' show FileDetailsScreen;
+import '../chat/formatting_toolbar.dart' show FormattingToolbar;
 import '../studio/record_notes.dart' show dictate;
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import '../workspace/access_editor.dart' show editAccess;
@@ -264,6 +265,10 @@ class NoteEditorScreen extends ConsumerStatefulWidget {
 class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   final _title = TextEditingController();
   final _body = TextEditingController();
+
+  /// The web's Formatting switch: here, the bar of bold, lists and
+  /// headings above the text (on, as the web starts).
+  bool _formatting = true;
   final _history = UndoHistoryController();
   bool _enhancing = false;
   bool _loaded = false;
@@ -370,19 +375,31 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
-  /// Opens a new chat with this note attached, as the web's Chat button.
+  /// The web's note chat: chats that belong to this note (the model can
+  /// read and rewrite it), with their Chat history to pick from.
   Future<void> _chat() async {
     await _save();
     if (!mounted) return;
-    ref.read(chatControllerProvider.notifier)
-      ..newChat()
-      ..attachReference({
-        'type': 'note',
-        'id': widget.id,
-        'name': _name,
-        'status': 'uploaded',
-      });
-    Navigator.of(context).popUntil((r) => r.isFirst);
+    final open = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (_) => NoteChatHistory(noteId: widget.id),
+    );
+    if (open == null || !mounted) return;
+    if (open == ':attach') {
+      ref.read(chatControllerProvider.notifier)
+        ..newChat()
+        ..attachReference({
+          'type': 'note',
+          'id': widget.id,
+          'name': _name,
+          'status': 'uploaded',
+        });
+    } else {
+      await ref.read(chatControllerProvider.notifier).open(open);
+    }
+    if (mounted) Navigator.of(context).popUntil((r) => r.isFirst);
   }
 
   bool _titling = false;
@@ -504,6 +521,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         await _upload();
       case 'chat':
         await _chat();
+      case 'formatting':
+        setState(() => _formatting = !_formatting);
       case 'enhance':
         await _enhance();
       default:
@@ -620,66 +639,71 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           if (_loaded)
             PopupMenuButton<String>(
               onSelected: _menu,
-              itemBuilder: (_) => const [
-                PopupMenuItem(
+              itemBuilder: (_) => [
+                CheckedPopupMenuItem(
+                  value: 'formatting',
+                  checked: _formatting,
+                  child: const T('Formatting'),
+                ),
+                const PopupMenuItem(
                   value: 'enhance',
                   child: ListTile(
                     leading: Icon(Icons.auto_awesome),
                     title: T('Enhance with AI'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'chat',
                   child: ListTile(
                     leading: Icon(Icons.chat_bubble_outline),
                     title: T('Chat about this note'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'upload',
                   child: ListTile(
                     leading: Icon(Icons.cloud_upload_outlined),
                     title: T('Upload files'),
                   ),
                 ),
-                PopupMenuDivider(),
-                PopupMenuItem(
+                const PopupMenuDivider(),
+                const PopupMenuItem(
                   value: 'copy',
                   child: ListTile(
                     leading: Icon(Icons.copy),
                     title: T('Copy text'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'link',
                   child: ListTile(
                     leading: Icon(Icons.link),
                     title: T('Copy link'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'md',
                   child: ListTile(
                     leading: Icon(Icons.download_outlined),
                     title: T('Download Markdown (.md)'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'txt',
                   child: ListTile(
                     leading: Icon(Icons.download_outlined),
                     title: T('Download text (.txt)'),
                   ),
                 ),
-                PopupMenuItem(
+                const PopupMenuItem(
                   value: 'pdf',
                   child: ListTile(
                     leading: Icon(Icons.picture_as_pdf_outlined),
                     title: T('Download PDF'),
                   ),
                 ),
-                PopupMenuDivider(),
-                PopupMenuItem(
+                const PopupMenuDivider(),
+                const PopupMenuItem(
                   value: 'access',
                   child: ListTile(
                     leading: Icon(Icons.lock_outline),
@@ -773,7 +797,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                       config: nexusMarkdown(context),
                     ),
                   )
-                else
+                else ...[
+                  if (_formatting && !_enhancing)
+                    FormattingToolbar(controller: _body, onChanged: _changed),
                   TextField(
                     controller: _body,
                     undoController: _history,
@@ -788,6 +814,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                       border: InputBorder.none,
                     ),
                   ),
+                ],
               ],
             ),
     );
@@ -811,3 +838,141 @@ JSON format: { "title": "your concise title here" }
 <content>
 $content
 </content>''';
+
+/// Chat history for a note's chats, as the web's note chat menu: New chat,
+/// the chat open now marked Current, and More Options to delete one.
+/// Pops with the chat to open, or ":attach" for a plain chat with the note.
+class NoteChatHistory extends ConsumerStatefulWidget {
+  const NoteChatHistory({super.key, required this.noteId});
+  final String noteId;
+
+  @override
+  ConsumerState<NoteChatHistory> createState() => _NoteChatHistoryState();
+}
+
+class _NoteChatHistoryState extends ConsumerState<NoteChatHistory> {
+  late Future<List<Map>> _chats = _load();
+  bool _busy = false;
+
+  Future<List<Map>> _load() async {
+    final res = await ref
+        .read(clientProvider)
+        .send('GET', '/api/v1/notes/${widget.noteId}/chats');
+    return [...((res as List?) ?? const []).whereType<Map>()]..sort(
+      (a, b) => ((b['updated_at'] ?? 0) as num).compareTo(
+        (a['updated_at'] ?? 0) as num,
+      ),
+    );
+  }
+
+  Future<void> _new() async {
+    setState(() => _busy = true);
+    try {
+      final chat =
+          await ref
+                  .read(clientProvider)
+                  .send('POST', '/api/v1/notes/${widget.noteId}/chat')
+              as Map;
+      if (mounted) Navigator.pop(context, '${chat['id']}');
+    } catch (e) {
+      if (mounted) {
+        setState(() => _busy = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+  }
+
+  Future<void> _delete(String id) async {
+    try {
+      await ref.read(clientProvider).deleteChat(id);
+      if (ref.read(chatControllerProvider).chat?.id == id) {
+        ref.read(chatControllerProvider.notifier).newChat();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    }
+    if (mounted) setState(() => _chats = _load());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final current = ref.watch(chatControllerProvider).chat?.id;
+    final muted = context.nexus.muted;
+    return SafeArea(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+        ),
+        child: FutureBuilder(
+          future: _chats,
+          builder: (context, snap) {
+            final chats = snap.data ?? const <Map>[];
+            return ListView(
+              shrinkWrap: true,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                  child: T(
+                    'Chat history',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.edit_square),
+                  title: const T('New chat'),
+                  enabled: !_busy,
+                  onTap: _new,
+                ),
+                if (snap.connectionState != ConnectionState.done)
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: LinearProgressIndicator(),
+                  )
+                else if (snap.hasError)
+                  ListTile(title: Text('${snap.error}'))
+                else if (chats.isEmpty)
+                  ListTile(
+                    title: T('No chat history', style: TextStyle(color: muted)),
+                  ),
+                for (final c in chats)
+                  ListTile(
+                    leading: const Icon(Icons.chat_bubble_outline),
+                    title: Text(
+                      '${c['title'] ?? (c['chat'] as Map?)?['title'] ?? tr('Chat')}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: c['id'] == current
+                        ? T('Current', style: TextStyle(color: muted))
+                        : null,
+                    onTap: () => Navigator.pop(context, '${c['id']}'),
+                    trailing: PopupMenuButton<String>(
+                      tooltip: tr('More Options'),
+                      onSelected: (_) => _delete('${c['id']}'),
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'delete', child: T('Delete')),
+                      ],
+                    ),
+                  ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.attach_file),
+                  title: const T('Attach to a new chat'),
+                  subtitle: T(
+                    'A regular chat with this note as a file.',
+                    style: TextStyle(color: muted),
+                  ),
+                  onTap: () => Navigator.pop(context, ':attach'),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

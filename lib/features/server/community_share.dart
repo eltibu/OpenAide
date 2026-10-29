@@ -148,3 +148,26 @@ String chatCommunityPayload(Map chat, List<Map> models) {
 /// Whether the server lets people share to the community.
 bool communitySharingOn(Map? config) =>
     (config?['features'] as Map?)?['enable_community_sharing'] == true;
+
+/// A tool's or function's "Support" link (its manifest's funding_url), as
+/// the web's heart button; null when it has none.
+String? fundingUrl(Map? item) {
+  final url = (((item?['meta'] as Map?)?['manifest'] as Map?)?['funding_url'])
+      ?.toString()
+      .trim();
+  return url == null || url.isEmpty ? null : url;
+}
+
+/// The heart: opens the author's support page in the browser.
+class SupportButton extends StatelessWidget {
+  const SupportButton({super.key, required this.url});
+  final String url;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: tr('Support'),
+    icon: const Icon(Icons.favorite_border),
+    onPressed: () =>
+        launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+  );
+}

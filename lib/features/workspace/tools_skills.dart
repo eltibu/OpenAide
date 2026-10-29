@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../server/community_share.dart' show SupportButton, fundingUrl;
 import '../../core/widgets/empty_state.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -102,6 +103,9 @@ class ToolsScreen extends ConsumerWidget {
               for (final t in ownerFiltered(ref, items, (t) => t['user_id']))
                 ListTile(
                   leading: const Icon(Icons.build_outlined),
+                  trailing: fundingUrl(t) == null
+                      ? null
+                      : SupportButton(url: fundingUrl(t)!),
                   title: Text('${t['name'] ?? t['id']}'),
                   subtitle: _description(t).isEmpty
                       ? null
