@@ -22,31 +22,53 @@
 
 <p align="center">
   <img src="docs/images/screens/chat.png" alt="Chat" width="24%">
+  <img src="docs/images/screens/images.png" alt="Pictures in chat" width="24%">
+  <img src="docs/images/screens/photos-video.png" alt="Photos and video" width="24%">
   <img src="docs/images/screens/call.png" alt="Voice call" width="24%">
-  <img src="docs/images/screens/drawer.png" alt="Side menu" width="24%">
-  <img src="docs/images/screens/doc.png" alt="Studio" width="24%">
 </p>
+<p align="center"><sub>Chat · Pictures in chat · Photos and video · Voice call</sub></p>
 <p align="center">
+  <img src="docs/images/screens/drawer.png" alt="Side menu" width="24%">
+  <img src="docs/images/screens/tools.png" alt="Tools menu" width="24%">
+  <img src="docs/images/screens/doc.png" alt="Studio" width="24%">
+  <img src="docs/images/screens/notes.png" alt="Notes" width="24%">
+</p>
+<p align="center"><sub>Side menu · Tools menu · Studio · Notes</sub></p>
+<p align="center">
+  <img src="docs/images/screens/dictation.png" alt="Record notes" width="24%">
   <img src="docs/images/screens/email.png" alt="Email" width="24%">
   <img src="docs/images/screens/cal.png" alt="Calendar" width="24%">
-  <img src="docs/images/screens/settings.png" alt="Settings" width="24%">
+  <img src="docs/images/screens/channels.png" alt="Channels" width="24%">
 </p>
-<p align="center"><sub>Chat · Voice call · Side menu · Studio · Email · Calendar · Settings</sub></p>
+<p align="center"><sub>Record notes · Email · Calendar · Channels</sub></p>
+<p align="center">
+  <img src="docs/images/screens/terminal.png" alt="Terminal" width="24%">
+  <img src="docs/images/screens/files.png" alt="Files" width="24%">
+  <img src="docs/images/screens/workspace.png" alt="Workspace" width="24%">
+  <img src="docs/images/screens/admin.png" alt="Admin panel" width="24%">
+</p>
+<p align="center"><sub>Terminal · Files · Workspace · Admin panel</sub></p>
 
 ## Features
 
 | | |
 |---|---|
 | 🔄 **Open WebUI, fully synced** | Chats, models, tools, knowledge, memory, notes, channels and settings live on your server, so the phone and the web UI always match. New models or tools you add on the server appear in the app without an update. |
-| 🧠 **Works without a server** | Sign in to OpenRouter, or add a Claude or OpenAI key, and chat straight from the phone, with built-in tools, skills and MCP servers. |
+| 🧠 **Works without a server** | Sign in to OpenRouter or GitHub Copilot, or add a Claude or OpenAI key, and chat straight from the phone, with web search, built-in tools, skills and MCP servers. |
 | 📴 **Models on your phone** | Download a small model (llama.cpp, from Hugging Face) and chat completely offline. |
-| 🎙️ **Voice** | Hands-free voice calls, dictation and spoken replies. |
-| 🤖 **Default assistant** | Set OpenAide as your Android assistant: long-press the power button and ask. |
+| 🎙️ **Voice** | Hands-free voice calls, video calls with the camera, a wake phrase, dictation and spoken replies. |
+| 🤖 **Default assistant** | Set OpenAide as your Android assistant: long-press the power button and ask. It floats over other apps, sets alarms and timers, sends texts and adds events. Share to it from any app, or use the widget and quick tile. |
+| 🖼️ **Pictures and video** | Generated pictures show right in the chat. Send photos, videos and files, play videos and voice notes, and see YouTube and tool embeds inside replies. |
 | 📝 **Studio** | Write and edit documents, spreadsheets and slides with AI help. Opens and saves Word, Excel and PowerPoint files. |
-| 🗒️ **Notes and recordings** | Quick notes, meeting minutes from a recording, and dictation. |
+| 🗒️ **Notes and recordings** | Quick notes that sync with your server. Record a meeting and get minutes, a summary, lecture notes or action items, with a live transcript. Dictate into any note or document. |
 | ✉️ **Email** | Read, sort and answer mail through your server or straight over IMAP, and link Google, Microsoft or GitHub accounts. |
-| 🧰 **Everything else** | Terminal, files, artifacts, calendar, automations, channels, workspace, playground and the admin panel. |
-| 🔒 **Private by design** | No ads, no tracking. Anything that leaves your home network is encrypted. |
+| 💻 **Terminal and files** | A full terminal on your server and a file browser in the chat's side panel. Preview PDFs, notebooks and SQLite files, upload folders, and ask the AI to edit selected lines. |
+| 💬 **Channels** | Team channels and direct messages, with pins, threads, reactions, webhooks, and a model you can ask right in the channel. |
+| 📅 **Calendar and automations** | Calendars with your own colors, and scheduled automations that post their results. |
+| 🗂️ **Workspace** | Models, knowledge, prompts, tools and skills, with sharing, versions, import and export. Playground for text and images. |
+| 🛡️ **Admin panel** | Users, groups and permissions, connections, Ollama downloads, functions, analytics, banners and every server settings tab, natively. |
+| 🎨 **Made to fit you** | The app in your language, light or dark, text size and UI scale, keyboard shortcuts, pinned and default models. |
+| 🔒 **Private by design** | No ads, no tracking. Anything that leaves your home network is encrypted, and chats can be end-to-end encrypted. Sign in with a password, API key, SSO, LDAP or two-step codes. |
 
 ## Install
 
