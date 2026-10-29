@@ -20,3 +20,13 @@ In this order, so no phone ever needs a reinstall:
 4. Settings → Actions → General → Fork pull request workflows: choose **Require approval for all outside collaborators**. (The workflow also never builds fork pull requests on the self-hosted runner.)
 5. Check in App updates on each of those phones that the installed version is the step 1 build or newer. Then revoke the `NEXUS_UPDATE_TOKEN` personal access token on GitHub and delete the repo secret. Old APKs contain it in plain text; once revoked it's useless.
 6. Run **Build** with **public_release** on the default branch.
+
+## Google Play
+
+The Play build is the `play` flavor: package name `com.eltibu.openaide` (permanent once uploaded), no in-app updater and no `REQUEST_INSTALL_PACKAGES`, because Play updates it and doesn't allow apps that install APKs. The GitHub APK (`direct` flavor) keeps `com.nexus.nexus_assistant` and its updater, so phones that have it never need a reinstall. The two are separate apps and can sit side by side.
+
+1. Run **Build** by hand with **play_bundle** ticked. It makes `app-play-release.aab` (artifact `openaide-play-aab`), signed with the Nexus release key as the upload key. It publishes no GitHub release and carries no update token.
+2. In Play Console, upload it to a track. On the first upload choose **Let Google manage and protect your app signing key**; the release key stays the upload key. Keep its backup safe: losing it means asking Google to reset the upload key.
+3. A new personal developer account must run a **closed test with at least 12 testers for 14 days in a row** before it can apply for production.
+
+Sign-in links back to the app use the build's own package name (`lib/core/store.dart`). The browser sign-in redirect `com.nexus.nexus_assistant://auth` is the same in both builds, so the GitHub, Google and Microsoft registrations don't change.

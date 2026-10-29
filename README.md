@@ -56,8 +56,9 @@ Requires Flutter (stable) and the Android SDK.
 ```sh
 flutter pub get
 flutter test
-flutter run            # on a connected device or emulator
-flutter build apk      # build/app/outputs/flutter-apk/app-release.apk
+flutter run --flavor direct                # on a connected device or emulator
+flutter build apk --flavor direct          # build/app/outputs/flutter-apk/app-direct-release.apk
+flutter build appbundle --flavor play --dart-define=OPENAIDE_STORE=play   # Google Play bundle
 ```
 
 A build you make yourself is signed with your own key, so it can't install over a release from this repo (and the other way round). Uninstall one before installing the other.

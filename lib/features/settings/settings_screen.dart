@@ -29,6 +29,7 @@ import 'terminal_connections.dart';
 import 'two_step_settings.dart';
 import 'usage_screen.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/store.dart';
 import 'language_settings.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
@@ -268,11 +269,13 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const AboutScreen()),
           ),
           const Divider(),
-          ListTile(
-            leading: const Icon(Icons.system_update_outlined),
-            title: const T('App updates'),
-            onTap: () => open(const UpdateScreen()),
-          ),
+          // Play updates its build itself.
+          if (!playBuild)
+            ListTile(
+              leading: const Icon(Icons.system_update_outlined),
+              title: const T('App updates'),
+              onTap: () => open(const UpdateScreen()),
+            ),
           ListTile(
             leading: const Icon(Icons.logout),
             title: const T('Sign out'),

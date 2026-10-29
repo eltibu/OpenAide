@@ -72,6 +72,7 @@ import 'compare_text.dart';
 import 'model_controls.dart';
 import '../../core/widgets/markdown_style.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/store.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   const ChatScreen({super.key});
@@ -514,7 +515,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       endDrawerEnableOpenDragGesture: false,
       body: Column(
         children: [
-          const UpdateBanner(),
+          // Play updates its build itself.
+          if (!playBuild) const UpdateBanner(),
           if (state.temporary) const _TemporaryBar(),
           if (state.error != null)
             MaterialBanner(

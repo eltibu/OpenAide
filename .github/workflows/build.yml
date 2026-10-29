@@ -18,12 +18,16 @@ on:
         description: Public release (stable channel) for everyone. No update token. Only from the default branch.
         type: boolean
         default: false
+      play_bundle:
+        description: Google Play bundle (.aab) to upload in Play Console. Play build, no updater, no update token, no release.
+        type: boolean
+        default: false
 
 # One runner (Joel's PC) builds everything, about 30 minutes a build. A new
 # push to a branch replaces that branch's older queued or running build.
 # A public release has its own group, so a push never cancels it.
 concurrency:
-  group: build-${{ github.head_ref || github.ref_name }}${{ inputs.public_release && '-public' || '' }}
+  group: build-${{ github.head_ref || github.ref_name }}${{ inputs.public_release && '-public' || '' }}${{ inputs.play_bundle && '-play' || '' }}
   cancel-in-progress: true
 
 jobs:
@@ -44,7 +48,7 @@ jobs:
       # A public repo's releases need no token, and an APK anyone can
       # download must not carry one. Once the repo is public, builds leave
       # the token out by themselves.
-      BUILT_IN_TOKEN: ${{ github.event.repository.private && !inputs.tester_build && !inputs.public_release }}
+      BUILT_IN_TOKEN: ${{ github.event.repository.private && !inputs.tester_build && !inputs.public_release && !inputs.play_bundle }}
     steps:
       - name: Public releases come from the default branch
         if: ${{ inputs.public_release && github.ref_name != github.event.repository.default_branch }}
@@ -243,7 +247,24 @@ jobs:
           echo "kotlin.compiler.execution.strategy=in-process" >> android/gradle.properties
           pkill -u "$(id -u)" -f KotlinCompileDaemon || true
           rm -rf "$HOME/.local/share/kotlin/daemon" "$HOME/.kotlin/daemon" 2>/dev/null || true
-      - name: Build APK
+      # Play Console takes bundles signed with one upload key for good: the
+      # Nexus release key (backed up outside the repo).
+      - name: Sign the Play bundle with the release key
+        if: ${{ inputs.play_bundle }}
+        env:
+          RELEASE_KEY_PASSWORD: ${{ secrets.NEXUS_RELEASE_KEY_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
+            echo "::error::NEXUS_RELEASE_KEYSTORE_BASE64 is not set; the Play bundle needs the release key."; exit 1
+          fi
+          echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > android/app/upload.p12
+          cat > android/key.properties <<EOF
+          storeFile=upload.p12
+          storePassword=$RELEASE_KEY_PASSWORD
+          keyPassword=$RELEASE_KEY_PASSWORD
+          keyAlias=nexus
+          EOF
+      - name: Build APK (or the Play bundle)
         env:
           # Read-only token for the in-app updater (repo secret), so the app
           # never asks for one while the repo is private. Left out of tester
@@ -260,27 +281,46 @@ jobs:
           NEXUS_GOOGLE_CLIENT_SECRET: ${{ vars.NEXUS_GOOGLE_CLIENT_SECRET || secrets.NEXUS_GOOGLE_CLIENT_SECRET }}
         run: |
           set -o pipefail
-          flutter build apk --release \
-            --build-name=0.1.${{ github.run_number }} \
-            --build-number=${{ github.run_number }} \
-            --dart-define=NEXUS_UPDATE_TOKEN="$NEXUS_UPDATE_TOKEN" \
-            --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID" \
-            --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
-            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
-            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET" 2>&1 | tee build.log || {
+          ARGS=(--release
+            --build-name=0.1.${{ github.run_number }}
+            --build-number=${{ github.run_number }}
+            --dart-define=NEXUS_UPDATE_TOKEN="$NEXUS_UPDATE_TOKEN"
+            --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID"
+            --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID"
+            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID"
+            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET")
+          # The Play build is a bundle (.aab) of the "play" flavor. Every
+          # other build is the "direct" APK, copied to app-release.apk for
+          # the steps below.
+          if [ "${{ inputs.play_bundle }}" = "true" ]; then
+            BUILD=(flutter build appbundle --flavor play --dart-define=OPENAIDE_STORE=play "${ARGS[@]}")
+          else
+            BUILD=(flutter build apk --flavor direct "${ARGS[@]}")
+          fi
+          "${BUILD[@]}" 2>&1 | tee build.log || {
             grep -E "^e: |error:|What went wrong|Exception|FAILURE" -A4 build.log \
               | head -40 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1
           }
+          if [ "${{ inputs.play_bundle }}" != "true" ]; then
+            cp build/app/outputs/flutter-apk/app-direct-release.apk build/app/outputs/flutter-apk/app-release.apk
+          fi
       # Models on the phone need llama.cpp's libraries in the APK. A build
       # without them still installs but can't run any model, so it must
       # never be published. Also lists every native library with its size.
+      # In a Play bundle they sit under base/lib/.
       - name: Check the on-device model engine is in the APK
         run: |
-          python3 - build/app/outputs/flutter-apk/app-release.apk <<'PY'
+          if [ "${{ inputs.play_bundle }}" = "true" ]; then
+            OUT=build/app/outputs/bundle/playRelease/app-play-release.aab; LIB=base/lib/
+          else
+            OUT=build/app/outputs/flutter-apk/app-release.apk; LIB=lib/
+          fi
+          python3 - "$OUT" "$LIB" <<'PY'
           import sys, zipfile
-          libs = {i.filename: i for i in zipfile.ZipFile(sys.argv[1]).infolist()
-                  if i.filename.startswith("lib/")}
+          root = sys.argv[2]
+          libs = {i.filename[len(root) - 4:]: i for i in zipfile.ZipFile(sys.argv[1]).infolist()
+                  if i.filename.startswith(root)}
           for name, i in sorted(libs.items()):
               print(f"::notice::{name} {i.file_size / 2**20:.1f} MB")
           arm = [n.split("/")[-1] for n in libs if n.startswith("lib/arm64-v8a/")]
@@ -300,7 +340,7 @@ jobs:
       # old key keeps the rollback right, so builds still signed with it (other
       # branches) also keep installing over the top.
       - name: Sign with the release key (rotated from the old key)
-        if: ${{ env.RELEASE_KEYSTORE_BASE64 != '' }}
+        if: ${{ env.RELEASE_KEYSTORE_BASE64 != '' && !inputs.play_bundle }}
         env:
           RELEASE_KEY_PASSWORD: ${{ secrets.NEXUS_RELEASE_KEY_PASSWORD }}
         run: |
@@ -336,6 +376,7 @@ jobs:
       # android/release-signing-sha256.txt and a rotation proof from the pinned
       # key. Anything else Android refuses as an update.
       - name: Check the APK's signature
+        if: ${{ !inputs.play_bundle }}
         run: |
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           APK=build/app/outputs/flutter-apk/app-release.apk
@@ -359,14 +400,22 @@ jobs:
           echo "::error::APK is signed with $ACTUAL, expected $EXPECTED. Not publishing: it would not install over the app."
           exit 1
       - uses: actions/upload-artifact@v4
+        if: ${{ !inputs.play_bundle }}
         with:
           name: ${{ inputs.tester_build && 'nexus-tester-apk' || 'nexus-assistant-apk' }}
           path: build/app/outputs/flutter-apk/app-release.apk
+      # The Play bundle goes to Play Console by hand; Play re-signs it for
+      # phones with its own key (Play App Signing).
+      - uses: actions/upload-artifact@v4
+        if: ${{ inputs.play_bundle }}
+        with:
+          name: openaide-play-aab
+          path: build/app/outputs/bundle/playRelease/app-play-release.aab
       # Each dev build becomes a GitHub pre-release tagged v0.1.<run number>;
       # the app's updater on the dev channel installs the newest one. Asset
       # name nexus-assistant.apk is what older apps look for.
       - name: Publish dev build for in-app updates
-        if: ${{ !inputs.tester_build && !inputs.public_release }}
+        if: ${{ !inputs.tester_build && !inputs.public_release && !inputs.play_bundle }}
         env:
           GH_TOKEN: ${{ github.token }}
           NOTES: ${{ github.event.head_commit.message || github.event.pull_request.title }}

@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/agent/agent_loop.dart';
 import '../../core/agent/mcp_client.dart';
 import '../../core/ai/ai_providers.dart' show newCodeVerifier, codeChallenge;
+import '../../core/store.dart';
 import 'agent_store.dart';
 
 /// A short, safe prefix for a server's tools ("github", "notion").
@@ -362,7 +363,7 @@ class _Loopback {
       'background:#0d6e66;color:#fff;text-decoration:none}</style></head>'
       '<body><h1>${ok ? 'Signed in' : 'Not signed in'}</h1><p>'
       '${ok ? 'You can go back to OpenAide now.' : 'The sign-in was cancelled.'}'
-      '</p><a href="intent://#Intent;package=com.nexus.nexus_assistant;end">'
+      '</p><a href="intent://#Intent;package=$appPackage;end">'
       'Back to OpenAide</a></body></html>',
     );
     await req.response.close();
