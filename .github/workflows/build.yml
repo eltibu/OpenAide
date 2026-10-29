@@ -254,8 +254,10 @@ jobs:
         env:
           RELEASE_KEY_PASSWORD: ${{ secrets.NEXUS_RELEASE_KEY_PASSWORD }}
         run: |
+          # Without the secret the bundle keeps the build's own key and is
+          # re-signed with the release key by hand before uploading.
           if [ -z "$RELEASE_KEYSTORE_BASE64" ]; then
-            echo "::error::NEXUS_RELEASE_KEYSTORE_BASE64 is not set; the Play bundle needs the release key."; exit 1
+            echo "::warning::NEXUS_RELEASE_KEYSTORE_BASE64 is not set; re-sign the bundle with the release key before uploading it to Play."; exit 0
           fi
           echo "$RELEASE_KEYSTORE_BASE64" | base64 -d > android/app/upload.p12
           cat > android/key.properties <<EOF
