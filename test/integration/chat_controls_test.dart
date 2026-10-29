@@ -1,12 +1,15 @@
 // Runs against a real Open WebUI server; see server_sync_test.dart.
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
 import 'package:nexus_assistant/core/auth/session.dart';
+import 'package:nexus_assistant/core/theme.dart';
 import 'package:nexus_assistant/features/chat/chat_controller.dart';
+import 'package:nexus_assistant/features/chat/chat_controls.dart';
 
 class _Session extends SessionNotifier {
   _Session(this.session);
@@ -86,4 +89,51 @@ void main() {
     skip: skip,
     timeout: const Timeout(Duration(minutes: 2)),
   );
+
+  testWidgets('the chat controls sheet closes with its own button', (
+    tester,
+  ) async {
+    HttpOverrides.global = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          const MethodChannel('plugins.it_nomads.com/flutter_secure_storage'),
+          (_) async => null,
+        );
+    final client = OpenWebUiClient(baseUrl: url!);
+    await tester.runAsync(() => client.signIn(email!, password!));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sessionProvider.overrideWith(
+            () => _Session(Session(serverUrl: url, token: client.token!)),
+          ),
+        ],
+        child: MaterialApp(
+          theme: nexusTheme(Brightness.light),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => showChatControls(context),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    for (var i = 0; i < 10; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Chat controls'), findsOneWidget);
+    await tester.tap(find.byTooltip('Close chat controls'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Chat controls'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(minutes: 5));
+  }, skip: skip != null);
 }

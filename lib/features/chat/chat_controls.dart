@@ -88,6 +88,13 @@ class _ChatControlsState extends ConsumerState<ChatControlsView> {
                 },
                 child: const T('Reset all'),
               ),
+            // The panel has its own close; the sheet gets one here.
+            if (!widget.inPanel)
+              IconButton(
+                tooltip: tr('Close chat controls'),
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.maybePop(context),
+              ),
           ],
         ),
         T(
