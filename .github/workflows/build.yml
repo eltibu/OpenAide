@@ -63,6 +63,20 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter analyze
+      # Encrypted chats in channels run the web's own encryption code
+      # (native/encryption, Rust). Built for the phone and for this PC's
+      # tests; Rust and the build output stay on the PC between builds. If
+      # it fails, the app still builds and opens those chats on the
+      # server's page instead.
+      - name: Build the encrypted chat library
+        id: encryption
+        continue-on-error: true
+        run: |
+          tool/build_encryption.sh android
+          echo "OPENAIDE_ENCRYPTION_LIB=$(tool/build_encryption.sh host)" >> "$GITHUB_ENV"
+      - name: Note a build without encrypted chats
+        if: ${{ steps.encryption.outcome == 'failure' }}
+        run: echo "::warning::The encrypted chat library didn't build; this build opens encrypted chats on the server's page."
       - run: flutter test
       # The recommended models on the phone (lib/core/ai/local_llm.dart) must
       # still be on Hugging Face. A warning, not a failure: the app also

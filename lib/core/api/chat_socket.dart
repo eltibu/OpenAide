@@ -60,6 +60,17 @@ class ChatSocket {
           _encryption.add(data.cast<String, dynamic>());
         }
       })
+      ..on('encryption:event', (data) {
+        if (data is Map && !_encryptionEvents.isClosed) {
+          _encryptionEvents.add(data.cast<String, dynamic>());
+        }
+      })
+      ..onDisconnect((_) {
+        if (!_dropped.isClosed) _dropped.add(null);
+      })
+      ..on('access:updated', (_) {
+        if (!_dropped.isClosed) _dropped.add(null);
+      })
       ..on('events:channel', (data) {
         if (data is Map && !_channelEvents.isClosed) {
           _channelEvents.add(data.cast<String, dynamic>());
@@ -75,6 +86,35 @@ class ChatSocket {
   final _waiting = <Completer<String?>>[];
   final _encryption = StreamController<Map<String, dynamic>>.broadcast();
   final _calls = StreamController<SocketCall>.broadcast();
+  final _encryptionEvents = StreamController<Map<String, dynamic>>.broadcast();
+  final _dropped = StreamController<void>.broadcast();
+
+  /// An encrypted chat's packets and changes, for the people in it.
+  Stream<Map<String, dynamic>> get encryptionEvents => _encryptionEvents.stream;
+
+  /// The connection dropped or your access changed: an encrypted chat ends.
+  Stream<void> get dropped => _dropped.stream;
+
+  /// Asks the server's encrypted-chat relay for [action] (start, join,
+  /// bind, packet, ping, leave), as the web. Throws when it refuses.
+  Future<Map<String, dynamic>> encryption(String action, Map data) async {
+    if (!_socket.connected) throw StateError('Encrypted chat is unavailable.');
+    final done = Completer<Map<String, dynamic>>();
+    _socket.emitWithAck(
+      'encryption:$action',
+      data,
+      ack: (res) {
+        final r = res is List && res.isNotEmpty ? res.first : res;
+        if (done.isCompleted) return;
+        if (r is Map && r['ok'] == true) {
+          done.complete(r.cast<String, dynamic>());
+        } else {
+          done.completeError(StateError('Encrypted chat ended.'));
+        }
+      },
+    );
+    return done.future.timeout(const Duration(seconds: 10));
+  }
 
   /// Events the server waits on an answer for.
   Stream<SocketCall> get calls => _calls.stream;
@@ -143,6 +183,8 @@ class ChatSocket {
     _channelEvents.close();
     _encryption.close();
     _calls.close();
+    _encryptionEvents.close();
+    _dropped.close();
   }
 }
 

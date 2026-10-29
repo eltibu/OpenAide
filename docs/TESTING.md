@@ -26,6 +26,12 @@ python3 tool/e2e/summary.py <json report> build/e2e
 
 Needs `uv` (installs Python 3.12 and Open WebUI into the workdir on first run).
 
+The encrypted chat tests (`test/mls_test.dart`, `test/integration/encrypted_chat_test.dart`) need the encryption library built for this computer; they are skipped without it:
+
+```sh
+export OPENAIDE_ENCRYPTION_LIB="$(tool/build_encryption.sh host)"
+```
+
 ## On GitHub
 
 `.github/workflows/e2e.yml` (Feature tests) runs all of this on the PC runner when the shared branches move, nightly, by hand, and on pull requests that change the tests. It never holds back a Build. The run summary lists pass and fail per area in plain words; the crawl report is attached to the run.

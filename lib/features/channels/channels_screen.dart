@@ -818,7 +818,11 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
           ref.invalidate(channelListProvider);
           nav.pop();
         case 'encrypted':
-          openEncryptedChat(context, _channel, join: false);
+          openEncryptedChat(
+            context,
+            _channel,
+            title: _channel.title(_myName(ref)),
+          );
         case 'hide':
           await _api.setActive(_id, false);
           ref.invalidate(channelListProvider);
@@ -889,7 +893,12 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
               ),
             if (_encrypted != null && _canEncrypt)
               InkWell(
-                onTap: () => openEncryptedChat(context, _channel, join: true),
+                onTap: () => openEncryptedChat(
+                  context,
+                  _channel,
+                  title: title,
+                  session: _encrypted,
+                ),
                 child: Text.rich(
                   TextSpan(
                     text: 'Encrypted chat in progress · ',
