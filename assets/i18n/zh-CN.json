@@ -119,6 +119,7 @@
 "General": "通用",
 "Generate": "生成",
 "Generate recovery codes": "生成恢复码",
+"Get information on {{name}} in the UI": "在界面中获取 {{name}} 的信息",
 "Group": "用户组",
 "Groups": "用户组",
 "Headers": "请求头",

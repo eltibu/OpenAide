@@ -136,6 +136,7 @@
 "General": "一般",
 "Generate": "產生",
 "Generate recovery codes": "產生復原碼",
+"Get information on {{name}} in the UI": "在介面中取得 {{name}} 的資訊",
 "Group": "群組",
 "Groups": "群組",
 "Headers": "HTTP 標頭",

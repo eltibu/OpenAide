@@ -109,6 +109,7 @@
 "Functions": "Fonctions",
 "General": "Général",
 "Generate": "Génère",
+"Get information on {{name}} in the UI": "Obtenir des informations sur {{name}} dans l'interface utilisateur",
 "Group": "Groupe",
 "Groups": "Groupes",
 "Headers": "En-têtes HTTP",

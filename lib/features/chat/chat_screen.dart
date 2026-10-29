@@ -453,9 +453,15 @@ class _EmptyState extends ConsumerWidget {
               textAlign: TextAlign.center,
               style: style,
             ),
+            // Comparing models: their pictures, and tapping one shows what
+            // it is, as the web's new-chat screen.
+            if (ref.watch(
+              chatControllerProvider.select((s) => s.compareIds.isNotEmpty),
+            ))
+              const ComparedModels()
             // As the web: the model's description (or the server's own
             // line for this screen) under the greeting.
-            if (placeholderDescription(ref) case final about?)
+            else if (placeholderDescription(ref) case final about?)
               Padding(
                 padding: const EdgeInsets.only(top: 6),
                 child: ConstrainedBox(
@@ -479,16 +485,95 @@ class _EmptyState extends ConsumerWidget {
   }
 }
 
+/// The models being compared, side by side; the one tapped shows its name
+/// and description underneath.
+class ComparedModels extends ConsumerStatefulWidget {
+  const ComparedModels({super.key});
+
+  @override
+  ConsumerState<ComparedModels> createState() => _ComparedModelsState();
+}
+
+class _ComparedModelsState extends ConsumerState<ComparedModels> {
+  int _picked = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(chatControllerProvider);
+    final all = ref.watch(modelsProvider).value ?? const <ModelInfo>[];
+    final models = [
+      for (final id in [state.modelId, ...state.compareIds])
+        ?all.where((m) => m.id == id).firstOrNull,
+    ];
+    if (models.isEmpty) return const SizedBox.shrink();
+    final at = models[_picked.clamp(0, models.length - 1)];
+    final about = placeholderDescription(ref, modelId: at.id);
+    final muted = context.nexus.muted;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        children: [
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: 6,
+            children: [
+              for (final (i, m) in models.indexed)
+                Tooltip(
+                  message: tr('Get information on {{name}} in the UI')
+                      .replaceAll('{{name}}', m.name),
+                  child: InkResponse(
+                    onTap: () => setState(() => _picked = i),
+                    radius: 22,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          width: 2,
+                          color: m == at
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.transparent,
+                        ),
+                      ),
+                      child: ModelAvatar(model: m, radius: 16),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            at.name,
+            style: Theme.of(context).textTheme.titleSmall,
+            textAlign: TextAlign.center,
+          ),
+          if (about != null)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Text(
+                about,
+                textAlign: TextAlign.center,
+                maxLines: 3,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: muted),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 /// What the new-chat screen says under the greeting, as the web: the
 /// server's placeholder text, else the chosen model's description.
-String? placeholderDescription(WidgetRef ref) {
+String? placeholderDescription(WidgetRef ref, {String? modelId}) {
   final config = ref.watch(serverConfigProvider).value;
   final own =
       ((config?['license_metadata'] as Map?)?['chat_placeholder_description']
               as String?)
           ?.trim();
   if (own != null && own.isNotEmpty) return own;
-  final at = ref.watch(atModelProvider);
+  final at = modelId ?? ref.watch(atModelProvider);
   final id = at ?? ref.watch(chatControllerProvider.select((s) => s.modelId));
   final about = (ref.watch(modelsProvider).value ?? const [])
       .where((m) => m.id == id)
