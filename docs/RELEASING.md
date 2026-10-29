@@ -21,3 +21,4 @@ In this order, so no phone ever needs a reinstall:
 4. Settings → Actions → General → Fork pull request workflows: choose **Require approval for all outside collaborators**. (The workflow also never builds fork pull requests on the self-hosted runner.)
 5. Check in App updates on each of those phones that the installed version is the step 1 build or newer. Then revoke the `NEXUS_UPDATE_TOKEN` personal access token on GitHub and delete the repo secret. Old APKs contain it in plain text; once revoked it's useless.
 6. Run **Build** with **public_release** on the default branch.
+7. Profile: in the profile repo `eltibu/eltibu` (default branch Main-Repository), replace "Coming soon." in README.md with a link to this repo, and pin this repo on the GitHub profile.
