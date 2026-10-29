@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -24,11 +25,18 @@ final wakeModelUrl = Uri.parse(
   'https://alphacephei.com/vosk/models/$wakeModelName.zip',
 );
 
+/// The SHA-256 of that zip: a download that differs (a changed or tampered
+/// file) is refused, since the phone runs what's in it. Checked by the
+/// build ("Check the wake-phrase model").
+const wakeModelSha256 =
+    '30f26242c4eb449f948e42cb302dd7a686cb29a3423a8367f99ff41780942498';
+
 /// The model's folder in [into], downloading and unpacking it the first
 /// time. [progress] gets 0 to 1 while it downloads.
 Future<String> downloadWakeModel(
   Directory into, {
   Uri? from,
+  String sha256Hex = wakeModelSha256,
   http.Client? client,
   void Function(double)? progress,
 }) async {
@@ -45,12 +53,21 @@ Future<String> downloadWakeModel(
     final total = res.contentLength ?? 0;
     var got = 0;
     final out = zip.openWrite();
+    final digest = _DigestSink();
+    final hash = sha256.startChunkedConversion(digest);
     await for (final chunk in res.stream) {
       out.add(chunk);
+      hash.add(chunk);
       got += chunk.length;
       if (total > 0) progress?.call(got / total);
     }
     await out.close();
+    hash.close();
+    if (sha256Hex.isNotEmpty && '${digest.value}' != sha256Hex) {
+      throw const FileSystemException(
+        "The speech model download wasn't the expected file",
+      );
+    }
     // The zip holds the model's own folder.
     await extractFileToDisk(zip.path, into.path);
     if (!File('${dir.path}/am/final.mdl').existsSync()) {
@@ -235,4 +252,14 @@ class _WakePhraseTileState extends State<WakePhraseTile>
       ],
     );
   }
+}
+
+class _DigestSink implements Sink<Digest> {
+  Digest? value;
+
+  @override
+  void add(Digest data) => value = data;
+
+  @override
+  void close() {}
 }
