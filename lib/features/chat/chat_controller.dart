@@ -1537,7 +1537,9 @@ class ChatController extends Notifier<ChatState> {
             userEmail: me?['email'] as String?,
             location: where,
           ),
-          if (chat.id.isEmpty && !temporary) 'folder_id': ?state.folderId,
+          // A temporary chat isn't saved in the folder, so the server learns
+          // it from here, for the folder's prompt and files, as the web.
+          if (chat.id.isEmpty || temporary) 'folder_id': ?state.folderId,
           // Not saved on the server yet: the answers go with the request.
           if ((temporary || chat.id.isEmpty) && state.variables.isNotEmpty)
             'chat_variables': state.variables,
