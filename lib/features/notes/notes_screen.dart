@@ -290,7 +290,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     _debounce?.cancel();
     if (!_dirty || !_loaded) return;
     _dirty = false;
-    if (mounted) setState(() => _saving = true);
+    if (mounted && !_closing) setState(() => _saving = true);
     try {
       await widget.api.update(
         widget.id,
@@ -524,8 +524,12 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
+  /// Set while the page closes: the last save runs without redrawing.
+  bool _closing = false;
+
   @override
   void dispose() {
+    _closing = true;
     _save();
     _history.dispose();
     _title.dispose();

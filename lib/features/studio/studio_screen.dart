@@ -516,8 +516,12 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     _load();
   }
 
+  /// Set while the page closes: the last save runs without redrawing.
+  bool _closing = false;
+
   @override
   void dispose() {
+    _closing = true;
     _saveTimer?.cancel();
     // Whatever was typed last is kept.
     if (!_loading && _error == null) unawaited(_save());
@@ -602,7 +606,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
     }
     _saved = markdown;
     _savedTitle = title;
-    if (mounted) setState(() => _saving = true);
+    if (mounted && !_closing) setState(() => _saving = true);
     try {
       await _api.save(
         widget.id,
