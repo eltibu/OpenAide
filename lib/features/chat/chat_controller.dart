@@ -921,6 +921,72 @@ class ChatController extends Notifier<ChatState> {
     return true;
   }
 
+  /// The web's Generate message pair (Ctrl+Shift+Enter): your message and
+  /// an empty answer from each chosen model, saved without asking any
+  /// model, to fill in by editing. False when no model is chosen.
+  Future<bool> createMessagePair(String prompt) async {
+    final ids = [?state.modelId, ...state.compareIds];
+    if (ids.isEmpty || state.loading || state.streaming) return false;
+    final chat =
+        state.chat ??
+        Chat(
+          id: '',
+          title: _titleFrom(prompt.trim().isEmpty ? 'New chat' : prompt.trim()),
+          messages: {},
+          models: ids,
+        );
+    final userId = _uuid.v4();
+    final user = ChatMessage(
+      id: userId,
+      role: 'user',
+      content: prompt.trim().isEmpty ? '[PROMPT] $userId' : prompt.trim(),
+      parentId: chat.currentId,
+      extra: {'models': ids},
+    );
+    chat.append(user);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final models = ref.read(modelsProvider).value ?? const [];
+    final changed = <String, ChatMessage>{user.id: user};
+    for (final (i, id) in ids.indexed) {
+      final replyId = _uuid.v4();
+      final reply = ChatMessage(
+        id: replyId,
+        role: 'assistant',
+        content: '[RESPONSE] $replyId',
+        parentId: userId,
+        model: id,
+        extra: {
+          'done': true,
+          'modelName': models.where((m) => m.id == id).firstOrNull?.name ?? id,
+          'modelIdx': i,
+          'timestamp': now,
+        },
+      );
+      chat.append(reply);
+      changed[replyId] = reply;
+    }
+    // The first model's answer is the one shown, as on the web.
+    chat.currentId = user.childrenIds.first;
+    state = state.copyWith(chat: chat);
+    final client = ref.read(clientProvider);
+    if (chat.id.isEmpty) {
+      final created = await client.createChat(chat);
+      chat.id = created.id;
+      refreshChatLists(ref.invalidate);
+    } else {
+      await client.patchChat(chat.id, {
+        'history': {
+          'currentId': chat.currentId,
+          'messages': {
+            for (final e in changed.entries) e.key: e.value.toJson(),
+          },
+        },
+      });
+    }
+    state = state.copyWith(chat: chat);
+    return true;
+  }
+
   /// Sets one of this chat's controls ([value] null goes back to the
   /// default) and saves them with the chat, as the web's Controls panel does.
   Future<void> setParam(String key, Object? value) async {

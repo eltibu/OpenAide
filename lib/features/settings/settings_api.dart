@@ -70,6 +70,13 @@ class SettingsApi {
     },
   );
 
+  /// Changes your password; [current] must be right.
+  Future<void> updatePassword(String current, String next) => client.send(
+    'POST',
+    '/api/v1/auths/update/password',
+    body: {'password': current, 'new_password': next},
+  );
+
   /// Your API key, or null when you have none.
   Future<String?> apiKey() async {
     try {

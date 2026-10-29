@@ -58,8 +58,10 @@ class NexusApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final session = ref.watch(sessionProvider);
-    final theme =
-        (ref.watch(userSettingsProvider).value?['ui'] as Map?)?['nexusTheme'];
+    final ui = ref.watch(userSettingsProvider).value?['ui'] as Map?;
+    final theme = ui?['nexusTheme'];
+    // Settings > Interface > UI Scale, on top of the phone's font size.
+    final scale = (ui?['textScale'] as num?)?.toDouble() ?? 1.0;
     // The server's own wording (Admin > UI translations), as on the web.
     final i18n = ref.watch(serverConfigProvider).value?['i18n'];
     WidgetsBinding.instance.addPostFrameCallback(
@@ -73,9 +75,21 @@ class NexusApp extends ConsumerWidget {
         debugShowCheckedModeBanner: false,
         navigatorObservers: navigatorObservers,
         // Settings > Phone and assistant > App lock.
-        builder: (context, child) => AppStringsScope(
-          child: AppLockGate(child: OfflineStrip(child: child!)),
-        ),
+        builder: (context, child) {
+          final media = MediaQuery.of(context);
+          return MediaQuery(
+            data: scale == 1.0
+                ? media
+                : media.copyWith(
+                    textScaler: TextScaler.linear(
+                      media.textScaler.scale(1) * scale.clamp(1.0, 1.5),
+                    ),
+                  ),
+            child: AppStringsScope(
+              child: AppLockGate(child: OfflineStrip(child: child!)),
+            ),
+          );
+        },
         // Settings > General > Language: the phone's own words (dates,
         // Cancel and OK in pickers) follow it too.
         locale: AppStrings.instance.locale,

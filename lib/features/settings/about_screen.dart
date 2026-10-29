@@ -156,6 +156,15 @@ class _WhatsNewScreenState extends ConsumerState<WhatsNewScreen> {
           onPressed: () => Navigator.pop(context),
         ),
       ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+          child: FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const T("Okay, Let's Go!"),
+          ),
+        ),
+      ),
       body: FutureBuilder(
         future: _notes,
         builder: (context, snap) {
@@ -332,6 +341,25 @@ class _AboutScreenState extends ConsumerState<AboutScreen> {
             title: const T('Open WebUI on GitHub'),
             onTap: () => launchUrl(
               Uri.parse('https://github.com/open-webui/open-webui'),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+          // The web's Community links.
+          ListTile(
+            leading: const Icon(Icons.forum_outlined),
+            title: const T('Community'),
+            subtitle: const Text('Discord'),
+            onTap: () => launchUrl(
+              Uri.parse('https://discord.gg/5rJgQTnV4s'),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.alternate_email),
+            title: const Text('X'),
+            subtitle: const Text('@OpenWebUI'),
+            onTap: () => launchUrl(
+              Uri.parse('https://twitter.com/OpenWebUI'),
               mode: LaunchMode.externalApplication,
             ),
           ),

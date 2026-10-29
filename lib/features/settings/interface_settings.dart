@@ -11,6 +11,7 @@ import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show userSettingsProvider;
 import '../../core/auth/session.dart';
 import 'settings_screen.dart' show settingsApiProvider, uiSettingsProvider;
+import 'keyboard_shortcuts.dart';
 import 'user_location.dart';
 import '../../core/i18n/app_strings.dart';
 
@@ -193,6 +194,7 @@ const appFollows = {
   'showEmojiInCall',
   'showUpdateToast',
   'showChangelog',
+  'terminalPreviewAllowSameOrigin',
 };
 
 class InterfaceSettings extends ConsumerWidget {
@@ -253,9 +255,99 @@ class InterfaceSettings extends ConsumerWidget {
               ],
             ),
           );
+          final scale = (ui['textScale'] as num?)?.toDouble();
+          Future<void> setScale(double? v) => set({
+            'textScale': v == null
+                ? null
+                : double.parse(v.clamp(1.0, 1.5).toStringAsFixed(2)),
+          });
           return ListView(
             padding: const EdgeInsets.only(bottom: 40),
             children: [
+              heading('Display'),
+              ListTile(
+                title: const T('UI Scale'),
+                subtitle: T(
+                  'Makes all text in the app bigger, on top of the phone\'s '
+                  'own font size.',
+                  style: TextStyle(color: muted),
+                ),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: tr('Decrease UI Scale'),
+                      icon: const Icon(Icons.remove),
+                      onPressed: scale == null || scale <= 1
+                          ? null
+                          : () => setScale(scale - 0.1),
+                    ),
+                    TextButton(
+                      onPressed: () => setScale(scale == null ? 1.0 : null),
+                      child: Text(
+                        scale == null ? tr('Default') : '${scale}x',
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: tr('Increase UI Scale'),
+                      icon: const Icon(Icons.add),
+                      onPressed: scale != null && scale >= 1.5
+                          ? null
+                          : () => setScale((scale ?? 1.0) + 0.1),
+                    ),
+                  ],
+                ),
+              ),
+              SwitchListTile(
+                title: const T('Display Chat Title in Tab'),
+                subtitle: T(
+                  'The open chat\'s title names the app in the phone\'s '
+                  'recent apps.',
+                  style: TextStyle(color: muted),
+                ),
+                value: ui['showChatTitleInTab'] != false,
+                onChanged: (on) => set({'showChatTitleInTab': on}),
+              ),
+              choice('chatDirection', 'auto', 'Chat Direction', {
+                'auto': tr('Auto'),
+                'LTR': tr('LTR'),
+                'RTL': tr('RTL'),
+              }),
+              SwitchListTile(
+                title: const T('Chat Hover Previews'),
+                subtitle: T(
+                  'Press and hold a chat in the chat list to see its latest '
+                  'messages.',
+                  style: TextStyle(color: muted),
+                ),
+                value: ui['chatHoverPreview'] != false,
+                onChanged: (on) => set({'chatHoverPreview': on}),
+              ),
+              SwitchListTile(
+                title: const T('Ctrl+Enter to Send'),
+                subtitle: T(
+                  'With a keyboard attached, Enter makes a new line and '
+                  'Ctrl+Enter sends. Off: Enter sends, Shift+Enter makes a '
+                  'new line.',
+                  style: TextStyle(color: muted),
+                ),
+                value: ui['ctrlEnterToSend'] == true,
+                onChanged: (on) => set({'ctrlEnterToSend': on}),
+              ),
+              ListTile(
+                title: const T('Keyboard shortcuts'),
+                subtitle: T(
+                  'For a Bluetooth or USB keyboard.',
+                  style: TextStyle(color: muted),
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => const KeyboardShortcutsScreen(),
+                  ),
+                ),
+              ),
               for (final group in interfaceSwitches.entries) ...[
                 heading(group.key),
                 for (final (key, start, label, help) in group.value)

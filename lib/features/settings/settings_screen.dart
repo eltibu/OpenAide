@@ -534,6 +534,7 @@ class _AccountSettingsState extends ConsumerState<AccountSettings> {
                 ),
                 const Divider(),
                 const AccountStatus(),
+                const ChangePassword(),
                 const TwoStepSettings(),
                 const Divider(),
                 const ApiKeys(),

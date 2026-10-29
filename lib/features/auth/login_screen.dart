@@ -1,5 +1,9 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
@@ -34,8 +38,41 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   /// Creating an account instead of signing in.
   bool _signUp = false;
 
+  /// The typed server has no accounts yet (the web's first-run welcome).
+  bool _fresh = false;
+  Timer? _lookup;
+
+  @override
+  void initState() {
+    super.initState();
+    _url.addListener(() {
+      _lookup?.cancel();
+      _lookup = Timer(const Duration(milliseconds: 700), _checkFresh);
+    });
+  }
+
+  Future<void> _checkFresh() async {
+    final typed = _url.text.trim();
+    var fresh = false;
+    if (typed.isNotEmpty) {
+      try {
+        final base = OpenWebUiClient.normalizeUrl(typed);
+        final res = await http
+            .get(Uri.parse('$base/api/config'))
+            .timeout(const Duration(seconds: 8));
+        fresh = serverIsFresh(res.statusCode == 200 ? res.body : null);
+      } catch (_) {
+        // Not reachable yet; the welcome only shows for a server that answers.
+      }
+    }
+    if (mounted && typed == _url.text.trim() && fresh != _fresh) {
+      setState(() => _fresh = fresh);
+    }
+  }
+
   @override
   void dispose() {
+    _lookup?.cancel();
     for (final c in [_url, _email, _password, _apiKey, _name, _confirm]) {
       c.dispose();
     }
@@ -160,6 +197,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     border: OutlineInputBorder(),
                   ),
                 ),
+                if (_fresh && !_signUp) ...[
+                  const SizedBox(height: 16),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          T(
+                            'Welcome to Open WebUI',
+                            style: theme.textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          const T(
+                            'This server has no accounts yet. The first '
+                            'account you create becomes its admin.',
+                          ),
+                          const SizedBox(height: 12),
+                          FilledButton(
+                            onPressed: () => setState(() {
+                              _mode = 'email';
+                              _signUp = true;
+                            }),
+                            child: const T('Get started'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 SegmentedButton<String>(
                   segments: const [
@@ -308,5 +375,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       },
       child: scaffold,
     );
+  }
+}
+
+/// Whether a server's /api/config says it has no accounts yet.
+bool serverIsFresh(String? configBody) {
+  if (configBody == null) return false;
+  try {
+    final config = jsonDecode(configBody);
+    return config is Map && config['onboarding'] == true;
+  } catch (_) {
+    return false;
   }
 }

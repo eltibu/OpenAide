@@ -53,7 +53,9 @@ import 'request_options.dart';
 import 'tool_auth.dart';
 import 'tool_approval.dart';
 import 'voice_note.dart';
+import '../settings/keyboard_shortcuts.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
+import 'search_everywhere.dart' show SearchEverywhereScreen;
 import '../settings/tool_servers.dart'
     show chatToolsProvider, directIntegrationsOn;
 import '../settings/terminal_connections.dart' show TerminalConnectionsScreen;
@@ -87,10 +89,192 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   /// Keeps the conversation (and where it is scrolled to) when the panels
   /// around it change or the phone folds.
   final _chatKey = GlobalKey();
+  final _scaffold = GlobalKey<ScaffoldState>();
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
+    super.dispose();
+  }
+
+  /// Settings > Interface > Keyboard shortcuts, with a keyboard attached.
+  bool _onKey(KeyEvent event) {
+    if (event is! KeyDownEvent || !mounted) return false;
+    final ui = ref.read(userSettingsProvider).value?['ui'] as Map?;
+    final chord = chordNow(event.logicalKey);
+    final id = shortcutFor(chord, ui);
+    if (id == null) return false;
+    final route = ModalRoute.of(context);
+    final onTop = route?.isCurrent ?? true;
+    // A page or sheet is open over the chat: only closing it applies.
+    if (!onTop) {
+      if (id != 'closeModal') return false;
+      Navigator.of(context).maybePop();
+      return true;
+    }
+    if (_scaffold.currentState?.isDrawerOpen ?? false) {
+      if (id == 'closeModal' || id == 'toggleSidebar') {
+        _scaffold.currentState!.closeDrawer();
+        return true;
+      }
+    }
+    _runShortcut(
+      id == 'closeModal' && keybindingsOf(ui)['clearInputSelections'] == chord
+          ? 'clearInputSelections'
+          : id,
+    );
+    return true;
+  }
+
+  Future<void> _runShortcut(String id) async {
+    final controller = ref.read(chatControllerProvider.notifier);
+    final state = ref.read(chatControllerProvider);
+    final wide = MediaQuery.sizeOf(context).width >= wideLayout;
+    void push(Widget page) => Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => page),
+    );
+    ChatMessage? lastReply() =>
+        state.messages.where((m) => m.role == 'assistant').lastOrNull;
+    switch (id) {
+      case 'newChat':
+        controller.newChat();
+      case 'newTemporaryChat':
+        controller.newChat(temporary: true);
+      case 'deleteChat':
+        final chat = state.chat;
+        if (chat == null || chat.id.isEmpty) return;
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (d) => AlertDialog(
+            title: const T('Delete chat?'),
+            content: Text(chat.title),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(d, false),
+                child: const T('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(d, true),
+                child: const T('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (ok == true) {
+          await controller.deleteChat(chat.id);
+          controller.newChat();
+        }
+      case 'openModelSelector':
+        await showModalBottomSheet<void>(
+          context: context,
+          showDragHandle: true,
+          isScrollControlled: true,
+          builder: (context) => const _ModelPickerSheet(),
+        );
+      case 'toggleDictation':
+        ref.read(dictateRequestProvider.notifier).start();
+      case 'navigateChatUp' || 'navigateChatDown':
+        final chats = [
+          ...?ref.read(pinnedChatsProvider).value,
+          ...?ref.read(chatListProvider).value,
+        ];
+        if (chats.isEmpty) return;
+        final at = chats.indexWhere((c) => c.id == state.chat?.id);
+        final next = id == 'navigateChatUp' ? at - 1 : at + 1;
+        if (at < 0) {
+          await controller.open(chats.first.id);
+        } else if (next >= 0 && next < chats.length) {
+          await controller.open(chats[next].id);
+        }
+      case 'search':
+        push(const SearchEverywhereScreen());
+      case 'openSettings':
+        push(const SettingsScreen());
+      case 'showShortcuts':
+        push(const KeyboardShortcutsScreen());
+      case 'toggleSidebar':
+        if (wide) {
+          setState(() {
+            _panel = null;
+            _nav = !_nav;
+          });
+        } else {
+          _scaffold.currentState?.openDrawer();
+        }
+      case 'toggleControls':
+        showChatPanel(context);
+      case 'focusInput' || 'clearInputSelections' || 'generateMessagePair':
+        ref.read(composerShortcutProvider.notifier).send(id);
+      case 'regenerateResponse':
+        final reply = lastReply();
+        if (reply != null && controller.canSend) {
+          await controller.regenerate(reply);
+        }
+      case 'allowToolCall' || 'denyToolCall':
+        final reply = lastReply();
+        final call = reply == null ? null : pendingCall(reply);
+        if (reply != null && call != null) {
+          await controller.resolveTool(
+            reply,
+            call.callId,
+            id == 'allowToolCall' ? 'approve' : 'reject',
+          );
+        }
+      case 'copyLastResponse' || 'copyLastCodeBlock':
+        final reply = lastReply();
+        if (reply == null) return;
+        var text = reply.content;
+        if (id == 'copyLastCodeBlock') {
+          final blocks = RegExp(
+            r'```[^\n]*\n([\s\S]*?)```',
+          ).allMatches(text).toList();
+          if (blocks.isEmpty) return;
+          text = blocks.last.group(1)!.trimRight();
+        }
+        await Clipboard.setData(ClipboardData(text: text));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: T(
+                id == 'copyLastCodeBlock'
+                    ? 'Last code block copied'
+                    : 'Last response copied',
+              ),
+            ),
+          );
+        }
+    }
+  }
+
+  /// Settings > Interface > Chat Direction: Auto leaves it to the text.
+  static Widget _directed(Object? direction, Widget child) =>
+      switch (direction) {
+        'LTR' => Directionality(textDirection: TextDirection.ltr, child: child),
+        'RTL' => Directionality(textDirection: TextDirection.rtl, child: child),
+        _ => child,
+      };
+
+  String? _recentsName;
+
+  /// Settings > Interface > Display Chat Title in Tab: the open chat's
+  /// title names the app in the phone's recent apps, as the browser tab.
+  void _nameInRecents(String? title) {
+    final name = title == null || title.isEmpty ? 'OpenAide' : title;
+    if (name == _recentsName) return;
+    _recentsName = name;
+    SystemChrome.setApplicationSwitcherDescription(
+      ApplicationSwitcherDescription(
+        label: name,
+        primaryColor: NexusColors.accent.toARGB32(),
+      ),
+    ).ignore();
+  }
 
   @override
   void initState() {
     super.initState();
+    HardwareKeyboard.instance.addHandler(_onKey);
     // A tapped reply notification opens its chat.
     listenForReplyTaps((id) {
       if (!mounted) return;
@@ -240,8 +424,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       });
     }
     final title = state.chat?.title;
+    final ui = ref.watch(userSettingsProvider).value?['ui'] as Map?;
+    _nameInRecents(ui?['showChatTitleInTab'] != false ? title : null);
 
     return Scaffold(
+      key: _scaffold,
       appBar: AppBar(
         leading: Builder(
           builder: (context) => IconButton(
@@ -345,10 +532,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : state.messages.isEmpty
                 ? const _EmptyState()
-                : _MessageList(
-                    messages: state.messages,
-                    streaming: state.streaming,
-                    status: state.status,
+                : _directed(
+                    ui?['chatDirection'],
+                    _MessageList(
+                      messages: state.messages,
+                      streaming: state.streaming,
+                      status: state.status,
+                    ),
                   ),
           ),
           _Composer(streaming: state.streaming),
@@ -1408,6 +1598,56 @@ class _ComposerState extends ConsumerState<_Composer> {
     ref.listenManual(dictateRequestProvider, (_, _) {
       if (mounted && !_recording) setState(() => _recording = true);
     });
+    // Keyboard shortcuts meant for the chat box.
+    ref.listenManual(composerShortcutProvider, (_, next) async {
+      if (next == null || !mounted) return;
+      switch (next.$1) {
+        case 'focusInput':
+          _focus.requestFocus();
+        case 'clearInputSelections':
+          _text.selection = TextSelection.collapsed(
+            offset: _text.selection.extentOffset < 0
+                ? _text.text.length
+                : _text.selection.extentOffset,
+          );
+        case 'generateMessagePair':
+          final text = _text.text;
+          final ok = await ref
+              .read(chatControllerProvider.notifier)
+              .createMessagePair(text);
+          if (!mounted) return;
+          if (ok) {
+            _text.clear();
+          } else {
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: T('Model not selected')));
+          }
+      }
+    });
+    // With a keyboard attached: Enter sends (Shift+Enter is a new line),
+    // or Ctrl+Enter sends when Settings > Interface asks, as on the web.
+    _focus.onKeyEvent = (node, event) {
+      if (event is! KeyDownEvent ||
+          (event.logicalKey != LogicalKeyboardKey.enter &&
+              event.logicalKey != LogicalKeyboardKey.numpadEnter)) {
+        return KeyEventResult.ignored;
+      }
+      final keys = HardwareKeyboard.instance;
+      final ctrl = keys.isControlPressed || keys.isMetaPressed;
+      if (keys.isShiftPressed || keys.isAltPressed) {
+        return KeyEventResult.ignored;
+      }
+      final ui = ref.read(userSettingsProvider).value?['ui'] as Map?;
+      final wantsCtrl = ui?['ctrlEnterToSend'] == true;
+      // Ctrl+Enter to Send on: plain Enter makes the new line.
+      if (ctrl != wantsCtrl) return KeyEventResult.ignored;
+      if (ref.read(chatControllerProvider).streaming) {
+        return KeyEventResult.handled;
+      }
+      _send();
+      return KeyEventResult.handled;
+    };
     ref.listenManual(composerDraftProvider, (_, text) {
       if (text == null) return;
       _fill(text);
@@ -1881,11 +2121,23 @@ class _ComposerState extends ConsumerState<_Composer> {
         onPressed: controller.stop,
       );
     } else if (_hasText || hasFiles) {
-      action = IconButton.filled(
-        visualDensity: VisualDensity.compact,
-        tooltip: tr('Send'),
-        icon: const Icon(Icons.arrow_upward),
-        onPressed: ready ? _send : null,
+      // Press and hold: the web's Generate message pair (your message and
+      // an empty answer to fill in, with no model asked).
+      action = Semantics(
+        label: tr('Send'),
+        hint: tr('Generate message pair'),
+        child: GestureDetector(
+          onLongPress: ready
+              ? () => ref
+                    .read(composerShortcutProvider.notifier)
+                    .send('generateMessagePair')
+              : null,
+          child: IconButton.filled(
+            visualDensity: VisualDensity.compact,
+            icon: const Icon(Icons.arrow_upward),
+            onPressed: ready ? _send : null,
+          ),
+        ),
       );
     } else {
       action = Row(

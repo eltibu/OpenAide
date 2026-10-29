@@ -864,6 +864,13 @@ Future<void> showChatActions(
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
+            // Settings > Interface > Chat Hover Previews: press and hold
+            // shows the latest messages, as hovering does on the web.
+            if (inList &&
+                (ref.read(userSettingsProvider).value?['ui']
+                        as Map?)?['chatHoverPreview'] !=
+                    false)
+              ChatPreview(id: chat.id),
             for (final (value, icon, label) in [
               ('rename', Icons.edit_outlined, 'Rename'),
               (
@@ -1438,4 +1445,71 @@ class _Account extends ConsumerWidget {
 void closeDrawer(BuildContext context) {
   final scaffold = Scaffold.maybeOf(context);
   if (scaffold != null && scaffold.isDrawerOpen) scaffold.closeDrawer();
+}
+
+
+/// The last few messages of a chat, for a quick look before opening it.
+class ChatPreview extends ConsumerWidget {
+  const ChatPreview({super.key, required this.id});
+  final String id;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final muted = context.nexus.muted;
+    return FutureBuilder(
+      future: ref.read(clientProvider).chat(id),
+      builder: (context, snap) {
+        final thread = snap.data?.thread ?? const [];
+        final last = thread.length > 3
+            ? thread.sublist(thread.length - 3)
+            : thread;
+        if (last.isEmpty) {
+          return snap.connectionState == ConnectionState.done
+              ? const SizedBox.shrink()
+              : const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: LinearProgressIndicator(),
+                );
+        }
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final m in last)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 3),
+                  child: Text.rich(
+                    TextSpan(
+                      children: [
+                        TextSpan(
+                          text: m.role == 'user' ? '${tr('You')}: ' : '',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        TextSpan(
+                          text: m.content
+                              .replaceAll(
+                                RegExp(r'<details[\s\S]*?</details>'),
+                                '',
+                              )
+                              .trim(),
+                        ),
+                      ],
+                    ),
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: muted, fontSize: 13),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

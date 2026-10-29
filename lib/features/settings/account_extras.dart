@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/session.dart';
 import '../../core/theme.dart';
+import '../../core/widgets/hideable.dart';
 import '../chat/chat_controller.dart' show serverConfigProvider;
 import 'settings_screen.dart' show meProvider, settingsApiProvider;
 import '../../core/i18n/app_strings.dart';
@@ -273,6 +275,148 @@ class _ApiKeysState extends ConsumerState<ApiKeys> {
               ],
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// Change Password, as on the web's Account tab (only when the server has
+/// the password form on). The server signs out every device when it
+/// changes, so this phone signs straight back in with the new one.
+class ChangePassword extends ConsumerStatefulWidget {
+  const ChangePassword({super.key});
+
+  @override
+  ConsumerState<ChangePassword> createState() => _ChangePasswordState();
+}
+
+class _ChangePasswordState extends ConsumerState<ChangePassword> {
+  final _current = TextEditingController();
+  final _next = TextEditingController();
+  final _confirm = TextEditingController();
+  bool _open = false;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    for (final c in [_current, _next, _confirm]) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  Future<void> _update() async {
+    if (_next.text != _confirm.text) {
+      _say(
+        context,
+        "The passwords you entered don't quite match. Please double-check "
+        'and try again.',
+      );
+      return;
+    }
+    if (_next.text.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: const T('Change your password?'),
+        content: const T(
+          'The server signs you out on every device when your password '
+          'changes. This phone signs back in by itself; your other devices '
+          'and the web need the new password.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d, false),
+            child: const T('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, true),
+            child: const T('Update password'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _busy = true);
+    final client = ref.read(clientProvider);
+    final email = '${ref.read(meProvider).value?['email'] ?? ''}';
+    try {
+      await ref.read(settingsApiProvider).updatePassword(
+        _current.text,
+        _next.text,
+      );
+    } catch (e) {
+      if (mounted) {
+        _say(context, '$e');
+        setState(() => _busy = false);
+      }
+      return;
+    }
+    // Still signed in? If the server ended this session, sign in again.
+    try {
+      await client.me();
+    } catch (_) {
+      if (email.isNotEmpty) {
+        await ref
+            .read(sessionProvider.notifier)
+            .signInWithPassword(client.baseUrl, email, _next.text);
+      }
+    }
+    if (!mounted) return;
+    _say(context, 'Password updated.');
+    for (final c in [_current, _next, _confirm]) {
+      c.clear();
+    }
+    setState(() {
+      _busy = false;
+      _open = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final features =
+        (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
+        const {};
+    if (features['enable_login_form'] == false ||
+        features['enable_password_change_form'] == false) {
+      return const SizedBox.shrink();
+    }
+    Widget field(TextEditingController c, String label) => Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Hideable(
+        builder: (obscure, eye) => TextField(
+          controller: c,
+          obscureText: obscure,
+          autocorrect: false,
+          enableSuggestions: false,
+          decoration: InputDecoration(labelText: tr(label), suffixIcon: eye),
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: const Icon(Icons.password),
+          title: const T('Change Password'),
+          trailing: Icon(_open ? Icons.expand_less : Icons.expand_more),
+          onTap: () => setState(() => _open = !_open),
+        ),
+        if (_open) ...[
+          field(_current, 'Current Password'),
+          field(_next, 'New Password'),
+          field(_confirm, 'Confirm Password'),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _busy ? null : _update,
+              child: const T('Update password'),
+            ),
+          ),
+        ],
       ],
     );
   }
