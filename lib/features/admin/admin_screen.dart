@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show serverConfigProvider;
+import '../server/community_share.dart';
 import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
@@ -878,6 +879,25 @@ class FunctionsScreen extends ConsumerWidget {
                         if (changed == true) ref.invalidate(functionsProvider);
                       },
                     ),
+                    if (communitySharingOn(
+                      ref.watch(serverConfigProvider).value,
+                    ))
+                      ListTile(
+                        leading: const Icon(Icons.public),
+                        title: const T('Share'),
+                        subtitle: const T('To Open WebUI Community'),
+                        onTap: () => run(() async {
+                          final one = await ref
+                              .read(clientProvider)
+                              .send('GET', '/api/v1/functions/id/${f.id}');
+                          if (!context.mounted) return;
+                          await shareToCommunity(
+                            context,
+                            path: '/functions/create',
+                            payload: jsonEncode(one),
+                          );
+                        }),
+                      ),
                     ListTile(
                       leading: const Icon(Icons.ios_share),
                       title: const T('Export'),

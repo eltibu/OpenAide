@@ -14,6 +14,7 @@ import 'package:pdf/widgets.dart' as pw;
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
+import '../server/community_share.dart';
 import '../studio/studio_export.dart' show pdfTheme, toPdf;
 import 'chat_controller.dart';
 import '../../core/i18n/app_strings.dart';
@@ -471,6 +472,18 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
     _replies = replies;
   });
 
+  Future<void> _community() => _run(() async {
+    final res = await _client.send('GET', '/api/v1/chats/${widget.id}');
+    final chat = ((res as Map)['chat'] as Map?) ?? const {};
+    final models = await ref.read(modelsProvider.future);
+    if (!mounted) return;
+    await shareToCommunity(
+      context,
+      path: '/chats/upload',
+      payload: chatCommunityPayload(chat, [for (final m in models) m.raw]),
+    );
+  });
+
   Future<void> _delete() => _run(() async {
     await _client.send('DELETE', '/api/v1/chats/${widget.id}/share');
     _shareId = null;
@@ -572,6 +585,15 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
                   child: FilledButton(
                     onPressed: _busy ? null : _create,
                     child: const T('Create link'),
+                  ),
+                ),
+              if (communitySharingOn(ref.watch(serverConfigProvider).value))
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    icon: const Icon(Icons.public, size: 18),
+                    label: const T('Share to Open WebUI Community'),
+                    onPressed: _busy ? null : _community,
                   ),
                 ),
               if (_busy) const LinearProgressIndicator(),
