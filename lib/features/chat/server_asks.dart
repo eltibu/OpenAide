@@ -249,6 +249,9 @@ class _ServerAsksState extends ConsumerState<ServerAsks> {
         serverUrl: session?.serverUrl ?? '',
         sessionToken: session?.token,
         systemTerminal: system.any((t) => t.id == call.body['terminal_id']),
+        fileBytes: (id) => ref
+            .read(clientProvider)
+            .getBytes('/api/v1/files/${Uri.encodeComponent(id)}/content'),
       );
     } catch (e) {
       call.reply({'error': '$e'});
