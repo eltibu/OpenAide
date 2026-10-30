@@ -494,13 +494,17 @@ Future<void> answerExecuteTool(
 }
 
 /// The server reads from one of your terminals through the phone (its
-/// AGENTS.md, for instance).
+/// AGENTS.md, for instance), or has the phone copy one of its files there:
+/// a generated or edited image goes into the chat's terminal folder, so the
+/// model can keep working on it with the terminal's tools, as on the web.
+/// [fileBytes] fetches that file from Open WebUI, signed in.
 Future<void> answerTerminalRequest(
   SocketCall call, {
   required Map? ui,
   required String serverUrl,
   required String? sessionToken,
   required bool systemTerminal,
+  Future<List<int>> Function(String fileId)? fileBytes,
   http.Client? httpClient,
 }) async {
   final id = '${call.body['terminal_id'] ?? ''}';
@@ -511,8 +515,9 @@ Future<void> answerTerminalRequest(
     base = '$serverUrl/api/v1/terminals/${Uri.encodeComponent(id)}';
     key = sessionToken ?? '';
   } else {
+    // Only one switched on, as the web reaches it.
     final mine = userTerminalConfigs(ui)
-        .where((s) => s['url'] == id)
+        .where((s) => s['url'] == id && s['enabled'] != false)
         .firstOrNull;
     if (mine != null) {
       base = '${mine['url']}'.replaceAll(RegExp(r'/$'), '');
@@ -523,12 +528,29 @@ Future<void> answerTerminalRequest(
     call.reply({'error': 'Terminal Not Found'});
     return;
   }
+  final file = call.body['file'];
   final client = EncryptedOnlyClient(httpClient);
   try {
-    final res = await client.get(
-      Uri.parse('$base$path'),
-      headers: {'Authorization': 'Bearer $key', 'X-Session-Id': ?call.chatId},
-    );
+    final headers = {
+      'Authorization': 'Bearer $key',
+      'X-Session-Id': ?call.chatId,
+    };
+    final http.Response res;
+    if (file is Map) {
+      if (fileBytes == null) throw Exception("Can't read the file");
+      final upload = http.MultipartRequest('POST', Uri.parse('$base$path'))
+        ..headers.addAll(headers)
+        ..files.add(
+          http.MultipartFile.fromBytes(
+            'file',
+            await fileBytes('${file['id']}'),
+            filename: '${file['name']}',
+          ),
+        );
+      res = await http.Response.fromStream(await client.send(upload));
+    } else {
+      res = await client.get(Uri.parse('$base$path'), headers: headers);
+    }
     if (res.statusCode >= 400) {
       throw Exception('Terminal request failed (${res.statusCode})');
     }
