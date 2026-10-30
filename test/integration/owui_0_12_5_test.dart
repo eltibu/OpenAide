@@ -2,7 +2,6 @@
 // The features that release added: note pages, files inside pages and live
 // presence, the Sessions explorer, admins rotating a user's API key, and
 // the chat's model saved as soon as it changes.
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
