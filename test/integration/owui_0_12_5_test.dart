@@ -21,7 +21,8 @@ void main() {
   setUpAll(() async {
     if (url == null) return;
     final c = OpenWebUiClient(baseUrl: url);
-    final version = '${((await c.send('GET', '/api/version')) as Map)['version']}';
+    final version =
+        '${((await c.send('GET', '/api/version')) as Map)['version']}';
     final parts = version.split('.').map((p) => int.tryParse(p) ?? 0).toList();
     if (parts.length < 3 ||
         parts[0] == 0 && (parts[1] < 12 || parts[1] == 12 && parts[2] < 5)) {
@@ -69,7 +70,10 @@ void main() {
     );
     await api.update(note.id, markdown: 'plan', pageId: 'main');
     got = await api.get(note.id);
-    expect(got.pages.firstWhere((p) => p.id.startsWith('2222')).markdown, 'coffee');
+    expect(
+      got.pages.firstWhere((p) => p.id.startsWith('2222')).markdown,
+      'coffee',
+    );
     expect(got.pages.first.markdown, 'plan');
     // Without a page, a note with several refuses the text (why the app
     // always says which page).
@@ -134,7 +138,8 @@ void main() {
     // The Studio reads and saves the first page only.
     final doc = await StudioApi(client).get(note.id);
     expect(doc.markdown, 'plan');
-    await StudioApi(client).save(note.id, title: 'pages note', markdown: 'plan 2');
+    await StudioApi(client)
+        .save(note.id, title: 'pages note', markdown: 'plan 2');
     got = await api.get(note.id);
     expect(got.pages.first.markdown, 'plan 2');
     expect(got.pages, hasLength(3));
@@ -260,10 +265,16 @@ void main() {
         'GET',
         '/api/v1/analytics/sessions/${chat['id']}',
       ) as Map;
-      expect((detail['items'] as List).map((m) => m['role']), contains('assistant'));
+      final reply = (detail['items'] as List).cast<Map>().firstWhere(
+        (m) => m['role'] == 'assistant',
+      );
+      // The server names each message chat id + "-" + message id; the app
+      // opens a reply's tool calls by the id the detail gave it.
+      expect(reply['id'], '${chat['id']}-a1');
       final events = await client.send(
         'GET',
-        '/api/v1/analytics/sessions/${chat['id']}/messages/a1/events',
+        '/api/v1/analytics/sessions/${chat['id']}/messages/'
+            '${Uri.encodeComponent('${reply['id']}')}/events',
       ) as Map;
       expect(events['items'], isA<List>());
     } finally {
@@ -286,16 +297,21 @@ void main() {
     try {
       final key = await admin.rotateUserApiKey(u.id);
       expect(key, startsWith('sk-'));
-      // The key signs in as that person.
+      // The key works as that person (the account page itself wants a
+      // signed-in session, so check what the key creates).
       final asThem = OpenWebUiClient(baseUrl: url!)..token = key;
-      final me = await asThem.send('GET', '/api/v1/auths/') as Map;
-      expect(me['id'], u.id);
+      final note = await asThem.send(
+        'POST',
+        '/api/v1/notes/create',
+        body: {'title': 'made with a key'},
+      ) as Map;
+      expect(note['user_id'], u.id);
       final again = await admin.rotateUserApiKey(u.id);
       expect(again, isNot(key));
       await admin.deleteUserApiKey(u.id);
       final gone = OpenWebUiClient(baseUrl: url)..token = again;
       await expectLater(
-        gone.send('GET', '/api/v1/auths/'),
+        gone.send('GET', '/api/models'),
         throwsA(isA<ApiException>()),
       );
     } finally {
