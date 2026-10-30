@@ -9,7 +9,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:-${E2E_WORKDIR:-$HOME/.cache/openaide-e2e}}"
-OWUI_VERSION="${OWUI_VERSION:-0.12.4}"
+OWUI_VERSION="${OWUI_VERSION:-0.12.5}"
 OPEN_TERMINAL_VERSION="${OPEN_TERMINAL_VERSION:-0.14.6}"
 PORT="${OWUI_PORT:-8080}"
 TERM_PORT="${TERM_PORT:-8100}"
@@ -17,6 +17,10 @@ FAKE_PORT="${FAKE_PORT:-11500}"
 mkdir -p "$WORK"
 if [ ! -x "$WORK/venv/bin/open-webui" ]; then
   uv venv -q -p 3.12 "$WORK/venv"
+fi
+# Installs, or moves to, the wanted version (an older run may have another).
+if ! VIRTUAL_ENV="$WORK/venv" uv pip show open-webui 2>/dev/null \
+    | grep -qx "Version: $OWUI_VERSION"; then
   VIRTUAL_ENV="$WORK/venv" uv pip install -q "open-webui==$OWUI_VERSION" \
     "open-terminal==$OPEN_TERMINAL_VERSION"
 fi
@@ -62,6 +66,8 @@ export IMAGE_GENERATION_ENGINE=openai
 export IMAGES_OPENAI_API_BASE_URL="http://127.0.0.1:$FAKE_PORT/v1"
 export IMAGES_OPENAI_API_KEY=fake
 export ENABLE_NOTES=true
+export ENABLE_API_KEYS=true
+export ENABLE_ADMIN_CHAT_ACCESS=true
 export ENABLE_CHANNELS=true
 export ENABLE_SIGNUP=true
 export ENABLE_TOOL_PERMISSIONS=true

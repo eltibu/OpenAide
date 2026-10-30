@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
@@ -521,6 +522,25 @@ class _UserEditorState extends ConsumerState<UserEditor> {
                   onPressed: _busy ? null : _signOutEverywhere,
                 ),
               ),
+            // Their API key, as in the web's Edit User: a new one is shown
+            // once, to copy.
+            const SizedBox(height: 8),
+            T('API key', style: Theme.of(context).textTheme.titleSmall),
+            Wrap(
+              spacing: 8,
+              children: [
+                TextButton.icon(
+                  icon: const Icon(Icons.autorenew),
+                  label: const T('Rotate API key'),
+                  onPressed: _busy ? null : _rotateKey,
+                ),
+                TextButton.icon(
+                  icon: const Icon(Icons.key_off_outlined),
+                  label: const T('Delete API key'),
+                  onPressed: _busy ? null : _deleteKey,
+                ),
+              ],
+            ),
           ],
         ],
       ),
@@ -558,6 +578,93 @@ class _UserEditorState extends ConsumerState<UserEditor> {
             '/api/v1/users/${Uri.encodeComponent(u.id)}/sessions/revoke',
           );
       if (mounted) _say(context, 'All sessions revoked');
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
+  Future<bool> _confirm(String title, String body, String action) async =>
+      await showDialog<bool>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: T(title),
+          content: Text(body),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(d, false),
+              child: const T('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(d, true),
+              child: T(action),
+            ),
+          ],
+        ),
+      ) ==
+      true;
+
+  Future<void> _rotateKey() async {
+    final u = widget.user!;
+    if (!await _confirm(
+      'Rotate API key?',
+      '${u.name}\'s current API key stops working, and a new one is made. '
+          'It is shown once, so copy it.',
+      'Rotate',
+    )) {
+      return;
+    }
+    try {
+      final res = await ref.read(adminApiProvider).rotateUserApiKey(u.id);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (d) => AlertDialog(
+          title: const T('New API key'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const T('It won\'t be shown again.'),
+              const SizedBox(height: 8),
+              SelectableText(
+                res,
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton.icon(
+              icon: const Icon(Icons.copy),
+              label: const T('Copy'),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: res));
+                _say(d, 'Copied');
+              },
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(d),
+              child: const T('Done'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) _say(context, '$e');
+    }
+  }
+
+  Future<void> _deleteKey() async {
+    final u = widget.user!;
+    if (!await _confirm(
+      'Delete API key?',
+      '${u.name}\'s API key stops working right away.',
+      'Delete',
+    )) {
+      return;
+    }
+    try {
+      await ref.read(adminApiProvider).deleteUserApiKey(u.id);
+      if (mounted) _say(context, 'API key deleted');
     } catch (e) {
       if (mounted) _say(context, '$e');
     }

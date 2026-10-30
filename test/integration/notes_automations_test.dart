@@ -47,6 +47,11 @@ void main() {
   test('adds files to a note and keeps them when the text changes', () async {
     final api = NotesApi(client);
     final note = await api.create('nexus files note');
+    if ((await api.get(note.id)).paged) {
+      // 0.12.5 keeps files inside pages: see owui_0_12_5_test.dart.
+      await api.delete(note.id);
+      return markTestSkipped('Files live in pages on this server');
+    }
     final up = await client.uploadFile(
       'minutes from Tuesday'.codeUnits,
       'minutes.txt',

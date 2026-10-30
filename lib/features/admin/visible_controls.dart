@@ -74,6 +74,12 @@ const visibleControlGroups = <(String, String, List<(String, String)>)>[
       ('attach_notes', 'Attach Notes'),
       ('attach_knowledge', 'Attach Knowledge'),
       ('reference_chats', 'Reference Chats'),
+      ('selected_tools', 'Selected tools'),
+      ('selected_skills', 'Selected skills'),
+      ('selected_filters', 'Selected filters'),
+      ('selected_web_search', 'Selected web search'),
+      ('selected_image_generation', 'Selected image generation'),
+      ('selected_code_interpreter', 'Selected code interpreter'),
       ('status', '/status'),
       ('model_command', '/model'),
       ('settings_command', '/settings'),
@@ -124,6 +130,12 @@ Map<String, bool> visibilityFrom(Map<String, dynamic>? config) {
         if (e.value == false) '${e.key}': false,
   };
 }
+
+/// Whether a control shows for you: admins see everything, others what the
+/// server hasn't hidden, as the web's isControlVisible.
+bool controlVisible(WidgetRef ref, String id) =>
+    ref.watch(sessionProvider).value?.user?['role'] == 'admin' ||
+    visibilityFrom(ref.watch(serverConfigProvider).value)[id] != false;
 
 class VisibleControlsScreen extends ConsumerStatefulWidget {
   const VisibleControlsScreen({super.key});

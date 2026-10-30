@@ -102,6 +102,13 @@ class AdminApi {
   Future<void> deleteUser(String id) =>
       client.send('DELETE', '/api/v1/users/${Uri.encodeComponent(id)}');
 
+  /// A new API key for that person (0.12.5+), replacing theirs.
+  Future<String> rotateUserApiKey(String id) async =>
+      '${((await client.send('POST', '/api/v1/users/${Uri.encodeComponent(id)}/api_key/rotate')) as Map)['api_key']}';
+
+  Future<void> deleteUserApiKey(String id) =>
+      client.send('DELETE', '/api/v1/users/${Uri.encodeComponent(id)}/api_key');
+
   // ---- Site settings ----
 
   Future<Map<String, dynamic>> config() async =>

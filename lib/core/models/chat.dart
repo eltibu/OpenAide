@@ -129,8 +129,8 @@ class ChatMessage {
   }
 
   /// Photos and files sent with this message, and those its tools showed:
-  /// pictures a tool returned, and files Nexus displayed from its terminal
-  /// (`display_file`).
+  /// pictures a tool returned, and files Nexus displayed (`display_file`)
+  /// from its terminal, the chat or a knowledge base.
   List<Attachment> get attachments {
     final out = <Attachment>[];
     final seen = <String>{};
@@ -170,7 +170,7 @@ class ChatMessage {
           if (text is! String || !text.trimLeft().startsWith('{')) continue;
           try {
             final j = jsonDecode(text);
-            final shown = j is Map ? terminalFile(j) : null;
+            final shown = j is Map ? terminalFile(j) ?? serverFile(j) : null;
             if (shown != null) add(shown);
           } on FormatException {
             // Not the file's details.
@@ -191,6 +191,10 @@ class ChatMessage {
     }
     final terminal = f['terminal_id'] ?? f['terminal_selector'];
     final path = f['full_path'] ?? f['path'];
+    // A chat file shown while a terminal is picked keeps its server path.
+    if (path is String && path.startsWith('/api/v1/files/')) {
+      return serverFile({...f, 'source': 'open_webui'});
+    }
     if (terminal is! String ||
         terminal.isEmpty ||
         terminal.startsWith('http') ||
@@ -207,6 +211,26 @@ class ChatMessage {
       'url':
           '/api/v1/terminals/${Uri.encodeComponent(terminal)}/files/view'
           '?path=${Uri.encodeQueryComponent(path)}',
+      if (type.isNotEmpty) 'content_type': type,
+    };
+  }
+
+  /// A chat or knowledge base file Nexus displayed (0.12.5: display_file
+  /// with a file id), as an attachment.
+  static Map<String, dynamic>? serverFile(Map f) {
+    if (f['source'] != 'open_webui' || f['exists'] == false) return null;
+    final id = RegExp(r'^/api/v1/files/([\w-]+)/content$')
+        .firstMatch('${f['full_path'] ?? f['path'] ?? ''}')
+        ?.group(1);
+    if (id == null) return null;
+    final type = '${f['content_type'] ?? f['mime_type'] ?? ''}';
+    return {
+      'type': type.startsWith('image/') && !type.contains('svg')
+          ? 'image'
+          : 'file',
+      'id': id,
+      'url': id,
+      'name': '${f['name'] ?? id}',
       if (type.isNotEmpty) 'content_type': type,
     };
   }

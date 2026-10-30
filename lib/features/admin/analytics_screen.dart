@@ -1,5 +1,5 @@
 /// Admin > Analytics: messages, chats, people and tokens over a period, by
-/// model and by person, with daily activity.
+/// model and by person, with daily activity, and the Sessions explorer.
 library;
 
 import 'dart:math' as math;
@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../../core/i18n/app_strings.dart';
+import 'analytics_sessions.dart';
 
 /// Periods offered, in days; null is all time.
 const analyticsPeriods = <String, int?>{
@@ -213,6 +214,17 @@ class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const T('Analytics'),
+        actions: [
+          TextButton.icon(
+            icon: const Icon(Icons.forum_outlined),
+            label: const T('Sessions'),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AnalyticsSessionsScreen(range: _range),
+              ),
+            ),
+          ),
+        ],
         bottom: _loading
             ? const PreferredSize(
                 preferredSize: Size.fromHeight(2),

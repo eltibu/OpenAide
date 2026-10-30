@@ -32,6 +32,9 @@ class ChatSocket {
           'auth': {'token': token},
         });
         joinChannels();
+        for (final id in _notes) {
+          _joinNote(id);
+        }
         for (final c in _waiting) {
           if (!c.isCompleted) c.complete(_socket.id);
         }
@@ -71,6 +74,16 @@ class ChatSocket {
       ..on('access:updated', (_) {
         if (!_dropped.isClosed) _dropped.add(null);
       })
+      ..on('note:presence', (data) {
+        if (data is Map && !_notePresence.isClosed) {
+          _notePresence.add(data.cast<String, dynamic>());
+        }
+      })
+      ..on('events:note', (data) {
+        if (data is Map && !_noteEvents.isClosed) {
+          _noteEvents.add(data.cast<String, dynamic>());
+        }
+      })
       ..on('events:channel', (data) {
         if (data is Map && !_channelEvents.isClosed) {
           _channelEvents.add(data.cast<String, dynamic>());
@@ -88,6 +101,31 @@ class ChatSocket {
   final _calls = StreamController<SocketCall>.broadcast();
   final _encryptionEvents = StreamController<Map<String, dynamic>>.broadcast();
   final _dropped = StreamController<void>.broadcast();
+  final _notePresence = StreamController<Map<String, dynamic>>.broadcast();
+  final _noteEvents = StreamController<Map<String, dynamic>>.broadcast();
+  final _notes = <String>{};
+
+  /// Who has a note open (0.12.5): {note_id, users: [{id, name, page_id}]}.
+  Stream<Map<String, dynamic>> get notePresence => _notePresence.stream;
+
+  /// A note changed elsewhere (its pages, title or text), as the web hears.
+  Stream<Map<String, dynamic>> get noteEvents => _noteEvents.stream;
+
+  /// Opens note [id]'s live room, again after a reconnect.
+  void joinNote(String id) {
+    _notes.add(id);
+    if (_socket.connected) _joinNote(id);
+  }
+
+  void _joinNote(String id) => _socket.emit('note:join', {
+    'note_id': id,
+    'auth': {'token': _token},
+  });
+
+  void leaveNote(String id) {
+    _notes.remove(id);
+    if (_socket.connected) _socket.emit('note:leave', {'note_id': id});
+  }
 
   /// An encrypted chat's packets and changes, for the people in it.
   Stream<Map<String, dynamic>> get encryptionEvents => _encryptionEvents.stream;
@@ -185,6 +223,8 @@ class ChatSocket {
     _calls.close();
     _encryptionEvents.close();
     _dropped.close();
+    _notePresence.close();
+    _noteEvents.close();
   }
 }
 
