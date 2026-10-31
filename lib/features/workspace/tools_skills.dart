@@ -504,9 +504,77 @@ class _ValvesScreenState extends ConsumerState<ValvesScreen> {
                           ),
                         );
                       }
+                      // A number shown as a slider with a number box, its
+                      // ends from the field's minimum and maximum (0.12.5).
+                      final input = p['input'] is Map
+                          ? p['input'] as Map
+                          : null;
+                      final lo = p['minimum'] ?? p['exclusiveMinimum'];
+                      final hi = p['maximum'] ?? p['exclusiveMaximum'];
+                      if (input?['type'] == 'range' &&
+                          lo is num &&
+                          hi is num &&
+                          hi > lo) {
+                        final ctl = _text[e.key]!;
+                        final whole =
+                            (p['type'] ??
+                                (p['anyOf'] as List?)?.firstOrNull?['type']) ==
+                            'integer';
+                        final step = input?['step'];
+                        final cur = (num.tryParse(ctl.text) ?? lo)
+                            .clamp(lo, hi)
+                            .toDouble();
+                        return withDefault(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(label),
+                              if (help != null)
+                                Text(help, style: TextStyle(color: muted)),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Slider(
+                                      value: cur,
+                                      min: lo.toDouble(),
+                                      max: hi.toDouble(),
+                                      divisions: step is num && step > 0
+                                          ? ((hi - lo) / step).round().clamp(
+                                              1,
+                                              10000,
+                                            )
+                                          : whole
+                                          ? (hi - lo).round().clamp(1, 10000)
+                                          : null,
+                                      label: ctl.text,
+                                      onChanged: (v) => setState(
+                                        () => ctl.text = whole
+                                            ? '${v.round()}'
+                                            : '${double.parse(v.toStringAsFixed(4))}',
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 72,
+                                    child: TextField(
+                                      controller: ctl,
+                                      textAlign: TextAlign.center,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(
+                                            decimal: true,
+                                            signed: true,
+                                          ),
+                                      onChanged: (_) => setState(() {}),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        );
+                      }
                       final secret =
-                          p['input'] is Map &&
-                          (p['input'] as Map)['type'] == 'password';
+                          input != null && input['type'] == 'password';
                       return withDefault(
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),

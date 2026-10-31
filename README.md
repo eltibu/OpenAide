@@ -6,7 +6,7 @@
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/eltibu/Nexus-assistant?label=download&color=7c4dff" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Android-9%2B-3ddc84?logo=android&logoColor=white" alt="Android 9+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
-  <a href="https://github.com/open-webui/open-webui"><img src="https://img.shields.io/badge/works%20with-Open%20WebUI-black" alt="Works with Open WebUI"></a>
+  <a href="https://github.com/open-webui/open-webui"><img src="https://img.shields.io/badge/works%20with-Open%20WebUI%200.12.5-black" alt="Works with Open WebUI 0.12.5"></a>
 </p>
 
 <p align="center">
@@ -86,7 +86,7 @@ Needs Android 9 or newer.
 
 The first screen asks how you want to use OpenAide. Pick one, and you can add the others later in **Settings**.
 
-- **I have an Open WebUI server:** enter its address (for example `https://chat.example.com`, or `http://192.168.1.20:3000` at home) and sign in with your email and password, an API key, or your server's sign-on page. Replies run on your server, so its tools, pipelines, filters and knowledge work exactly as on the web.
+- **I have an Open WebUI server:** enter its address (for example `https://chat.example.com`, or `http://192.168.1.20:3000` at home) and sign in with your email and password, an API key, or your server's sign-on page. Replies run on your server, so its tools, pipelines, filters and knowledge work exactly as on the web. Tested with Open WebUI 0.12.5 (and 0.12.4).
 - **Use an AI provider:** sign in to OpenRouter, or paste a Claude or OpenAI API key.
 - **Run a model on the phone:** choose one of the recommended small models and download it once. After that it works with no internet.
 

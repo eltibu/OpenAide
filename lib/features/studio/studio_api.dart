@@ -17,7 +17,13 @@ class StudioDocument {
 
   factory StudioDocument.fromJson(Map j) {
     final data = (j['data'] as Map?) ?? const {};
-    final content = (data['content'] as Map?) ?? const {};
+    // Since 0.12.5 a note has pages, and data.content joins them all; the
+    // document is its first (main) page.
+    final main = (data['pages'] as List?)?.whereType<Map>().where(
+      (p) => p['id'] == 'main',
+    );
+    final content =
+        ((main?.firstOrNull ?? data)['content'] as Map?) ?? const {};
     return StudioDocument(
       id: '${j['id']}',
       title: '${j['title'] ?? ''}',
@@ -110,6 +116,8 @@ class StudioApi {
     '${_id(id)}/update',
     body: {
       'title': title,
+      // Older servers ignore it; 0.12.5 needs it once there are more pages.
+      'page_id': 'main',
       'data': {
         'content': content(markdown),
         if (versions != null)

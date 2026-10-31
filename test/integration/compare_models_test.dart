@@ -86,7 +86,8 @@ void main() {
       expect(now().compareIds, ['fake2']);
       await client.deleteChat(saved.id);
 
-      // "@" a model: it answers that one message, then the chat's own.
+      // "@" a model: since Open WebUI 0.12.5 it answers and the chat
+      // carries on with it, saved with the chat.
       controller
         ..newChat()
         ..selectModel('fake')
@@ -95,9 +96,10 @@ void main() {
       await controller.send('Just you');
       expect(now().messages.last.model, 'fake2');
       expect(container.read(atModelProvider), isNull);
-      expect(now().modelId, 'fake');
+      expect(now().modelId, 'fake2');
       await controller.send('And now');
-      expect(now().messages.last.model, 'fake');
+      expect(now().messages.last.model, 'fake2');
+      expect((await client.chat(now().chat!.id)).models, ['fake2']);
       await client.deleteChat(now().chat!.id);
     },
     skip: skip,
