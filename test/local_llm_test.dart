@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/ai/ai_providers.dart';
 import 'package:nexus_assistant/core/ai/local_llm.dart';
@@ -101,5 +103,27 @@ void main() {
       isNull,
     );
     expect(modelFromLink('not a link'), isNull);
+  });
+
+  test('fitting the history keeps the question while tools run', () {
+    final kept = fitHistory([
+      const AiMessage('system', 'S'),
+      const AiMessage('user', 'Summarize this page'),
+      const AiMessage('assistant', '<tool_call>{}</tool_call>'),
+      AiMessage('user', '<tool_response>\n${'x' * 500}\n</tool_response>'),
+    ], maxChars: 300);
+    expect(kept.map((m) => m.text), contains('Summarize this page'));
+  });
+
+  test('recommended models are ordered for the phone', () {
+    const gb = 1024 * 1024 * 1024;
+    final small = recommendedFor(4 * gb);
+    expect(fitFor(small.first.size, 4 * gb), Fit.good);
+    expect(fitFor(small.last.size, 4 * gb), isNot(Fit.good));
+    final big = recommendedFor(12 * gb);
+    expect(
+      big.first.toolScore,
+      recommendedModels.map((m) => m.toolScore ?? 0).reduce(max),
+    );
   });
 }

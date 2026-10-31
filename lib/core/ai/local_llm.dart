@@ -90,6 +90,7 @@ class ModelFile {
     required this.size,
     this.blurb,
     this.link,
+    this.toolScore,
   });
 
   final String repo;
@@ -102,6 +103,10 @@ class ModelFile {
 
   /// Where to download it from, when it's not a Hugging Face file.
   final String? link;
+
+  /// Out of 100: how many of OpenAide's tool tasks (phone actions, search,
+  /// skills, MCP) it got right in our tests. Recommended models only.
+  final int? toolScore;
 
   String get url =>
       link ??
@@ -141,55 +146,35 @@ ModelFile? modelFromLink(String text) {
 }
 
 /// A starting point. People can pick anything else from Hugging Face.
+/// Only models that did well in our tool tests (phone actions, web search,
+/// skills, MCP; the same prompt and parser the app uses) are here, best
+/// first. [recommendedFor] orders them for each phone's memory.
 const recommendedModels = [
   ModelFile(
-    repo: 'unsloth/Qwen3-0.6B-GGUF',
-    file: 'Qwen3-0.6B-Q4_K_M.gguf',
-    name: 'Qwen3 0.6B',
-    size: 397 * _mb,
-    blurb: 'Tiny and quick. Fine for simple questions on any phone.',
-  ),
-  ModelFile(
-    repo: 'unsloth/gemma-3-1b-it-GGUF',
-    file: 'gemma-3-1b-it-Q4_K_M.gguf',
-    name: 'Gemma 3 1B',
-    size: 806 * _mb,
-    blurb: "Google's small model. Friendly writing, quick replies.",
-  ),
-  ModelFile(
-    repo: 'bartowski/Llama-3.2-1B-Instruct-GGUF',
-    file: 'Llama-3.2-1B-Instruct-Q4_K_M.gguf',
-    name: 'Llama 3.2 1B',
-    size: 808 * _mb,
-    blurb: "Meta's small model. Good for short chats and summaries.",
-  ),
-  ModelFile(
-    repo: 'unsloth/Qwen3-1.7B-GGUF',
-    file: 'Qwen3-1.7B-Q4_K_M.gguf',
-    name: 'Qwen3 1.7B',
-    size: 1107 * _mb,
-    blurb: 'The best small all-rounder. Thinks before it answers.',
-  ),
-  ModelFile(
-    repo: 'bartowski/Llama-3.2-3B-Instruct-GGUF',
-    file: 'Llama-3.2-3B-Instruct-Q4_K_M.gguf',
-    name: 'Llama 3.2 3B',
-    size: 2019 * _mb,
-    blurb: 'Smarter, still at a usable speed on most phones.',
+    repo: 'unsloth/Qwen3-4B-Instruct-2507-GGUF',
+    file: 'Qwen3-4B-Instruct-2507-Q4_K_M.gguf',
+    name: 'Qwen3 4B 2507',
+    size: 2497 * _mb,
+    blurb:
+        'The best with tools and quick to answer. For phones with 8 GB or '
+        'more.',
+    toolScore: 88,
   ),
   ModelFile(
     repo: 'unsloth/Qwen3-4B-GGUF',
     file: 'Qwen3-4B-Q4_K_M.gguf',
     name: 'Qwen3 4B',
     size: 2497 * _mb,
-    blurb: 'The smartest that runs well on a phone with 8 GB or more.',
+    blurb: 'Just as good with tools; thinks first, so slower. 8 GB or more.',
+    toolScore: 88,
   ),
   ModelFile(
-    repo: 'unsloth/gemma-3-4b-it-GGUF',
-    file: 'gemma-3-4b-it-Q4_K_M.gguf',
-    name: 'Gemma 3 4B',
-    size: 2489 * _mb,
-    blurb: 'Strong writer, many languages. Needs 8 GB or more.',
+    repo: 'bartowski/Llama-3.2-3B-Instruct-GGUF',
+    file: 'Llama-3.2-3B-Instruct-Q4_K_M.gguf',
+    name: 'Llama 3.2 3B',
+    size: 2019 * _mb,
+    blurb: 'Good with tools and fast. Runs well on most phones with 6 GB.',
+    toolScore: 76,
   ),
   ModelFile(
     repo: 'bartowski/microsoft_Phi-4-mini-instruct-GGUF',
@@ -197,8 +182,47 @@ const recommendedModels = [
     name: 'Phi-4 mini',
     size: 2491 * _mb,
     blurb: "Microsoft's small model; good at reasoning and math.",
+    toolScore: 76,
+  ),
+  ModelFile(
+    repo: 'unsloth/gemma-3-4b-it-GGUF',
+    file: 'gemma-3-4b-it-Q4_K_M.gguf',
+    name: 'Gemma 3 4B',
+    size: 2489 * _mb,
+    blurb: 'Strong writer, many languages. Needs 8 GB or more.',
+    toolScore: 71,
+  ),
+  ModelFile(
+    repo: 'unsloth/Qwen3-1.7B-GGUF',
+    file: 'Qwen3-1.7B-Q4_K_M.gguf',
+    name: 'Qwen3 1.7B',
+    size: 1107 * _mb,
+    blurb: 'The pick for phones with 4 GB. Thinks before it answers.',
+    toolScore: 65,
+  ),
+  ModelFile(
+    repo: 'unsloth/Qwen3-0.6B-GGUF',
+    file: 'Qwen3-0.6B-Q4_K_M.gguf',
+    name: 'Qwen3 0.6B',
+    size: 397 * _mb,
+    blurb: 'Tiny and quick, for any phone. Simple questions and actions.',
+    toolScore: 65,
   ),
 ];
+
+/// The recommended models in the order that suits a phone with
+/// [totalRam]: the ones that run well first, best with tools first, and
+/// the ones too big for it last.
+List<ModelFile> recommendedFor(int totalRam) {
+  int rank(ModelFile m) => totalRam <= 0 ? 0 : fitFor(m.size, totalRam).index;
+  // The list is already best first; only how well it fits moves a model.
+  final order = {for (final (i, m) in recommendedModels.indexed) m: i};
+  return [...recommendedModels]..sort(
+    (a, b) => rank(a) != rank(b)
+        ? rank(a).compareTo(rank(b))
+        : order[a]!.compareTo(order[b]!),
+  );
+}
 
 // Hugging Face: search every GGUF model there.
 
@@ -439,8 +463,13 @@ List<AiMessage> fitHistory(List<AiMessage> chat, {required int maxChars}) {
   final rest = chat.where((m) => m.role != 'system').toList();
   var used = system.fold<int>(0, (n, m) => n + m.text.length);
   final kept = <AiMessage>[];
-  for (final m in rest.reversed) {
-    if (kept.isNotEmpty && used + m.text.length > maxChars) break;
+  // While tools run, the person's question comes before the calls and
+  // their results; it's always kept, or the model forgets what was asked.
+  final asked = rest.lastIndexWhere(
+    (m) => m.role == 'user' && !m.text.trimLeft().startsWith('<tool_response>'),
+  );
+  for (final (i, m) in rest.indexed.toList().reversed) {
+    if (kept.isNotEmpty && i < asked && used + m.text.length > maxChars) break;
     kept.insert(0, m);
     used += m.text.length;
   }

@@ -46,7 +46,8 @@ void main() {
         p.add('ments": {"query": "weather"}}</tool_call> ok'),
         p.close(),
       ].join();
-      expect(shown, 'Let me check.  ok');
+      // What comes after the call is a guess at its result.
+      expect(shown, 'Let me check. ');
       expect(p.calls.single.$1, 'web_search');
       expect(jsonDecode(p.calls.single.$2), {'query': 'weather'});
     });
@@ -55,6 +56,67 @@ void main() {
       final p = ToolCallParser();
       expect([p.add('a < b and 2 <'), p.close()].join(), 'a < b and 2 <');
       expect(p.calls, isEmpty);
+    });
+
+    test("Gemma's ```tool_call blocks count", () {
+      final p = ToolCallParser();
+      final shown = [
+        p.add('```tool_call\n{"name": "open_app", "arguments": '),
+        p.add('{"name": "Spotify"}}\n```\nThe app is open.'),
+        p.close(),
+      ].join();
+      expect(shown.trim(), isEmpty);
+      expect(p.calls.single.$1, 'open_app');
+    });
+
+    test('mistakes small models make are read', () {
+      (String, String) one(String body) {
+        final p = ToolCallParser()..add('<tool_call>$body</tool_call>');
+        p.close();
+        return p.calls.single;
+      }
+
+      expect(
+        one('{"calculator", "arguments": {"expression": "1+1"}}').$1,
+        'calculator',
+      );
+      expect(jsonDecode(one('{"directions", "place": "airport"}').$2), {
+        'place': 'airport',
+      });
+      expect(
+        jsonDecode(
+          one('{"name": "flashlight", "arguments": {"on": true"}}').$2,
+        ),
+        {'on': true},
+      );
+      expect(one('{"directions": {"place": "airport"}}').$1, 'directions');
+      expect(
+        one('{"home__get_state", {"entity_id": "x"}}').$1,
+        'home__get_state',
+      );
+      final bad = ToolCallParser()..add('<tool_call>not json</tool_call>');
+      expect(bad.calls, isEmpty);
+      expect(bad.unread, 1);
+    });
+
+    test('calls written without tags are found by tool name', () {
+      final tools = [
+        for (final n in ['set_alarm', 'calculator'])
+          AgentTool(name: n, description: 'x', run: (_) async => ''),
+      ];
+      expect(
+        looseCall('<set_alarm {"time": "06:30"}>', tools)!.$1,
+        'set_alarm',
+      );
+      expect(
+        looseCall(
+          '<calculator>{"name": "calculator", "arguments": '
+          '{"expression": "1+1"}}',
+          tools,
+        )!.$2,
+        '{"expression":"1+1"}',
+      );
+      expect(looseCall('Here is some JSON: {"a": 1}', tools), isNull);
     });
   });
 
@@ -153,6 +215,53 @@ void main() {
         );
       },
     );
+
+    test('small models: stop at the call, forgiving names and arguments, '
+        'no repeats', () async {
+      final ran = <Map<String, dynamic>>[];
+      final tool = AgentTool(
+        name: 'home__get_state',
+        description: 'Reads a sensor',
+        run: (a) async {
+          ran.add(a);
+          return '21 C';
+        },
+      );
+      final replies = [
+        // A misspelt name, "?" copied from the list, and a made-up result
+        // after the call that must not be shown.
+        '<tool_call>{"name": "home_get_state", "arguments": '
+            '{"entity_id?": "sensor.t"}}</tool_call> It is 30 C.',
+        '<tool_call>{"name": "home__get_state", "arguments": '
+            '{"entity_id": "sensor.t"}}</tool_call>',
+        'It is 21 C.',
+      ];
+      var round = 0;
+      Stream<AiChunk> turn({
+        required List<AiMessage> messages,
+        String? system,
+        required List<AiToolSpec> tools,
+        required List<AiToolTurn> turns,
+      }) async* {
+        yield AiChunk(text: replies[round++]);
+      }
+
+      final events = await runAgent(
+        turn: turn,
+        messages: const [AiMessage('user', 'temperature?')],
+        tools: [tool],
+        nativeTools: false,
+      ).toList();
+      expect(ran, [
+        {'entity_id': 'sensor.t'},
+      ]);
+      final done = events.whereType<AgentToolDone>().toList();
+      expect(done.last.output, startsWith('Already done: 21 C'));
+      expect(
+        events.whereType<AgentText>().map((e) => e.text).join().trim(),
+        'It is 21 C.',
+      );
+    });
 
     test('an unknown tool or an error goes back to the model', () async {
       var round = 0;
