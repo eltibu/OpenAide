@@ -1,11 +1,20 @@
 name: Mark old builds as dev builds
 
-# One-off, before the first public release: every build so far was published
-# as a normal release, so the stable channel and /releases/latest would point
-# at a dev build. This marks them all as pre-releases (dev channel only).
-# Nothing is deleted; a release can be switched back on its GitHub page.
+# Every build so far was published as a normal release, so the stable
+# channel and /releases/latest would point at a dev build. This marks them
+# all as pre-releases (dev channel only). Nothing is deleted; a release can
+# be switched back on its GitHub page.
+#
+# With stable_tag, that one build then becomes the public (stable) release:
+# no "(dev)" in its name, marked latest, and its APK also attached as
+# OpenAide-<version>.apk for people downloading by hand.
 on:
   workflow_dispatch:
+    inputs:
+      stable_tag:
+        description: Build to make the stable release, like v0.1.255 (optional)
+        type: string
+        default: ''
 
 jobs:
   mark:
@@ -16,11 +25,25 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          STABLE: ${{ inputs.stable_tag }}
         run: |
+          set -e
           N=0
           for id in $(gh api --paginate "repos/$REPO/releases?per_page=100" \
-              --jq '.[] | select(.prerelease == false and .draft == false) | .id'); do
+              --jq ".[] | select(.prerelease == false and .draft == false and .tag_name != \"$STABLE\") | .id"); do
             gh api -X PATCH "repos/$REPO/releases/$id" -F prerelease=true -f make_latest=false >/dev/null
             N=$((N + 1))
           done
           echo "::notice::Marked $N releases as dev builds (pre-releases)."
+          if [ -n "$STABLE" ]; then
+            VERSION="${STABLE#v}"
+            ID=$(gh api "repos/$REPO/releases/tags/$STABLE" --jq .id)
+            gh api -X PATCH "repos/$REPO/releases/$ID" -F prerelease=false -f make_latest=true \
+              -f name="OpenAide $VERSION" >/dev/null
+            if ! gh release view "$STABLE" -R "$REPO" --json assets --jq '.assets[].name' | grep -qx "OpenAide-$VERSION.apk"; then
+              gh release download "$STABLE" -R "$REPO" -p nexus-assistant.apk -O "OpenAide-$VERSION.apk" --clobber
+              gh release upload "$STABLE" -R "$REPO" "OpenAide-$VERSION.apk"
+              rm -f "OpenAide-$VERSION.apk"
+            fi
+            echo "::notice::$STABLE is now the stable release (latest)."
+          fi

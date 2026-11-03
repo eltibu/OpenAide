@@ -64,6 +64,7 @@ import '../notes/notes_api.dart' show NotesApi, noteIdIn;
 import '../notes/notes_screen.dart' show NoteEditorScreen;
 import '../admin/ollama_pulls.dart';
 import '../admin/connections_screen.dart' show ConnectionsScreen;
+import '../admin/visible_controls.dart' show controlVisible;
 import '../../core/models/model_info.dart';
 import 'model_avatar.dart';
 import 'model_pins.dart';
@@ -938,6 +939,8 @@ class _MessageList extends ConsumerWidget {
             builder: (_) => NoteEditorScreen(
               api: NotesApi(ref.read(clientProvider)),
               id: id,
+              // A link to one page of it (0.12.5).
+              page: Uri.tryParse(url)?.queryParameters['page'],
             ),
           ),
         );
@@ -2894,7 +2897,11 @@ class _FeaturesButton extends ConsumerWidget {
     final activeTools = state.toolIds ?? model?.toolIds.toSet() ?? const {};
     final terminalId = state.terminalId ?? model?.terminalId ?? '';
     final terminal = terminals.where((t) => t.id == terminalId).firstOrNull;
-    final count = activeTools.length + (state.skillIds?.length ?? 0);
+    // Admin > Visible controls can hide what's picked (0.12.5).
+    bool shown(String id) => controlVisible(ref, 'chat.selected_$id');
+    final count =
+        (shown('tools') ? activeTools.length : 0) +
+        (shown('skills') ? state.skillIds?.length ?? 0 : 0);
     final accent = NexusColors.accent;
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -2933,8 +2940,9 @@ class _FeaturesButton extends ConsumerWidget {
               ),
             ),
         // What's switched on, at a glance, as in the web UI's text box.
-        if (on('web_search')) Icon(Icons.language, size: 20, color: accent),
-        if (on('image_generation'))
+        if (on('web_search') && shown('web_search'))
+          Icon(Icons.language, size: 20, color: accent),
+        if (on('image_generation') && shown('image_generation'))
           Padding(
             padding: const EdgeInsets.only(left: 6),
             child: Icon(Icons.image_outlined, size: 20, color: accent),
@@ -2948,7 +2956,7 @@ class _FeaturesButton extends ConsumerWidget {
             sandbox: on('code_interpreter'),
             canSandbox: features.contains('code_interpreter'),
           )
-        else if (on('code_interpreter'))
+        else if (on('code_interpreter') && shown('code_interpreter'))
           Padding(
             padding: const EdgeInsets.only(left: 6),
             child: Icon(Icons.code, size: 20, color: accent),

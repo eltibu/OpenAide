@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_widget/markdown_widget.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
@@ -198,7 +199,11 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
-        [_ago(n.updated), if (snippet.isNotEmpty) snippet].join(' · '),
+        [
+          _ago(n.updated),
+          if ((n.pageCount ?? 1) > 1) '${n.pageCount} ${tr('pages')}',
+          if (snippet.isNotEmpty) snippet,
+        ].join(' · '),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(color: muted),
@@ -255,9 +260,17 @@ TextEditingValue insertSaid(TextEditingValue v, String said) {
 }
 
 class NoteEditorScreen extends ConsumerStatefulWidget {
-  const NoteEditorScreen({super.key, required this.api, required this.id});
+  const NoteEditorScreen({
+    super.key,
+    required this.api,
+    required this.id,
+    this.page,
+  });
   final NotesApi api;
   final String id;
+
+  /// The page to open (a link's ?page=), else the first.
+  final String? page;
 
   @override
   ConsumerState<NoteEditorScreen> createState() => _NoteEditorScreenState();
@@ -281,24 +294,114 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   Object? _error;
   Timer? _debounce;
 
+  /// The note's pages (Open WebUI 0.12.5+; empty before), the one open,
+  /// and the revision page changes are checked against.
+  List<NotePage> _pages = const [];
+  String _pageId = 'main';
+  int _pagesRevision = 0;
+  bool _pageBusy = false;
+
+  /// Who else has the note open, and on which page (live presence).
+  List<Map<String, dynamic>> _people = const [];
+  StreamSubscription<Map<String, dynamic>>? _presence;
+  StreamSubscription<Map<String, dynamic>>? _noteEvents;
+
+  bool get _paged => _pages.isNotEmpty;
+  NotePage? get _page => _pages.where((p) => p.id == _pageId).firstOrNull;
+
   @override
   void initState() {
     super.initState();
     _load();
+    _live();
   }
 
   Future<void> _load() async {
     try {
       final n = await widget.api.get(widget.id);
       _title.text = n.title;
-      _body.text = n.markdown;
-      _files = n.files;
-      _preview = n.markdown.trim().isNotEmpty;
+      _pages = n.pages;
+      _pagesRevision = n.pagesRevision;
+      if (_paged) {
+        _pageId = _pages.any((p) => p.id == widget.page)
+            ? widget.page!
+            : _pages.first.id;
+        _body.text = _page!.markdown;
+        _files = pageFiles(_body.text);
+      } else {
+        _body.text = n.markdown;
+        _files = n.files;
+      }
+      _preview = _body.text.trim().isNotEmpty;
       _loaded = true;
     } catch (e) {
       _error = e;
     }
     if (mounted) setState(() {});
+  }
+
+  /// Joins the note's live room: who else is here, and page changes made
+  /// elsewhere.
+  void _live() {
+    final socket = ref.read(chatSocketProvider);
+    final me = ref.read(sessionProvider).value?.user?['id'];
+    _presence = socket.notePresence.listen((e) {
+      if (e['note_id'] != widget.id || !mounted) return;
+      setState(
+        () => _people = [
+          for (final u in (e['users'] as List? ?? const []).whereType<Map>())
+            if (u['id'] != me) u.cast<String, dynamic>(),
+        ],
+      );
+    });
+    _noteEvents = socket.noteEvents.listen((e) {
+      if (e['id'] != widget.id || !mounted || _pageBusy) return;
+      final data = e['data'];
+      if (data is! Map || data['pages'] is! List) return;
+      final rev = (data['pages_revision'] as num?)?.toInt() ?? 0;
+      if (rev == _pagesRevision) return;
+      final pages = [
+        for (final p in (data['pages'] as List).whereType<Map>())
+          NotePage.fromJson(p),
+      ];
+      setState(() {
+        _pages = _withOpenText(pages);
+        _pagesRevision = rev;
+        if (_page == null) _show(_pages.first);
+      });
+    });
+    socket.joinNote(widget.id);
+  }
+
+  /// [pages] from the server, keeping the open page's text as typed here.
+  List<NotePage> _withOpenText(List<NotePage> pages) => [
+    for (final p in pages)
+      p.id == _pageId
+          ? NotePage(
+              id: p.id,
+              title: p.title,
+              markdown: _body.text,
+              parentId: p.parentId,
+              revision: p.revision,
+            )
+          : p,
+  ];
+
+  void _show(NotePage page) {
+    _pageId = page.id;
+    _body.text = page.markdown;
+    _files = pageFiles(page.markdown);
+    _history.value = UndoHistoryValue.empty;
+    _preview = page.markdown.trim().isNotEmpty;
+  }
+
+  /// Opens another page, saving this one first.
+  Future<void> _openPage(String id) async {
+    if (id == _pageId || _pageBusy) return;
+    await _save();
+    final page = _pages.where((p) => p.id == id).firstOrNull;
+    if (page == null || !mounted) return;
+    setState(() => _show(page));
   }
 
   void _changed() {
@@ -313,12 +416,29 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     if (!_dirty || !_loaded) return;
     _dirty = false;
     if (mounted && !_closing) setState(() => _saving = true);
+    final pageId = _paged ? _pageId : null;
+    final text = _body.text;
     try {
       await widget.api.update(
         widget.id,
         title: _title.text.trim().isEmpty ? 'Untitled' : _title.text.trim(),
-        markdown: _body.text,
+        markdown: text,
+        pageId: pageId,
       );
+      if (pageId != null) {
+        _pages = [
+          for (final p in _pages)
+            p.id == pageId
+                ? NotePage(
+                    id: p.id,
+                    title: p.title,
+                    markdown: text,
+                    parentId: p.parentId,
+                    revision: p.revision + 1,
+                  )
+                : p,
+        ];
+      }
     } catch (e) {
       _dirty = true;
       if (mounted) {
@@ -343,28 +463,29 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   String get _name =>
       _title.text.trim().isEmpty ? 'Untitled' : _title.text.trim();
 
-  /// Saves the note to the phone as Markdown, plain text or PDF.
+  /// Saves the note (the open page, with several) to the phone as
+  /// Markdown, plain text or PDF.
   Future<void> _download(String kind) async {
+    final page = _page;
+    final name = page != null && _pages.length > 1 && !page.isMain
+        ? '$_name - ${page.title}'
+        : _name;
     try {
       final (Uint8List bytes, String type) = switch (kind) {
         'pdf' => (
-          await toPdf(
-            _name,
-            _body.text,
-            theme: await pdfTheme(rootBundle.load),
-          ),
+          await toPdf(name, _body.text, theme: await pdfTheme(rootBundle.load)),
           'application/pdf',
         ),
         'md' => (
-          Uint8List.fromList(utf8.encode('# $_name\n\n${_body.text}')),
+          Uint8List.fromList(utf8.encode('# $name\n\n${_body.text}')),
           'text/markdown',
         ),
         _ => (
-          Uint8List.fromList(utf8.encode('$_name\n\n${_body.text}')),
+          Uint8List.fromList(utf8.encode('$name\n\n${_body.text}')),
           'text/plain',
         ),
       };
-      final file = '${_name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}.$kind';
+      final file = '${name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_')}.$kind';
       final saved = await FilePicker.saveFile(
         fileName: file,
         bytes: bytes,
@@ -514,7 +635,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
       case 'link':
         await Clipboard.setData(
           ClipboardData(
-            text: '${ref.read(clientProvider).baseUrl}/notes/${widget.id}',
+            text:
+                '${ref.read(clientProvider).baseUrl}/notes/${widget.id}'
+                '${_paged ? '?page=${Uri.encodeComponent(_pageId)}' : ''}',
           ),
         );
         _say('Link copied');
@@ -550,11 +673,37 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         if (mounted) _say("Couldn't upload ${f.name}: $e");
       }
     }
-    if (added.isNotEmpty) await _setFiles([..._files, ...added]);
+    if (added.isNotEmpty) {
+      if (_paged) {
+        // Since 0.12.5 a file sits inside the page it was added to.
+        var text = _body.text;
+        for (final f in added) {
+          text = withFileLink(text, f);
+        }
+        _body.text = text;
+        _files = pageFiles(text);
+        _changed();
+        await _save();
+      } else {
+        await _setFiles([..._files, ...added]);
+      }
+    }
     if (mounted) setState(() => _uploading = false);
   }
 
   Future<void> _setFiles(List<Map<String, dynamic>> files) async {
+    if (_paged) {
+      var text = _body.text;
+      for (final f in _files) {
+        if (!files.any((o) => o['id'] == f['id'])) {
+          text = withoutFileLink(text, '${f['id']}');
+        }
+      }
+      _body.text = text;
+      setState(() => _files = pageFiles(text));
+      _changed();
+      return;
+    }
     final before = _files;
     setState(() => _files = files);
     try {
@@ -567,12 +716,337 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
+  // ---- Pages (0.12.5) ----
+
+  Future<String?> _pageTitle(String title, [String initial = '']) async {
+    final text = TextEditingController(text: initial);
+    final v = await showDialog<String>(
+      context: context,
+      builder: (d) => AlertDialog(
+        title: T(title),
+        content: TextField(
+          controller: text,
+          autofocus: true,
+          maxLength: 200,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: InputDecoration(hintText: tr('Page title')),
+          onSubmitted: (v) => Navigator.pop(d, v),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(d),
+            child: const T('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(d, text.text),
+            child: const T('Save'),
+          ),
+        ],
+      ),
+    );
+    final t = v?.trim();
+    return t == null || t.isEmpty ? null : t;
+  }
+
+  /// A change to the pages, as the web's page tabs; opens [open] (or the
+  /// new page) after.
+  Future<void> _pageOp(
+    String action, {
+    String? pageId,
+    String? parentId,
+    bool toTop = false,
+    String? beforeId,
+    String? title,
+  }) async {
+    if (_pageBusy) return;
+    setState(() => _pageBusy = true);
+    await _save();
+    final newId = action == 'create' || action == 'duplicate'
+        ? const Uuid().v4()
+        : null;
+    try {
+      final n = await widget.api.pages(
+        widget.id,
+        action,
+        revision: _pagesRevision,
+        pageId: pageId,
+        newId: newId,
+        parentId: parentId,
+        toTop: toTop,
+        beforeId: beforeId,
+        title: title,
+      );
+      if (!mounted) return;
+      final index = _pages.indexWhere((p) => p.id == _pageId);
+      setState(() {
+        _pages = _withOpenText(n.pages);
+        _pagesRevision = n.pagesRevision;
+        final target = newId != null
+            ? _pages.where((p) => p.id == newId).firstOrNull
+            : _page ?? _pages[index.clamp(0, _pages.length - 1)];
+        if (target != null && target.id != _pageId) _show(target);
+      });
+    } catch (e) {
+      if (mounted) _say('$e');
+      // Someone else changed the pages: show them as they are now.
+      try {
+        final n = await widget.api.get(widget.id);
+        if (mounted) {
+          setState(() {
+            _pages = _withOpenText(n.pages);
+            _pagesRevision = n.pagesRevision;
+          });
+        }
+      } catch (_) {}
+    } finally {
+      if (mounted) setState(() => _pageBusy = false);
+    }
+  }
+
+  Future<void> _addPage({String? parentId}) async {
+    final title = await _pageTitle(
+      parentId == null ? 'New page' : 'New subpage',
+    );
+    if (title == null) return;
+    await _pageOp('create', parentId: parentId, title: title);
+  }
+
+  /// The pages next to [page] under the same parent, in order.
+  List<NotePage> _siblings(NotePage page) => [
+    for (final p in _pages)
+      if (p.parentId == page.parentId) p,
+  ];
+
+  Future<void> _pageMenu(NotePage page) async {
+    final siblings = _siblings(page);
+    final i = siblings.indexWhere((p) => p.id == page.id);
+    final canUp = !page.isMain && i > 0 && !siblings[i - 1].isMain;
+    final canDown = !page.isMain && i < siblings.length - 1;
+    final v = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (s) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                title: Text(
+                  page.title,
+                  style: Theme.of(s).textTheme.titleMedium,
+                ),
+              ),
+              for (final (value, icon, label, on) in [
+                ('rename', Icons.edit_outlined, 'Rename', true),
+                ('sub', Icons.subdirectory_arrow_right, 'Add subpage', true),
+                ('duplicate', Icons.copy_all_outlined, 'Duplicate', true),
+                ('up', Icons.arrow_upward, 'Move up', canUp),
+                ('down', Icons.arrow_downward, 'Move down', canDown),
+                (
+                  'under',
+                  Icons.drive_file_move_outline,
+                  'Move under…',
+                  !page.isMain,
+                ),
+                (
+                  'top',
+                  Icons.vertical_align_top,
+                  'Move to top level',
+                  !page.isMain && page.parentId != null,
+                ),
+                ('link', Icons.link, 'Copy link', true),
+                ('md', Icons.download_outlined, 'Download page', true),
+                (
+                  'delete',
+                  Icons.delete_outline,
+                  'Delete',
+                  !page.isMain && _pages.length > 1,
+                ),
+              ])
+                if (on)
+                  ListTile(
+                    leading: Icon(icon),
+                    title: T(label),
+                    onTap: () => Navigator.pop(s, value),
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (v == null || !mounted) return;
+    switch (v) {
+      case 'rename':
+        final t = await _pageTitle('Rename page', page.title);
+        if (t != null && t != page.title) {
+          await _pageOp('rename', pageId: page.id, title: t);
+        }
+      case 'sub':
+        await _addPage(parentId: page.id);
+      case 'duplicate':
+        await _pageOp('duplicate', pageId: page.id);
+      case 'up':
+        await _pageOp(
+          'move',
+          pageId: page.id,
+          parentId: page.parentId,
+          toTop: page.parentId == null,
+          beforeId: siblings[i - 1].id,
+        );
+      case 'down':
+        await _pageOp(
+          'move',
+          pageId: page.id,
+          parentId: page.parentId,
+          toTop: page.parentId == null,
+          beforeId: i + 2 < siblings.length ? siblings[i + 2].id : null,
+        );
+      case 'top':
+        await _pageOp('move', pageId: page.id, toTop: true);
+      case 'under':
+        final branch = pageBranch(_pages, page.id);
+        final to = await showModalBottomSheet<String>(
+          context: context,
+          showDragHandle: true,
+          builder: (s) => SafeArea(
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                ListTile(title: T('Move "${page.title}" under')),
+                for (final p in _pages)
+                  if (!branch.contains(p.id) && p.id != page.parentId)
+                    ListTile(
+                      contentPadding: EdgeInsets.only(
+                        left: 16.0 + 16 * pageDepth(_pages, p),
+                        right: 16,
+                      ),
+                      leading: const Icon(Icons.description_outlined),
+                      title: Text(p.title),
+                      onTap: () => Navigator.pop(s, p.id),
+                    ),
+              ],
+            ),
+          ),
+        );
+        if (to != null) await _pageOp('move', pageId: page.id, parentId: to);
+      case 'link':
+        await Clipboard.setData(
+          ClipboardData(
+            text:
+                '${ref.read(clientProvider).baseUrl}/notes/${widget.id}'
+                '?page=${Uri.encodeComponent(page.id)}',
+          ),
+        );
+        _say('Link copied');
+      case 'md':
+        if (page.id != _pageId) await _openPage(page.id);
+        await _download('md');
+      case 'delete':
+        final ok = await showDialog<bool>(
+          context: context,
+          builder: (d) => AlertDialog(
+            title: Text('${tr('Delete page')} "${page.title}"?'),
+            content: const T(
+              'Its subpages move up a level. This can\'t be undone.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(d, false),
+                child: const T('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(d, true),
+                child: const T('Delete'),
+              ),
+            ],
+          ),
+        );
+        if (ok == true) await _pageOp('delete', pageId: page.id);
+    }
+  }
+
+  /// The page tabs under the title: tap to open, hold for its menu.
+  Widget _pageTabs() => SizedBox(
+    height: 44,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      children: [
+        for (final p in _pages)
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onLongPress: () => _pageMenu(p),
+              child: ChoiceChip(
+                avatar: pageDepth(_pages, p) > 0
+                    ? const Icon(Icons.subdirectory_arrow_right, size: 16)
+                    : null,
+                label: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 180),
+                  child: Text(
+                    '${'· ' * (pageDepth(_pages, p) > 1 ? pageDepth(_pages, p) - 1 : 0)}${p.title}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                selected: p.id == _pageId,
+                onSelected: (_) =>
+                    p.id == _pageId ? _pageMenu(p) : _openPage(p.id),
+              ),
+            ),
+          ),
+        IconButton(
+          tooltip: tr('Add page'),
+          icon: const Icon(Icons.add),
+          onPressed: _pageBusy ? null : () => _addPage(),
+        ),
+      ],
+    ),
+  );
+
+  /// Who else has the note open; tap one to go to their page.
+  List<Widget> _presenceAvatars() => [
+    for (final u in _people.take(4))
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Tooltip(
+          message: [
+            '${u['name'] ?? ''}',
+            ?_pages.where((p) => p.id == u['page_id']).firstOrNull?.title,
+          ].join(' · '),
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: u['page_id'] is String
+                ? () => _openPage(u['page_id'] as String)
+                : null,
+            child: CircleAvatar(
+              radius: 14,
+              child: Text(
+                '${u['name'] ?? '?'}'.trim().isEmpty
+                    ? '?'
+                    : '${u['name']}'.trim()[0].toUpperCase(),
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ),
+        ),
+      ),
+    if (_people.length > 4)
+      Padding(
+        padding: const EdgeInsets.only(right: 4),
+        child: Text('+${_people.length - 4}'),
+      ),
+  ];
+
   /// Set while the page closes: the last save runs without redrawing.
   bool _closing = false;
 
   @override
   void dispose() {
     _closing = true;
+    _presence?.cancel();
+    _noteEvents?.cancel();
+    try {
+      ref.read(chatSocketProvider).leaveNote(widget.id);
+    } catch (_) {}
     _save();
     _history.dispose();
     _title.dispose();
@@ -594,7 +1068,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
           style: TextStyle(color: muted, fontSize: 14),
         ),
         actions: [
-          if (_enhancing || _uploading)
+          ..._presenceAvatars(),
+          if (_enhancing || _uploading || _pageBusy)
             const Padding(
               padding: EdgeInsets.all(14),
               child: SizedBox.square(
@@ -753,6 +1228,8 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                           ),
                   ),
                 ),
+                // Pages and subpages (0.12.5): tap one, hold for its menu.
+                if (_paged) _pageTabs(),
                 if (_files.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),

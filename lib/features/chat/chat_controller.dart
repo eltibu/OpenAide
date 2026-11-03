@@ -439,21 +439,48 @@ class ChatController extends Notifier<ChatState> {
 
   /// Picks the model; its default terminal (set in its editor, as on the
   /// web) comes with it when that terminal is there.
+  ///
+  /// As on the web (0.12.5), the new model's default tools come on while
+  /// the ones you switched on or off yourself stay that way, and the choice
+  /// is saved with the chat right away, so it reopens with that model.
   void selectModel(String id) {
-    final meta = ref
-        .read(modelsProvider)
-        .value
-        ?.where((m) => m.id == id)
-        .firstOrNull
-        ?.meta;
-    final tid = meta?['terminalId'];
+    final models = ref.read(modelsProvider).value ?? const [];
+    final next = models.where((m) => m.id == id).firstOrNull;
+    final prev = models.where((m) => m.id == state.modelId).firstOrNull;
+    final tid = next?.meta['terminalId'];
     final terminals = ref.read(chatTerminalsProvider).value ?? const [];
+    final picked = state.toolIds;
+    Set<String>? tools;
+    if (picked != null) {
+      final before = prev?.toolIds.toSet() ?? const <String>{};
+      tools = {...?next?.toolIds, ...picked.difference(before)}
+        ..removeAll(before.difference(picked));
+    }
     state = state.copyWith(
       modelId: id,
+      toolIds: tools,
       terminalId: tid is String && terminals.any((t) => t.id == tid)
           ? tid
           : null,
     );
+    unawaited(_saveModels());
+  }
+
+  /// Saves the chosen models with the open chat (not a temporary or new one).
+  Future<void> _saveModels() async {
+    final chat = state.chat;
+    final id = state.modelId;
+    if (chat == null || chat.id.isEmpty || state.temporary || id == null) {
+      return;
+    }
+    final models = [id, ...state.compareIds];
+    if (models.join('\n') == chat.models.join('\n')) return;
+    chat.models = models;
+    try {
+      await ref.read(clientProvider).patchChat(chat.id, {'models': models});
+    } catch (_) {
+      // Saved again with the next message.
+    }
   }
 
   void setFeature(String id, bool on) =>
@@ -881,7 +908,12 @@ class ChatController extends Notifier<ChatState> {
   /// original's. Returns false if nothing was sent.
   Future<bool> send(String text, {ChatMessage? editOf}) async {
     // A model picked with "@" answers this one message, as on the web.
+    // Since 0.12.5 it also switches the chat to that model.
     final at = ref.read(atModelProvider);
+    if (at != null && at != state.modelId && canSend) {
+      state = state.copyWith(compareIds: const []);
+      selectModel(at);
+    }
     final chatModel = state.modelId;
     final modelId = at ?? chatModel;
     final also = at != null ? const <String>[] : state.compareIds;
@@ -1033,12 +1065,15 @@ class ChatController extends Notifier<ChatState> {
 
   /// Has [ids] answer too, next to the chosen model (the web's "+" beside
   /// the model name).
-  void setCompare(List<String> ids) => state = state.copyWith(
-    compareIds: [
-      for (final id in ids.toSet())
-        if (id != state.modelId) id,
-    ],
-  );
+  void setCompare(List<String> ids) {
+    state = state.copyWith(
+      compareIds: [
+        for (final id in ids.toSet())
+          if (id != state.modelId) id,
+      ],
+    );
+    unawaited(_saveModels());
+  }
 
   /// The replies to [user] from each model it was sent to, newest version
   /// of each, in the order the models were picked.
@@ -1251,10 +1286,21 @@ class ChatController extends Notifier<ChatState> {
     }
     chat.currentId = user.id;
     final h = hint?.trim();
+    // The model picked now for that reply's column (0.12.5), not the one
+    // that first wrote it.
+    final ids = [modelId, ...state.compareIds];
+    final idx = reply.extra['modelIdx'] is int
+        ? reply.extra['modelIdx'] as int
+        : chat.models.indexOf(reply.model ?? '');
+    final use = ids.length == 1
+        ? modelId
+        : idx >= 0 && idx < ids.length
+        ? ids[idx]
+        : reply.model ?? modelId;
     await _reply(
       chat,
       user,
-      reply.model ?? modelId,
+      use,
       redoOf: h == null || h.isEmpty ? null : reply,
       hint: h == null || h.isEmpty ? null : h,
     );

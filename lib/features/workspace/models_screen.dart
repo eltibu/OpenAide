@@ -22,6 +22,7 @@ import 'owner_filter.dart';
 import '../settings/audio_settings.dart' show ttsVoicesProvider;
 import '../voice/voice_avatar.dart';
 import 'model_translations.dart';
+import 'provider_details.dart';
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
 import '../../core/i18n/app_strings.dart';
 
@@ -873,6 +874,22 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                     ],
                   ),
                 ),
+                if (ref.watch(sessionProvider).value?.user?['role'] ==
+                        'admin' &&
+                    writable)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: ProviderDetails(
+                      entry: models
+                          .where(
+                            (m) =>
+                                m.id ==
+                                (_connection ? _m?.id : (_base ?? _m?.id)),
+                          )
+                          .firstOrNull
+                          ?.raw,
+                    ),
+                  ),
                 _chips('Knowledge', [
                   for (final k in kbs) (k.id, k.name),
                   for (final (id, name)

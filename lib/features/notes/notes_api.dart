@@ -27,6 +27,34 @@ String? noteIdIn(String url, String serverUrl) {
   return RegExp(r'^/notes/([^/]+)$').firstMatch(path)?.group(1);
 }
 
+/// One page of a note (Open WebUI 0.12.5+): a note holds pages and
+/// subpages, the first ("main") always there.
+class NotePage {
+  const NotePage({
+    required this.id,
+    required this.title,
+    required this.markdown,
+    this.parentId,
+    this.revision = 0,
+  });
+
+  factory NotePage.fromJson(Map j) => NotePage(
+    id: '${j['id']}',
+    title: '${j['title'] ?? ''}',
+    markdown: '${(j['content'] as Map?)?['md'] ?? ''}',
+    parentId: j['parent_id'] as String?,
+    revision: (j['revision'] as num?)?.toInt() ?? 0,
+  );
+
+  final String id;
+  final String title;
+  final String markdown;
+  final String? parentId;
+  final int revision;
+
+  bool get isMain => id == 'main';
+}
+
 class Note {
   const Note({
     required this.id,
@@ -35,10 +63,15 @@ class Note {
     required this.pinned,
     required this.updated,
     this.files = const [],
+    this.pages = const [],
+    this.pagesRevision = 0,
+    this.pageCount,
+    this.writable = true,
   });
 
   factory Note.fromJson(Map j) {
-    final content = ((j['data'] as Map?)?['content'] as Map?) ?? const {};
+    final data = (j['data'] as Map?) ?? const {};
+    final content = (data['content'] as Map?) ?? const {};
     return Note(
       id: '${j['id']}',
       title: '${j['title'] ?? ''}',
@@ -46,25 +79,108 @@ class Note {
       pinned: j['is_pinned'] == true,
       updated: fromServerTime((j['updated_at'] as num?) ?? 0),
       files: [
-        for (final f
-            in ((j['data'] as Map?)?['files'] as List? ?? const [])
-                .whereType<Map>())
+        for (final f in (data['files'] as List? ?? const []).whereType<Map>())
           if (f['id'] != null) f.cast<String, dynamic>(),
       ],
+      pages: [
+        for (final p in (data['pages'] as List? ?? const []).whereType<Map>())
+          NotePage.fromJson(p),
+      ],
+      pagesRevision: (data['pages_revision'] as num?)?.toInt() ?? 0,
+      pageCount: (data['page_count'] as num?)?.toInt(),
+      writable: j['write_access'] != false,
     );
   }
 
   final String id;
   final String title;
 
-  /// The note's text as Markdown (cut short in lists).
+  /// The note's text as Markdown (cut short in lists). With several pages,
+  /// all of them, each under its own heading.
   final String markdown;
   final bool pinned;
   final DateTime updated;
 
-  /// Files added to the note (Upload files), as the web keeps them.
+  /// Files added to the note (Upload files), as servers before 0.12.5 keep
+  /// them. Since then they are links inside a page: see [pageFiles].
   final List<Map<String, dynamic>> files;
+
+  /// The note's pages, in order (parents before their subpages); empty on
+  /// servers before 0.12.5.
+  final List<NotePage> pages;
+
+  /// Sent back with each page change, so two editors can't clash.
+  final int pagesRevision;
+
+  /// In lists: how many pages the note has.
+  final int? pageCount;
+  final bool writable;
+
+  /// Whether the server keeps pages (and files inside them).
+  bool get paged => pages.isNotEmpty;
 }
+
+/// How deep [page] sits: 0 for a top page, 1 for its subpages...
+int pageDepth(List<NotePage> pages, NotePage page) {
+  var depth = 0;
+  var parent = page.parentId;
+  final seen = <String>{};
+  while (parent != null && seen.add(parent)) {
+    depth++;
+    parent = pages.where((p) => p.id == parent).firstOrNull?.parentId;
+  }
+  return depth;
+}
+
+/// [page] and every page under it.
+Set<String> pageBranch(List<NotePage> pages, String id) {
+  final out = {id};
+  for (final p in pages) {
+    if (p.parentId != null && out.contains(p.parentId)) out.add(p.id);
+  }
+  return out;
+}
+
+final _fileLink = RegExp(
+  r'\[([^\]]*)\]\((?:[^)\s]*?)/api/v1/files/([\w-]+)/content\)',
+);
+
+/// The files attached to a page (0.12.5+): links to the server's files in
+/// its text, as the web adds them.
+List<Map<String, dynamic>> pageFiles(String markdown) {
+  final seen = <String>{};
+  return [
+    for (final m in _fileLink.allMatches(markdown))
+      if (seen.add(m.group(2)!))
+        {
+          'type': 'file',
+          'id': m.group(2),
+          'name': m.group(1)!.isEmpty ? m.group(2) : m.group(1),
+        },
+  ];
+}
+
+/// The text with a link to [file] added at the end, as the web attaches.
+String withFileLink(String markdown, Map<String, dynamic> file) {
+  final name = '${file['name'] ?? file['id']}'.replaceAll(
+    RegExp(r'[\[\]]'),
+    '',
+  );
+  final link = '[$name](/api/v1/files/${file['id']}/content)';
+  return markdown.trim().isEmpty ? link : '${markdown.trimRight()}\n\n$link';
+}
+
+/// The text without its links to the file [id].
+String withoutFileLink(String markdown, String id) => markdown
+    .replaceAll(
+      RegExp(
+        r'\n*\[[^\]]*\]\([^)\s]*?/api/v1/files/' +
+            RegExp.escape(id) +
+            r'/content\)',
+      ),
+      '',
+    )
+    .trimRight();
 
 /// How the web lists an uploaded [file] (the server's record) in a note.
 Map<String, dynamic> noteFileItem(Map<String, dynamic> file) => {
@@ -122,16 +238,20 @@ class NotesApi {
       );
 
   /// Changes the title, the text and the files given; the rest stays.
+  /// [pageId] says which page the text is for (0.12.5+; older servers
+  /// ignore it). [files] is only for servers before 0.12.5.
   Future<void> update(
     String id, {
     String? title,
     String? markdown,
+    String? pageId,
     List<Map<String, dynamic>>? files,
   }) => client.send(
     'POST',
     '$_base/${Uri.encodeComponent(id)}/update',
     body: {
       'title': ?title,
+      if (markdown != null) 'page_id': ?pageId,
       if (markdown != null || files != null)
         'data': {
           if (markdown != null) ..._content(markdown),
@@ -139,6 +259,34 @@ class NotesApi {
           if (files != null) 'files': files.isEmpty ? null : files,
         },
     },
+  );
+
+  /// A change to the note's pages (0.12.5+): create, rename, duplicate,
+  /// move or delete one, as the web's page tabs. Returns the note as saved.
+  Future<Note> pages(
+    String id,
+    String action, {
+    required int revision,
+    String? pageId,
+    String? newId,
+    String? parentId,
+    bool toTop = false,
+    String? beforeId,
+    String? title,
+  }) async => Note.fromJson(
+    await client.send(
+      'POST',
+      '$_base/${Uri.encodeComponent(id)}/pages/update',
+      body: {
+        'action': action,
+        'revision': revision,
+        'page_id': ?pageId,
+        'new_id': ?newId,
+        if (parentId != null || toTop) 'parent_id': parentId,
+        'before_id': ?beforeId,
+        'title': ?title,
+      },
+    ) as Map,
   );
 
   Future<void> togglePin(String id) =>

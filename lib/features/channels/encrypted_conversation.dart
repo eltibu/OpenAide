@@ -186,6 +186,11 @@ class EncryptedConversation extends ChangeNotifier {
   DateTime? _lastTyping;
   final _typingTimers = <String, Timer>{};
 
+  /// Your new keys wait for the host to take them in; until then nothing
+  /// can be sealed (MLS refuses), so what you send waits here.
+  bool _updating = false;
+  final _held = <Future<void> Function()>[];
+
   bool get isHost => self.isNotEmpty && self == host;
 
   /// The name shown for [participation].
@@ -320,8 +325,12 @@ class EncryptedConversation extends ChangeNotifier {
             final packet = _crypto('commit_updates');
             await _send('packet', {'kind': 'mls', 'packet': packet});
             _members();
+          case 'proposal':
+            // Someone else's new keys wait for the host here too.
+            _updating = true;
           case 'commit':
             _members();
+            await _release();
         }
       default:
         throw const MlsException();
@@ -411,16 +420,7 @@ class EncryptedConversation extends ChangeNotifier {
         _removeTyping(from);
         if (_seenIds.length > 1000) _seenIds.remove(_seenIds.first);
         _append(id: data['id'] as String, sender: from, text: body);
-        final packet = _crypto(
-          'encrypt',
-          jsonEncode({
-            'type': 'receipt',
-            'id': data['id'],
-            'channel': channel,
-            'session': _view!['session'],
-          }),
-        );
-        await _send('packet', {'kind': 'mls', 'packet': packet});
+        await _seal({'type': 'receipt', 'id': data['id']});
       default:
         throw const MlsException();
     }
@@ -448,19 +448,9 @@ class EncryptedConversation extends ChangeNotifier {
       return null;
     }
     _lastTyping = on ? now : null;
-    return _enqueue(() async {
-      final packet = _crypto(
-        'encrypt',
-        jsonEncode({
-          'type': 'typing',
-          'id': _uuid.v4(),
-          'typing': on,
-          'channel': channel,
-          'session': _view!['session'],
-        }),
-      );
-      await _send('packet', {'kind': 'mls', 'packet': packet});
-    });
+    return _enqueue(
+      () => _seal({'type': 'typing', 'id': _uuid.v4(), 'typing': on}),
+    );
   }
 
   Future<void>? sendText(String text) {
@@ -482,27 +472,53 @@ class EncryptedConversation extends ChangeNotifier {
         ],
         relayed: false,
       );
+      await _seal({'type': 'text', 'id': id, 'text': text}, () {
+        messages = [
+          for (final m in messages) m.id == id ? m.copyWith(relayed: true) : m,
+        ];
+        _changed();
+      });
+    });
+  }
+
+  /// Seals [content] for the others and sends it, or holds it while your
+  /// new keys wait for the host; [sent] runs once it is on its way.
+  Future<void> _seal(Map<String, dynamic> content, [void Function()? sent]) {
+    Future<void> send() async {
       final packet = _crypto(
         'encrypt',
         jsonEncode({
-          'type': 'text',
-          'id': id,
-          'text': text,
+          ...content,
           'channel': channel,
           'session': _view!['session'],
         }),
       );
       await _send('packet', {'kind': 'mls', 'packet': packet});
-      messages = [
-        for (final m in messages) m.id == id ? m.copyWith(relayed: true) : m,
-      ];
-      _changed();
-    });
+      sent?.call();
+    }
+
+    if (!_updating) return send();
+    _held.add(send);
+    return Future.value();
+  }
+
+  /// The host took in your new keys: send what waited, in order.
+  Future<void> _release() async {
+    _updating = false;
+    final held = [..._held];
+    _held.clear();
+    for (final send in held) {
+      await send();
+    }
   }
 
   /// New keys for everyone (the web's Update keys).
+  /// As a guest they are only proposed, and take effect when the host
+  /// commits them; what you send meanwhile waits for that.
   Future<void> updateKeys() => _enqueue(() async {
+    if (_updating) return;
     final packet = _crypto('update');
+    _updating = !isHost;
     await _send('packet', {'kind': 'mls', 'packet': packet});
   });
 
@@ -523,6 +539,7 @@ class EncryptedConversation extends ChangeNotifier {
       t.cancel();
     }
     _typingTimers.clear();
+    _held.clear();
     _lastTyping = null;
     final view = _view;
     if (view != null && _participation.isNotEmpty) {
