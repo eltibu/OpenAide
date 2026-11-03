@@ -47,11 +47,6 @@ void main() {
   test('adds files to a note and keeps them when the text changes', () async {
     final api = NotesApi(client);
     final note = await api.create('nexus files note');
-    if ((await api.get(note.id)).paged) {
-      // 0.12.5 keeps files inside pages: see owui_0_12_5_test.dart.
-      await api.delete(note.id);
-      return markTestSkipped('Files live in pages on this server');
-    }
     final up = await client.uploadFile(
       'minutes from Tuesday'.codeUnits,
       'minutes.txt',
@@ -60,6 +55,27 @@ void main() {
     final item = noteFileItem(up);
     expect(item['name'], 'minutes.txt');
     expect(item['type'], 'file');
+    if ((await api.get(note.id)).paged) {
+      // 0.12.5 keeps files as links in a page's text, and the note screen
+      // saves the whole text, links and all, as it changes.
+      final link = withFileLink('', item);
+      await api.update(note.id, markdown: link, pageId: 'main');
+      final text = 'see the file\n\n$link';
+      await api.update(note.id, markdown: text, pageId: 'main');
+      var got = await api.get(note.id);
+      expect(got.pages.first.markdown, text);
+      expect(pageFiles(text).map((f) => f['id']), [up['id']]);
+      await api.update(
+        note.id,
+        markdown: withoutFileLink(text, '${up['id']}'),
+        pageId: 'main',
+      );
+      got = await api.get(note.id);
+      expect(got.pages.first.markdown, 'see the file');
+      expect(pageFiles(got.pages.first.markdown), isEmpty);
+      await api.delete(note.id);
+      return;
+    }
     await api.update(note.id, files: [item]);
     await api.update(note.id, markdown: 'see the file');
     var got = await api.get(note.id);

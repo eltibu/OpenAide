@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/eltibu/Nexus-assistant?label=download&color=7c4dff" alt="Latest release"></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/eltibu/OpenAide?label=download&color=7c4dff" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Android-9%2B-3ddc84?logo=android&logoColor=white" alt="Android 9+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
   <a href="https://github.com/open-webui/open-webui"><img src="https://img.shields.io/badge/works%20with-Open%20WebUI%200.12.5-black" alt="Works with Open WebUI 0.12.5"></a>

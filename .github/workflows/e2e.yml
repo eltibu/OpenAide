@@ -5,11 +5,11 @@ name: Feature tests
 # never holds back an update; the results show in the run's summary.
 #
 # The runner is one PC that also builds every update, so this runs when
-# the shared branches move, once a night, by hand, and on pull requests
+# the default branch moves, once a night, by hand, and on pull requests
 # that change the tests themselves, not on every pull request.
 on:
   push:
-    branches: [Main-Repository, claude/project-thread-io206b]
+    branches: [Main-Repository]
   pull_request:
     paths:
       - tool/e2e/**
@@ -38,10 +38,6 @@ jobs:
       TERM_PORT: '18100'
     steps:
       - uses: actions/checkout@v4
-        with:
-          # The nightly run starts from the default branch's copy of this
-          # file but tests the shared branch, where the app work lands.
-          ref: ${{ github.event_name == 'schedule' && 'claude/project-thread-io206b' || '' }}
       # Pinned to a commit (v2.23.0), as in Build.
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
