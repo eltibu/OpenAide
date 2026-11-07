@@ -192,7 +192,9 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.manage_accounts_outlined),
             title: const T('Accounts'),
-            subtitle: const T('Email and other services the app signs in to'),
+            subtitle: const T(
+              'Sign in with Google or Microsoft, and other email',
+            ),
             onTap: () => open(const AccountsScreen()),
           ),
           ListTile(
@@ -204,7 +206,7 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.hub_outlined),
             title: const T('AI providers'),
-            subtitle: const T('OpenRouter, Claude and OpenAI'),
+            subtitle: const T('OpenRouter, Claude, OpenAI and GitHub Copilot'),
             onTap: () => open(const AiProvidersScreen()),
           ),
           ListTile(
