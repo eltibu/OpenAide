@@ -1641,6 +1641,7 @@ class ChatController extends Notifier<ChatState> {
                 system,
                 userName: me?['name'] as String?,
                 userEmail: me?['email'] as String?,
+                userRole: me?['role'] as String?,
               ),
             },
           for (final m in history)
@@ -1817,6 +1818,7 @@ class ChatController extends Notifier<ChatState> {
               system,
               userName: me?['name'] as String?,
               userEmail: me?['email'] as String?,
+              userRole: me?['role'] as String?,
             );
       final stream = streamAgentReply(
         keys: await ref.read(aiKeysProvider.future),

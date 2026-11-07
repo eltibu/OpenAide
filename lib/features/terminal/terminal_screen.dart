@@ -15,7 +15,7 @@ import '../chat/chat_controller.dart'
     show serverConfigProvider, userSettingsProvider;
 import '../settings/settings_screen.dart' show meProvider;
 import '../settings/tool_servers.dart' show directIntegrationsOn;
-import '../chat/file_details.dart' show PdfViewScreen;
+import '../chat/file_details.dart' show PdfViewScreen, fileSize;
 import '../server/server_page.dart';
 import 'file_tools.dart';
 import 'sqlite_view.dart';
@@ -999,10 +999,14 @@ class _FileBrowserState extends State<FileBrowser>
       }
     }),
     itemBuilder: (_) => [
-      for (final (by, label) in const [
+      for (final (by, label) in [
         (FileSort.name, 'Name'),
         (FileSort.size, 'Size'),
         (FileSort.modified, 'Date modified'),
+        // Terminals that report when files were added (Open WebUI 0.13).
+        if (_sortBy == FileSort.created ||
+            (_listing?.entries.any((e) => e.created != null) ?? false))
+          (FileSort.created, 'Date added'),
       ])
         CheckedPopupMenuItem(
           value: by.name,
@@ -1556,7 +1560,18 @@ class _FileViewerState extends State<FileViewer> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.name),
+          // With its size, as the web's file toolbar (Open WebUI 0.13).
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+              if (_bytes != null)
+                Text(
+                  fileSize(_bytes!.length),
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+            ],
+          ),
           actions: [
             IconButton(
               tooltip: tr('Copy path'),

@@ -1,3 +1,4 @@
+import '../comments/comments.dart' show CommentsButton;
 import 'dart:async';
 
 import '../../core/widgets/empty_state.dart';
@@ -1069,6 +1070,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         ),
         actions: [
           ..._presenceAvatars(),
+          CommentsButton(type: 'note', id: widget.id),
           if (_enhancing || _uploading || _pageBusy)
             const Padding(
               padding: EdgeInsets.all(14),

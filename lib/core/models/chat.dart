@@ -431,6 +431,7 @@ class ChatSummary {
     required this.title,
     required this.updatedAt,
     this.unread = false,
+    this.waitingForApproval = false,
   });
 
   factory ChatSummary.fromJson(Map<String, dynamic> json) {
@@ -444,12 +445,17 @@ class ChatSummary {
       unread:
           json.containsKey('last_read_at') &&
           updated > ((json['last_read_at'] as num?)?.toInt() ?? 0),
+      // Open WebUI 0.13: a tool call in it waits for Allow or Deny.
+      waitingForApproval: json['pending_approval'] == true,
     );
   }
 
   final String id;
   final String title;
   final DateTime updatedAt;
+
+  /// A tool call in this chat waits for you to allow or deny it.
+  final bool waitingForApproval;
 
   /// New replies since you last opened it.
   final bool unread;

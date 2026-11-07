@@ -56,6 +56,8 @@ import 'voice_note.dart';
 import '../settings/keyboard_shortcuts.dart';
 import '../settings/settings_screen.dart' show SettingsScreen, meProvider;
 import 'search_everywhere.dart' show SearchEverywhereScreen;
+import '../comments/comments.dart';
+import 'side_chat.dart';
 import '../settings/tool_servers.dart'
     show chatToolsProvider, directIntegrationsOn;
 import '../settings/terminal_connections.dart' show TerminalConnectionsScreen;
@@ -131,10 +133,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final controller = ref.read(chatControllerProvider.notifier);
     final state = ref.read(chatControllerProvider);
     final wide = MediaQuery.sizeOf(context).width >= wideLayout;
-    void push(Widget page) => Navigator.push(
-      context,
-      MaterialPageRoute<void>(builder: (_) => page),
-    );
+    void push(Widget page) =>
+        Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
     ChatMessage? lastReply() =>
         state.messages.where((m) => m.role == 'assistant').lastOrNull;
     switch (id) {
@@ -227,9 +227,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         if (reply == null) return;
         var text = reply.content;
         if (id == 'copyLastCodeBlock') {
-          final blocks = RegExp(
-            r'```[^\n]*\n([\s\S]*?)```',
-          ).allMatches(text).toList();
+          final blocks = RegExp(r'```[^\n]*\n([\s\S]*?)```')
+              .allMatches(text)
+              .toList();
           if (blocks.isEmpty) return;
           text = blocks.last.group(1)!.trimRight();
         }
@@ -494,6 +494,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             selectedIcon: const Icon(Icons.tune, color: NexusColors.accent),
             onPressed: () => showChatPanel(context),
           ),
+          // Open WebUI 0.13: comments on this chat, with their count.
+          if (!state.temporary && state.chat != null)
+            CommentsButton(type: 'chat', id: state.chat!.id, title: title),
           const ReadAloudButton(),
           IconButton(
             tooltip: tr('New chat'),
@@ -880,6 +883,9 @@ class _MessageList extends ConsumerWidget {
     final ui =
         (ref.watch(userSettingsProvider).value?['ui'] as Map?) ?? const {};
     final userMarkdown = ui['renderMarkdownInUserMessages'] != false;
+    final chatId = ref.watch(
+      chatControllerProvider.select((s) => s.temporary ? null : s.chat?.id),
+    );
     final keepFollowUps = ui['keepFollowUpPrompts'] == true;
     // Pictures in replies load from the server signed in, like the web.
     final images = ImgConfig(
@@ -1025,6 +1031,21 @@ class _MessageList extends ConsumerWidget {
                 switch (groups[g]) {
                   // Selectable, with Ask and Explain beside Copy.
                   final TextPart t when !live => QuickActionSelection(
+                    // Open WebUI 0.13: comment on the selected passage.
+                    onComment: commentsOn(ref) && commentableChat(chatId)
+                        ? (quote) => showComments(
+                            context,
+                            type: 'chat',
+                            id: chatId!,
+                            targetType: 'chat_message',
+                            targetId: m.id,
+                            anchor: CommentAnchor.find(
+                              quote: quote,
+                              content: m.content,
+                            ),
+                            compose: true,
+                          )
+                        : null,
                     child: MarkdownBlock(
                       data: t.text,
                       config: mdConfig,
@@ -1423,6 +1444,21 @@ class _MessageActions extends ConsumerWidget {
               'Fork from here',
               () => controller.fork(message),
             ),
+            // Open WebUI 0.13: a comment on this reply.
+            if (commentsOn(ref) && commentableChat(chat?.id) && message.done)
+              action(
+                Icons.add_comment_outlined,
+                'Comment',
+                () => showComments(
+                  context,
+                  type: 'chat',
+                  id: chat!.id,
+                  title: chat.title,
+                  targetType: 'chat_message',
+                  targetId: message.id,
+                  compose: true,
+                ),
+              ),
             ReplyMoreButton(reply: message, color: muted, isLast: isLast),
           ],
           if (!compact && message.timestamp > 0)
@@ -1506,6 +1542,17 @@ class _ComposerState extends ConsumerState<_Composer> {
         .read(chatControllerProvider)
         .attachments
         .any((a) => a.uploaded != null);
+    // "/side …" or "/btw …" (Open WebUI 0.13): a question on the side, with
+    // this chat as context; works while a reply is still being written.
+    final side = sideChatQuestion(value);
+    if (side != null &&
+        !files &&
+        ref.read(chatControllerProvider).messages.isNotEmpty &&
+        sideChatAllowed(ref.read(meProvider).value)) {
+      _text.clear();
+      await openSideChat(context, question: side);
+      return;
+    }
     // Keep the draft when it can't go anywhere yet, rather than losing it.
     if ((value.trim().isEmpty && !files) || !controller.canSend) return;
     // The model's Chat Variables come first when unanswered, as on the web.
@@ -1622,9 +1669,8 @@ class _ComposerState extends ConsumerState<_Composer> {
           if (ok) {
             _text.clear();
           } else {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: T('Model not selected')));
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: T('Model not selected')));
           }
       }
     });
@@ -1768,11 +1814,36 @@ class _ComposerState extends ConsumerState<_Composer> {
             ((me['permissions'] as Map?)?['workspace'] as Map?)?['skills'] ==
                 true);
 
+    final chatId = state.temporary ? null : state.chat?.id;
     return [
       if (state.streaming)
         SlashCommand('stop', 'Stop the reply', Icons.stop_rounded, () {
           run(controller.stop);
         }),
+      // Open WebUI 0.13: side chats, for admins and people allowed them.
+      if (state.messages.isNotEmpty && sideChatAllowed(me))
+        for (final name in const ['side', 'btw'])
+          SlashCommand(
+            name,
+            'Side chat: ask on the side, with this chat as context',
+            Icons.chat_bubble_outline,
+            () => run(() => openSideChat(context)),
+          ),
+      // Open WebUI 0.13: this chat's comments.
+      if (commentsOn(ref) && commentableChat(chatId))
+        SlashCommand(
+          'comments',
+          'Comments on this chat',
+          Icons.mode_comment_outlined,
+          () => run(
+            () => showComments(
+              context,
+              type: 'chat',
+              id: chatId!,
+              title: state.chat?.title,
+            ),
+          ),
+        ),
       if (lastReply.id.isNotEmpty && !state.streaming)
         SlashCommand(
           'fork',
@@ -2159,7 +2230,10 @@ class _ComposerState extends ConsumerState<_Composer> {
             onPressed: ready
                 ? () {
                     // A call talks to one model, as on the web.
-                    if (ref.read(chatControllerProvider).compareIds.isNotEmpty) {
+                    if (ref
+                        .read(chatControllerProvider)
+                        .compareIds
+                        .isNotEmpty) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: T('Select only one model to call')),
                       );

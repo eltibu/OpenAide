@@ -50,6 +50,30 @@ const modelCapabilities = <String, String>{
   'usage': 'Reports token use',
 };
 
+/// The web's Built-in Tools, each with the server feature it needs:
+/// (meta.builtinTools key, label, features key or null).
+const builtinToolList = <(String, String, String?)>[
+  ('time', 'Time & Calculation', null),
+  ('user_input', 'Ask User', null),
+  ('memory', 'Memory', 'enable_memories'),
+  ('chats', 'Chat History', null),
+  ('notes', 'Notes', 'enable_notes'),
+  ('knowledge', 'Knowledge Base', null),
+  ('files', 'Files', null),
+  ('channels', 'Channels', 'enable_channels'),
+  ('notifications', 'Notifications', 'enable_user_webhooks'),
+  ('web_search', 'Web Search', 'enable_web_search'),
+  ('image_generation', 'Image Generation', 'enable_image_generation'),
+  ('code_interpreter', 'Code Interpreter', 'enable_code_interpreter'),
+  ('tasks', 'Task Management', null),
+  ('automations', 'Automations', 'enable_automations'),
+  ('calendar', 'Calendar', 'enable_calendar'),
+  ('subagents', 'Sub-agents', 'enable_subagents'),
+  ('skills', 'Skills', null),
+  // Open WebUI 0.13: the model may write a private Python tool for you.
+  ('tools', 'Tool Creation', 'enable_tools'),
+];
+
 /// The abilities a new model starts with, as on the web.
 const defaultModelCapabilities = [
   'vision',

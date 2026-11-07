@@ -1,3 +1,5 @@
+import '../comments/comments.dart' show CommentsButton;
+
 import 'dart:convert';
 
 import '../../core/widgets/empty_state.dart';
@@ -210,6 +212,12 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
   final _system = TextEditingController();
   String? _base;
   Map<String, dynamic> _caps = {};
+
+  /// Built-in tools switched off for this model (meta.builtinTools).
+  Map<String, dynamic> _builtin = {};
+
+  /// Models it may hand work to (Open WebUI 0.13, meta.subagents).
+  List<String> _subagents = [];
   Set<String> _knowledge = {};
   Set<String> _tools = {};
   Set<String> _skills = {};
@@ -265,6 +273,14 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _system.text = m.system;
       _base = m.baseModelId;
       _caps = {...m.capabilities};
+      _builtin = {
+        ...?(m.meta['builtinTools'] as Map?)?.cast<String, dynamic>(),
+      };
+      _subagents = [
+        for (final id
+            in (m.meta['subagents'] as Map?)?['model_ids'] as List? ?? const [])
+          '$id',
+      ];
       _knowledge = {for (final k in m.knowledge) k.$1};
       _tools = m.ids('toolIds').toSet();
       _skills = m.ids('skillIds').toSet();
@@ -286,6 +302,14 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _system.text = c.system;
       _base = c.baseModelId ?? c.id;
       _caps = {...c.capabilities};
+      _builtin = {
+        ...?(c.meta['builtinTools'] as Map?)?.cast<String, dynamic>(),
+      };
+      _subagents = [
+        for (final id
+            in (c.meta['subagents'] as Map?)?['model_ids'] as List? ?? const [])
+          '$id',
+      ];
       _knowledge = {for (final k in c.knowledge) k.$1};
       _tools = c.ids('toolIds').toSet();
       _skills = c.ids('skillIds').toSet();
@@ -305,6 +329,81 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       _caps = {for (final k in defaultModelCapabilities) k: true};
     }
     if (mounted) setState(() => _loading = false);
+  }
+
+  /// The web's Built-in Tools: which of them this model may use, and
+  /// (Open WebUI 0.13) the models its sub-agents may run on.
+  Widget _builtinTools() {
+    final features =
+        (ref.watch(serverConfigProvider).value?['features'] as Map?) ??
+        const {};
+    final tools = [
+      for (final (key, label, feature) in builtinToolList)
+        if ((feature == null || features[feature] == true) &&
+            (key == 'files'
+                ? _caps['file_upload'] != false &&
+                      _caps['file_context'] == false
+                : _caps[key] != false))
+          (key, label),
+    ];
+    final on = tools.where((t) => _builtin[t.$1] != false).length;
+    final models = ref.watch(modelsProvider).value ?? const [];
+    final self = _isNew ? modelIdFrom(_id.text.trim()) : _m?.id;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        title: const T('Built-in tools'),
+        subtitle: Text(
+          on == tools.length ? tr('All allowed') : '$on / ${tools.length}',
+        ),
+        children: [
+          for (final (key, label) in tools) ...[
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: T(label),
+              value: _builtin[key] != false,
+              onChanged: (v) => setState(
+                () => v ? _builtin.remove(key) : _builtin[key] = false,
+              ),
+            ),
+            if (key == 'subagents' && _builtin[key] != false)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    T(
+                      _subagents.isEmpty
+                          ? 'Sub-agents use this same model. Pick others '
+                                'to hand research, coding or review to them.'
+                          : 'Sub-agents may run on:',
+                      style: TextStyle(color: context.nexus.muted),
+                    ),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final m in models)
+                          if (m.id != self)
+                            FilterChip(
+                              label: Text(m.name),
+                              selected: _subagents.contains(m.id),
+                              onSelected: (v) => setState(
+                                () => v
+                                    ? _subagents.add(m.id)
+                                    : _subagents.remove(m.id),
+                              ),
+                            ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
   }
 
   ImageProvider? _avatar() {
@@ -364,6 +463,16 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       meta['i18n'] = i18n;
     }
     meta['capabilities'] = _caps;
+    if (_builtin.isEmpty) {
+      meta.remove('builtinTools');
+    } else {
+      meta['builtinTools'] = _builtin;
+    }
+    if (_subagents.isEmpty) {
+      meta.remove('subagents');
+    } else {
+      meta['subagents'] = {'model_ids': _subagents};
+    }
     meta['toolIds'] = _tools.toList();
     meta['skillIds'] = _skills.toList();
     meta['knowledge'] = [
@@ -741,6 +850,8 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       appBar: AppBar(
         title: Text(_isNew ? 'New model' : 'Edit model'),
         actions: [
+          if (!_isNew && _m != null)
+            CommentsButton(type: 'model', id: _m!.id, title: _m!.name),
           if (!_isNew && (!_connection || widget.saved) && _m != null)
             ItemMenu(
               kind: 'model',
@@ -931,6 +1042,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                     value: _caps[c.key] == true,
                     onChanged: (on) => setState(() => _caps[c.key] = on),
                   ),
+                if (_caps['builtin_tools'] == true) _builtinTools(),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: ExpansionTile(

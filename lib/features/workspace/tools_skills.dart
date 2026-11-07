@@ -1,3 +1,5 @@
+import '../comments/comments.dart' show CommentsButton;
+
 import 'package:flutter/material.dart';
 
 import '../server/community_share.dart' show SupportButton, fundingUrl;
@@ -11,7 +13,7 @@ import '../../core/theme.dart';
 import 'code_editor.dart';
 import 'skill_files.dart';
 import 'access_editor.dart' show ItemMenu;
-import '../chat/chat_controller.dart' show skillsProvider;
+import '../chat/chat_controller.dart' show skillsProvider, toolsProvider;
 import 'owner_filter.dart';
 import '../../core/i18n/app_strings.dart';
 import '../../core/widgets/hideable.dart';
@@ -25,7 +27,15 @@ String _seg(String id) => Uri.encodeComponent(id);
 final _toolsListProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,
 ) async {
-  final res = await ref.watch(clientProvider).send('GET', '/api/v1/tools/');
+  final client = ref.watch(clientProvider);
+  // The workspace list, as the web: switched-off tools too (Open WebUI 0.13
+  // leaves them out of /tools/), with whether you may change each.
+  Object? res;
+  try {
+    res = await client.send('GET', '/api/v1/tools/list');
+  } catch (_) {
+    res = await client.send('GET', '/api/v1/tools/');
+  }
   return [
     for (final t in (res as List? ?? const []).whereType<Map>())
       t.cast<String, dynamic>(),
@@ -102,10 +112,38 @@ class ToolsScreen extends ConsumerWidget {
                 ),
               for (final t in ownerFiltered(ref, items, (t) => t['user_id']))
                 ListTile(
-                  leading: const Icon(Icons.build_outlined),
-                  trailing: fundingUrl(t) == null
-                      ? null
-                      : SupportButton(url: fundingUrl(t)!),
+                  leading: Icon(
+                    Icons.build_outlined,
+                    color: t['is_active'] == false ? muted : null,
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (fundingUrl(t) != null)
+                        SupportButton(url: fundingUrl(t)!),
+                      // Open WebUI 0.13: a switched-off tool can't be picked
+                      // or run in any chat. Only for those who may edit it.
+                      if (t.containsKey('is_active') &&
+                          t['write_access'] != false)
+                        Switch(
+                          value: t['is_active'] != false,
+                          onChanged: (_) async {
+                            try {
+                              await ref
+                                  .read(clientProvider)
+                                  .send(
+                                    'POST',
+                                    '/api/v1/tools/id/${_seg('${t['id']}')}/toggle',
+                                  );
+                            } catch (e) {
+                              if (context.mounted) _say(context, '$e');
+                            }
+                            ref.invalidate(_toolsListProvider);
+                            ref.invalidate(toolsProvider);
+                          },
+                        ),
+                    ],
+                  ),
                   title: Text('${t['name'] ?? t['id']}'),
                   subtitle: _description(t).isEmpty
                       ? null
@@ -203,6 +241,11 @@ class _ToolDetailState extends ConsumerState<ToolDetail> {
       appBar: AppBar(
         title: Text('${t?['name'] ?? 'Tool'}'),
         actions: [
+          CommentsButton(
+            type: 'tool',
+            id: widget.id,
+            title: '${t?['name'] ?? ''}',
+          ),
           if (t != null)
             IconButton(
               tooltip: tr('Edit'),
@@ -835,6 +878,7 @@ class _SkillEditorState extends ConsumerState<SkillEditor> {
       title: const T('Skill'),
       actions: [
         if (_s != null) ...[
+          CommentsButton(type: 'skill', id: widget.id, title: _name.text),
           IconButton(
             tooltip: tr('Delete'),
             onPressed: _busy ? null : _delete,
