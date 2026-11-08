@@ -124,5 +124,11 @@ void main() {
       e('b', 20),
     ], FileSort.created);
     expect(sorted.map((x) => x.name), ['a', 'b', 'c', 'none']);
+    final reversed = sortEntries(
+      [e('c', 30), e('none', null), e('a', 10), e('b', 20)],
+      FileSort.created,
+      descending: true,
+    );
+    expect(reversed.map((x) => x.name), ['c', 'b', 'a', 'none']);
   });
 }

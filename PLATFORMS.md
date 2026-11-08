@@ -22,15 +22,17 @@ What decides each row is in `lib/core/platform_caps.dart`.
 
 ## Building
 
-Builds for these platforms run on GitHub's own servers, never on the Android
-build PC: Actions → "Windows, Linux, Mac, iPhone and iPad" → Run workflow.
+Linux builds on the Android build PC (the self-hosted runner); Windows,
+Mac and iPhone/iPad build on GitHub's servers. Every run starts on the PC
+(it picks the version number), so the PC must be on: Actions → "Windows,
+Linux, Mac, iPhone and iPad" → Run workflow.
 A push whose commit message contains `[build other platforms]` runs it
 too, without attaching anything. Give it a release tag (for example `v0.1.272`) to attach the Windows, Linux
 and Mac downloads to that release, where the app's update check finds them.
 
 On your own computer: `flutter build windows`, `flutter build linux`
 (needs `libgtk-3-dev libsecret-1-dev libgstreamer1.0-dev
-libgstreamer-plugins-base1.0-dev libpulse-dev`), or on a Mac
+libgstreamer-plugins-base1.0-dev`), or on a Mac
 `flutter build macos` / `flutter build ios`.
 
 Linux keeps sign-ins in the desktop keyring (GNOME Keyring or KWallet's

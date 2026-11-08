@@ -34,9 +34,19 @@ enum OpenAideCookies {
           return
         }
         store.httpCookieStore.getAllCookies { cookies in
+          // Only what a browser would send to this address: host-only
+          // cookies for exactly this host, domain cookies for it and its
+          // subdomains, Secure cookies only over https.
+          let secure = url.scheme?.lowercased() == "https"
+          let lowerHost = host.lowercased()
           let mine = cookies.filter { cookie in
-            let domain = cookie.domain.hasPrefix(".") ? String(cookie.domain.dropFirst()) : cookie.domain
-            return host == domain || host.hasSuffix("." + domain)
+            if cookie.isSecure && !secure { return false }
+            let raw = cookie.domain.lowercased()
+            if raw.hasPrefix(".") {
+              let domain = String(raw.dropFirst())
+              return lowerHost == domain || lowerHost.hasSuffix("." + domain)
+            }
+            return lowerHost == raw
           }
           result(mine.isEmpty ? nil : mine.map { "\($0.name)=\($0.value)" }.joined(separator: "; "))
         }

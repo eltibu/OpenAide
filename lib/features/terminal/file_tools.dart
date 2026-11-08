@@ -37,6 +37,10 @@ List<TerminalEntry> sortEntries(
 
   return [...entries]..sort((a, b) {
     if (a.isDir != b.isDir) return a.isDir ? -1 : 1;
+    // Undated files stay last in both directions.
+    if (by == FileSort.created && (a.created == null) != (b.created == null)) {
+      return a.created == null ? 1 : -1;
+    }
     final r = compare(a, b);
     return descending ? -r : r;
   });
