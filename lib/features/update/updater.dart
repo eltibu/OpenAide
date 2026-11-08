@@ -3,12 +3,12 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/platform_caps.dart';
+import '../../core/secure_storage.dart';
 
 /// Where CI publishes builds: a pre-release per dev build, and a normal
 /// release per public (stable) build.
@@ -22,18 +22,20 @@ bool isAppAsset(String? name) =>
     name == 'nexus-assistant.apk' ||
     RegExp(r'^OpenAide[-\w.]*\.apk$').hasMatch(name ?? '');
 
-/// The download for a computer in a release: `OpenAide-windows-...`,
-/// `OpenAide-linux-...` or `OpenAide-macos-...`.
+/// The download for a computer, iPhone or iPad in a release:
+/// `OpenAide-windows-...`, `OpenAide-linux-...`, `OpenAide-macos-...` or
+/// `OpenAide-ios-....ipa` (installed with AltStore or SideStore).
 bool Function(String?) desktopAsset(String platform) =>
-    (name) =>
-        RegExp('^OpenAide-$platform[-\\w.]*\\.(zip|tar\\.gz|dmg|exe|msix)\$')
-            .hasMatch(name ?? '');
+    (name) => RegExp(
+      '^OpenAide-$platform[-\\w.]*\\.(zip|tar\\.gz|dmg|exe|msix|ipa)\$',
+    ).hasMatch(name ?? '');
 
 /// Which release file this device installs from.
 bool Function(String?) get assetForThisDevice {
   if (PlatformCaps.windows) return desktopAsset('windows');
   if (PlatformCaps.linux) return desktopAsset('linux');
   if (PlatformCaps.macos) return desktopAsset('macos');
+  if (PlatformCaps.ios) return desktopAsset('ios');
   return isAppAsset;
 }
 
@@ -47,7 +49,7 @@ const builtInToken = String.fromEnvironment('NEXUS_UPDATE_TOKEN');
 /// (GitHub pre-releases).
 enum UpdateChannel { stable, dev }
 
-const _storage = FlutterSecureStorage();
+const _storage = appSecureStorage;
 const _channel = MethodChannel('nexus/updates');
 
 class AvailableUpdate {

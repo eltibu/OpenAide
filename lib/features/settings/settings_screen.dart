@@ -276,8 +276,9 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const AboutScreen()),
           ),
           const Divider(),
-          // Play and the App Store (iPhone, iPad) update the app themselves.
-          if (!playBuild && !PlatformCaps.ios)
+          // Google Play updates the app itself. iPhone and iPad builds are
+          // sideloaded for now (AltStore / SideStore), so they check here too.
+          if (!playBuild)
             ListTile(
               leading: const Icon(Icons.system_update_outlined),
               title: const T('App updates'),

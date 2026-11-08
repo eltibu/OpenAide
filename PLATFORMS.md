@@ -16,7 +16,7 @@ the others are built by CI but not yet tried on real devices.
 | Browser (SSO) sign-in | yes | yes | yes | not yet: email/password or API key | not yet: email/password or API key |
 | Models on the device (llama.cpp) | yes | not yet | not yet | not yet | not yet |
 | Default assistant, overlay panel, quick tile, phone actions | yes | no (iOS has no equivalent) | no | no | no |
-| Updates | in the app | App Store / TestFlight | release page | release page | release page |
+| Updates | in the app | AltStore / SideStore source | release page | release page | release page |
 
 What decides each row is in `lib/core/platform_caps.dart`.
 
@@ -38,13 +38,43 @@ libgstreamer-plugins-base1.0-dev`), or on a Mac
 Linux keeps sign-ins in the desktop keyring (GNOME Keyring or KWallet's
 Secret Service), so one must be running.
 
-## Apple
+## Apple without a paid account
 
-The Mac and iPhone/iPad builds are unsigned. To hand them to people:
+Building needs a Mac, so the Apple builds run on GitHub's Mac servers (free
+for public repos like this one). Neither download needs Apple's $99 account.
 
-1. An Apple Developer account ($99 a year) in the name OpenAide ships under.
-2. Bundle id `com.eltibu.openaide` registered there, and an App Store
-   Connect app record for iPhone/iPad (and Mac, or notarize the Mac app to
-   share it outside the store).
-3. Signing certificates and an App Store Connect API key as repo secrets,
-   so the workflow can sign and upload to TestFlight.
+**Mac** (`OpenAide-macos-….zip` on the release): ad-hoc signed, so macOS
+warns the first time.
+
+1. Unzip and drag OpenAide to Applications.
+2. Open it once; macOS says it can't check it. Click Done.
+3. System Settings → Privacy & Security → "OpenAide was blocked" →
+   Open Anyway, then confirm with your password.
+
+(Or in Terminal: `xattr -dr com.apple.quarantine /Applications/OpenAide.app`.)
+Sign-ins are kept in the login keychain.
+
+**iPhone and iPad** (`OpenAide-ios-….ipa`): installed with
+[SideStore](https://sidestore.io) or [AltStore](https://altstore.io), both
+free, using your own free Apple ID.
+
+1. Install SideStore (or AltStore with AltServer on a computer) by
+   following its own guide.
+2. In SideStore/AltStore → Sources → add
+   `https://github.com/eltibu/OpenAide/releases/latest/download/altstore.json`
+3. Install OpenAide from that source. New releases show up there as
+   updates, and in OpenAide's Settings → App updates.
+
+Limits of a free Apple ID: the app must be refreshed every 7 days
+(SideStore does it on the phone, AltStore needs the computer nearby), and
+at most 3 sideloaded apps at once. Push notifications are not available.
+
+### What still needs Apple's account ($99 a year)
+
+- App Store and TestFlight (anyone installs with one tap, no refresh).
+- Notarizing the Mac app, so it opens without the Privacy & Security step.
+- Push notifications on iPhone and iPad.
+
+When that's set up: register bundle id `com.eltibu.openaide`, create the
+App Store Connect app record, and add the signing certificates and an App
+Store Connect API key as repo secrets so the workflow can sign and upload.

@@ -6,13 +6,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../core/widgets/nexus_logo.dart';
 import 'phone_launch.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/secure_storage.dart';
 
-const _storage = FlutterSecureStorage();
+const _storage = appSecureStorage;
 const _key = 'app_lock_after';
 
 /// How long Nexus may be away before it locks, in seconds, or null when

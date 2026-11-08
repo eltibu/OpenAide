@@ -13,13 +13,13 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/copilot.dart' show DeviceCode;
 import '../../core/oauth_clients.dart';
 import '../../core/store.dart';
+import '../../core/secure_storage.dart';
 
 enum MailSignIn {
   google('google', 'Google'),
@@ -317,7 +317,7 @@ Future<MailGrant> exchangeGoogleCode(
 
 // Access tokens for signed-in accounts.
 
-const _storage = FlutterSecureStorage();
+const _storage = appSecureStorage;
 final _cache = <String, ({String token, DateTime expires})>{};
 
 String _rotatedKey(String email) => 'mail_oauth_${email.toLowerCase()}';
