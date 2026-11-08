@@ -24,7 +24,8 @@ What decides each row is in `lib/core/platform_caps.dart`.
 
 Builds for these platforms run on GitHub's own servers, never on the Android
 build PC: Actions → "Windows, Linux, Mac, iPhone and iPad" → Run workflow.
-Give it a release tag (for example `v0.1.272`) to attach the Windows, Linux
+A push whose commit message contains `[build other platforms]` runs it
+too, without attaching anything. Give it a release tag (for example `v0.1.272`) to attach the Windows, Linux
 and Mac downloads to that release, where the app's update check finds them.
 
 On your own computer: `flutter build windows`, `flutter build linux`
