@@ -10,6 +10,7 @@ import 'core/offline/offline_cache.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/auth/session.dart';
+import 'core/desktop_web_view.dart';
 import 'core/i18n/app_strings.dart';
 import 'core/theme.dart';
 import 'core/widgets/nexus_logo.dart';
@@ -26,6 +27,8 @@ import 'features/standalone/standalone_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Windows and Linux: web pages open in the browser (no in-app web view).
+  installDesktopWebViewFallback();
   // Saved copies of your chats, for opening them with no connection.
   try {
     final support = await getApplicationSupportDirectory();

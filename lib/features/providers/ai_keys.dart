@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/ai_providers.dart';
 import '../../core/models/model_info.dart';
+import '../../core/store.dart';
 import 'local_models.dart';
 
 const _storage = FlutterSecureStorage();
@@ -177,7 +178,7 @@ class OpenRouterSignIn {
         'border-radius:2rem;background:#0d6e66;color:#fff;'
         'text-decoration:none}</style></head><body><h1>$title</h1>'
         '<p>$body</p><a href="intent://#Intent;'
-        'package=com.nexus.nexus_assistant;end">Back to OpenAide</a>'
+        'package=$appPackage;end">Back to OpenAide</a>'
         '</body></html>';
   }
 

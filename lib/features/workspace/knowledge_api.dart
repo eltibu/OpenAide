@@ -14,7 +14,13 @@ class Knowledge {
     required this.updated,
     this.writable = true,
     this.userId,
+    this.meta = const {},
   });
+
+  /// Its own limits (Open WebUI 0.13): max_file_count, max_file_size (MB).
+  final Map meta;
+  int? get maxFileCount => (meta['max_file_count'] as num?)?.toInt();
+  int? get maxFileSize => (meta['max_file_size'] as num?)?.toInt();
 
   /// Who made it.
   final String? userId;
@@ -26,6 +32,7 @@ class Knowledge {
     userId: j['user_id']?.toString(),
     updated: fromServerTime((j['updated_at'] as num?) ?? 0),
     writable: j['write_access'] != false,
+    meta: (j['meta'] as Map?) ?? const {},
   );
 
   final String id;
@@ -138,21 +145,59 @@ class KnowledgeApi {
     return KnowledgeListing(folders, files, path);
   }
 
-  Future<Knowledge> create(String name, String description) async =>
-      Knowledge.fromJson(
-        await client.send(
-          'POST',
-          '$_base/create',
-          body: {'name': name, 'description': description},
-        ) as Map,
-      );
+  /// [limits] (Open WebUI 0.13): its own file count and size (MB) caps;
+  /// the server's own limits still apply. Older servers ignore them.
+  Future<Knowledge> create(
+    String name,
+    String description, {
+    ({int? count, int? size})? limits,
+  }) async => Knowledge.fromJson(
+    await client.send(
+      'POST',
+      '$_base/create',
+      body: {
+        'name': name,
+        'description': description,
+        if (limits != null) 'meta': _limits(limits),
+      },
+    ) as Map,
+  );
 
-  Future<void> update(String id, String name, String description) =>
-      client.send(
+  Future<void> update(
+    String id,
+    String name,
+    String description, {
+    ({int? count, int? size})? limits,
+  }) => client.send(
+    'POST',
+    '${_id(id)}/update',
+    body: {
+      'name': name,
+      'description': description,
+      if (limits != null) 'meta': _limits(limits),
+    },
+  );
+
+  static Map<String, Object?> _limits(({int? count, int? size}) l) => {
+    'max_file_count': l.count,
+    'max_file_size': l.size,
+  };
+
+  /// Asks the server whether [count] files (the largest [size] bytes) fit
+  /// (Open WebUI 0.13); throws its reason when they don't. Older servers
+  /// have no such check, so a missing endpoint passes.
+  Future<void> checkUpload(String id, int count, {int? size}) async {
+    try {
+      await client.send(
         'POST',
-        '${_id(id)}/update',
-        body: {'name': name, 'description': description},
+        '${_id(id)}/files/validate',
+        body: {'count': count, 'file_size': ?size},
       );
+    } on ApiException catch (e) {
+      if (e.statusCode == 404 || e.statusCode == 405) return;
+      rethrow;
+    }
+  }
 
   Future<void> delete(String id) => client.send('DELETE', '${_id(id)}/delete');
 

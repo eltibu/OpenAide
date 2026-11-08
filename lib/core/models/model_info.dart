@@ -31,7 +31,17 @@ class ModelInfo {
   List<String> get filterIds => _strings(meta['filterIds']);
   List<String> get actionIds => _strings(meta['actionIds']);
   List<String> get defaultFeatureIds => _strings(meta['defaultFeatureIds']);
-  String? get terminalId => meta['terminalId'] as String?;
+  String? get terminalId =>
+      meta['terminalId'] as String? ?? agent?['terminal_id'] as String?;
+
+  /// A coding agent (Claude Code, Codex, Pi...) offered by an Open Terminal
+  /// (Open WebUI 0.13.1): `{terminal_id, provider, model}`, or null.
+  Map<String, dynamic>? get agent => raw['agent'] is Map
+      ? (raw['agent'] as Map).cast<String, dynamic>()
+      : null;
+
+  /// Agent chats can't be regenerated, continued, or edited and resent.
+  bool get isAgent => agent != null || id.startsWith('agent:');
 
   static List<String> _strings(Object? v) =>
       (v as List?)?.whereType<String>().toList() ?? const [];

@@ -119,11 +119,21 @@ Map<String, dynamic> requestOptions(
     // this phone, which needs the model as the list had it.
     if (model?.raw['direct'] == true) 'model_item': model!.raw,
     // Settings > General's model settings, then this chat's own (Controls).
-    if (ui['params'] is Map || chatParams.isNotEmpty)
+    // With tool permissions on, the mode as the web resolves it (Open WebUI
+    // 0.13.1 adds Auto, the default when the admin turns it on).
+    if (ui['params'] is Map ||
+        chatParams.isNotEmpty ||
+        enabled['enable_tool_permissions'] == true)
       'params': {
         ...?(ui['params'] as Map?)?.cast<String, dynamic>(),
         for (final e in chatParams.entries)
           if (e.key != 'system' && e.value != null) e.key: e.value,
+        if (enabled['enable_tool_permissions'] == true)
+          'tool_approval_mode': toolApprovalMode(
+            chatParams,
+            ui,
+            autoEnabled: enabled['enable_tool_permissions_auto'] == true,
+          ),
       },
     // Naming and tagging new chats follow Settings > Chats, as on the web.
     'background_tasks': {
@@ -133,3 +143,24 @@ Map<String, dynamic> requestOptions(
     },
   };
 }
+
+/// The chat's own choice, else your default, as the web reads it
+/// (resolveToolApprovalMode). With [autoEnabled] (the admin's Auto switch),
+/// no choice means Auto.
+String toolApprovalMode(
+  Map<String, dynamic> chatParams,
+  Map? ui, {
+  bool autoEnabled = false,
+}) {
+  final value =
+      chatParams['tool_approval_mode'] ??
+      (ui?['params'] as Map?)?['tool_approval_mode'];
+  if (value == null) return autoEnabled ? 'auto' : 'full';
+  if (value == 'auto') return autoEnabled ? 'auto' : 'ask';
+  return value == 'full' || value == 'ask' ? value as String : 'ask';
+}
+
+/// Whether the admin offers Auto tool permissions.
+bool autoApprovalEnabled(Map? serverConfig) =>
+    ((serverConfig?['features'] as Map?)?['enable_tool_permissions_auto']) ==
+    true;

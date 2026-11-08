@@ -62,6 +62,7 @@ class TerminalEntry {
     required this.isDir,
     this.size,
     this.modified,
+    this.created,
   });
 
   final String name;
@@ -69,6 +70,9 @@ class TerminalEntry {
   final bool isDir;
   final int? size;
   final DateTime? modified;
+
+  /// When it was added, on terminals that report it.
+  final DateTime? created;
 }
 
 class TerminalListing {
@@ -151,6 +155,11 @@ class TerminalApi {
               modified: e['modified'] is num
                   ? DateTime.fromMillisecondsSinceEpoch(
                       ((e['modified'] as num) * 1000).round(),
+                    )
+                  : null,
+              created: e['created'] is num
+                  ? DateTime.fromMillisecondsSinceEpoch(
+                      ((e['created'] as num) * 1000).round(),
                     )
                   : null,
             ),

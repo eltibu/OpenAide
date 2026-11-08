@@ -7,10 +7,10 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-import 'package:flutter/services.dart';
 import 'package:http_parser/http_parser.dart';
 
 import '../../core/api/openwebui_client.dart';
+import '../../core/mic.dart';
 
 const micRate = 24000;
 
@@ -159,8 +159,7 @@ class SpeechListener {
   /// Each piece of text, in the order it was said.
   final void Function(String text) onText;
 
-  static const _method = MethodChannel('nexus/voice');
-  static const _events = EventChannel('nexus/voice/events');
+  final _mic = Mic();
 
   StreamSubscription<dynamic>? _sub;
   Future<void> _last = Future.value();
@@ -180,7 +179,7 @@ class SpeechListener {
 
   /// "started", "denied" or a problem.
   Future<String> start() async {
-    _sub = _events.receiveBroadcastStream().listen((e) {
+    _sub = _mic.events.listen((e) {
       if (e is! Map) return;
       if (e['type'] == 'error') errors.add('${e['message']}');
       if (e['type'] != 'input' || _paused) return;
@@ -189,14 +188,12 @@ class SpeechListener {
       final piece = _cutter.add(frame);
       if (piece != null) _send(piece);
     });
-    final status =
-        await _method.invokeMethod<String>('start', {'record': true}) ??
-        'The microphone could not be started';
+    final status = await _mic.start(record: true);
     if (status != 'started') {
       await _sub?.cancel();
       return status;
     }
-    await _method.invokeMethod('capture', {'enabled': true});
+    await _mic.capture(true);
     return status;
   }
 
@@ -236,7 +233,7 @@ class SpeechListener {
 
   /// Stops listening; done when the last piece is back.
   Future<void> stop() async {
-    await _method.invokeMethod('stop');
+    await _mic.stop();
     await _sub?.cancel();
     _sub = null;
     final piece = _cutter.flush();
@@ -249,7 +246,7 @@ class SpeechListener {
 
   /// Stops without waiting for text.
   Future<void> cancel() async {
-    await _method.invokeMethod('stop');
+    await _mic.stop();
     await _sub?.cancel();
     _sub = null;
   }

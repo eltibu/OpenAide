@@ -54,8 +54,11 @@ String quickActionPrompt(Map action, String selected) {
 
 /// Makes [child] selectable, with the quick actions beside Copy.
 class QuickActionSelection extends ConsumerStatefulWidget {
-  const QuickActionSelection({super.key, required this.child});
+  const QuickActionSelection({super.key, required this.child, this.onComment});
   final Widget child;
+
+  /// Comment on the selected text (Open WebUI 0.13), when comments are on.
+  final void Function(String selected)? onComment;
 
   @override
   ConsumerState<QuickActionSelection> createState() =>
@@ -90,6 +93,16 @@ class _QuickActionSelectionState extends ConsumerState<QuickActionSelection> {
                           .put(quickActionPrompt(a, text));
                     },
                   ),
+              if (widget.onComment != null)
+                ContextMenuButtonItem(
+                  label: tr('Comment'),
+                  onPressed: () {
+                    final text = _selected.trim();
+                    state.hideToolbar();
+                    state.clearSelection();
+                    if (text.isNotEmpty) widget.onComment!(text);
+                  },
+                ),
             ],
           ),
       child: widget.child,

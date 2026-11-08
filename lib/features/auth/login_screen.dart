@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:http/http.dart' as http;
 
+import '../../core/platform_caps.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/net/local_network.dart';
@@ -309,21 +310,32 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
+                // Windows and Linux have no in-app browser to sign in with.
+                if (PlatformCaps.webView) ...[
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size.fromHeight(48),
+                    ),
+                    onPressed: session.isLoading ? null : _signInWithBrowser,
+                    icon: const Icon(Icons.open_in_browser),
+                    label: const T('Sign in with browser (SSO)'),
                   ),
-                  onPressed: session.isLoading ? null : _signInWithBrowser,
-                  icon: const Icon(Icons.open_in_browser),
-                  label: const T('Sign in with browser (SSO)'),
-                ),
-                const SizedBox(height: 4),
-                T(
-                  'Use this for SSO, or when a login page sits in front of '
-                  'Open WebUI.',
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
-                ),
+                  const SizedBox(height: 4),
+                  T(
+                    'Use this for SSO, or when a login page sits in front of '
+                    'Open WebUI.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ] else
+                  T(
+                    'Single sign-on (SSO) needs the in-app browser, which '
+                    'Windows and Linux don\'t have yet. Sign in with your '
+                    'email and password or an API key, or use your server\'s '
+                    'home network address.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
                 if (session.hasError && session.error is! SignInStep) ...[
                   const SizedBox(height: 16),
                   Text(

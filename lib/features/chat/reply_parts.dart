@@ -36,13 +36,46 @@ class ToolPart extends StepPart {
     this.arguments = '',
     this.result,
     this.failed = false,
+    this.running,
+    this.completed,
     super.done,
   });
   final String name;
   final String arguments;
   final String? result;
   final bool failed;
+
+  /// Open WebUI 0.13.1 "Tool Call Labels": the model's own short words for
+  /// what the call is doing and what it did, in the person's language.
+  final String? running;
+  final String? completed;
 }
+
+/// The model's labels for a tool call (Open WebUI 0.13.1), or nulls.
+({String? running, String? completed}) toolCallLabels(Map item) {
+  final l = item['display_labels'];
+  String? pick(String k) {
+    final v = l is Map ? l[k] : null;
+    return v is String && v.trim().isNotEmpty ? v.trim() : null;
+  }
+
+  return (running: pick('running'), completed: pick('completed'));
+}
+
+/// Whether an `output` item is the server's own hidden context (Open WebUI
+/// 0.13.1 sends memories, the skills list and knowledge as hidden tool
+/// results), which the web never shows.
+bool hiddenOutputItem(Map item, Set<String> hiddenCalls) =>
+    item['hidden'] == true ||
+    (item['type'] == 'function_call_output' &&
+        hiddenCalls.contains('${item['call_id']}'));
+
+/// The call ids of hidden tool calls in [output].
+Set<String> hiddenCallIds(List output) => {
+  for (final item in output.whereType<Map>())
+    if (item['type'] == 'function_call' && item['hidden'] == true)
+      '${item['call_id']}',
+};
 
 /// A task step the server reported ("Searching the web", "Reading 3
 /// pages"...).
@@ -112,7 +145,9 @@ List<ReplyPart> outputParts(List output, {bool live = false}) {
       if (item['type'] == 'function_call_output') '${item['call_id']}': item,
   };
   final out = <ReplyPart>[];
+  final hidden = hiddenCallIds(output);
   for (final item in output.whereType<Map>()) {
+    if (hiddenOutputItem(item, hidden)) continue;
     switch (item['type']) {
       case 'message':
         final text = _texts(item['content']);
@@ -136,9 +171,12 @@ List<ReplyPart> outputParts(List output, {bool live = false}) {
       case 'function_call':
         final r = results['${item['call_id']}'];
         final status = '${item['status'] ?? ''}';
+        final labels = toolCallLabels(item);
         out.add(
           ToolPart(
             name: '${item['name'] ?? 'tool'}',
+            running: labels.running,
+            completed: labels.completed,
             arguments: '${item['arguments'] ?? ''}',
             result: r == null ? null : _texts(r['output']),
             failed: status == 'failed' || r?['status'] == 'failed',
@@ -347,6 +385,7 @@ String currentStep(List<StepPart> steps) {
   final s = steps.lastWhere((s) => !s.done, orElse: () => steps.last);
   return switch (s) {
     ThinkingPart() => 'Thinking…',
+    ToolPart(:final running?) => running,
     ToolPart(:final name) => 'Using ${toolLabel(name)}…',
     StatusPart(:final description) => description,
   };

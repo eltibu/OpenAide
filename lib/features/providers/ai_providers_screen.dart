@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/platform_caps.dart';
 import '../../core/ai/ai_providers.dart';
 import '../../core/ai/copilot.dart';
 import '../../core/theme.dart';
@@ -55,7 +56,7 @@ class AiProviderList extends ConsumerWidget {
               _ProviderCard(provider: p, savedKey: value[p]),
               const SizedBox(height: 12),
             ],
-          const _OnThisPhoneCard(),
+          if (PlatformCaps.localModels) const _OnThisPhoneCard(),
         ],
       ),
       AsyncError(:final error) => Center(child: Text('$error')),

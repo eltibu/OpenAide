@@ -136,9 +136,16 @@ Future<AgentKit> _build(
   final extra = [...mcp.tools, ...servers.tools];
   // Small models get lost with many tools; a few of yours still fit.
   if (!small || extra.length <= 8) tools.addAll(extra);
+  final instructions = agentInstructions(
+    config,
+    skills: skills,
+    hasTools: tools.isNotEmpty,
+  );
+  // Small models get it with the tool list instead.
+  final search = !small && tools.any((t) => t.name == 'web_search');
   return AgentKit(
     tools,
-    agentInstructions(config, skills: skills, hasTools: tools.isNotEmpty),
+    search ? '$instructions\n\n$liveDataRule' : instructions,
     problems,
   );
 }
@@ -154,6 +161,8 @@ String agentInstructions(
   final memories = config.memoryOn ? config.memories : const [];
   return [
     'Today is ${_dateWords(t)}, ${_timeWords(t)} (${t.timeZoneName}).',
+    // Small models can't work out "next Tuesday" themselves.
+    'The next days: ${[for (var d = 1; d <= 7; d++) _isoDay(t.add(Duration(days: d)))].join(', ')}.',
     if (hasTools)
       'You are running in the OpenAide app on the user\'s phone, with '
           'tools. Use them when they help, and say plainly what you did.',
@@ -190,6 +199,9 @@ const _months = [
 
 String _dateWords(DateTime t) =>
     '${_days[t.weekday - 1]}, ${t.day} ${_months[t.month - 1]} ${t.year}';
+
+String _isoDay(DateTime t) =>
+    '${_days[t.weekday - 1]} ${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
 
 String _timeWords(DateTime t) =>
     '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
@@ -321,8 +333,8 @@ List<AgentTool> _builtIns(
         ['seconds'],
       ),
       run: (a) async {
-        final s =
-            (a['seconds'] as num?)?.round() ?? int.tryParse('${a['seconds']}');
+        // Small models send numbers as text ("600").
+        final s = num.tryParse('${a['seconds'] ?? ''}')?.round();
         if (s == null || s <= 0) return 'Give the length in seconds.';
         return phone(TimerAction(s));
       },
@@ -352,8 +364,8 @@ List<AgentTool> _builtIns(
       small: true,
       label: 'Getting a call ready',
       description:
-          'Get a phone call ready to a contact (by name) or a number. The '
-          'user presses call.',
+          'Get a phone call ready to a contact by name (like Mom, as the '
+          'user says it) or a number. The user presses call.',
       parameters: _schema({'who': _str('A contact name or number')}, ['who']),
       run: (a) => phone(CallAction('${a['who'] ?? ''}')),
     ),
@@ -438,9 +450,15 @@ List<AgentTool> _builtIns(
           location: a['location'] as String?,
           description: a['description'] as String?,
         );
+        // The day in words, so a wrong date (small models are bad at
+        // "next Tuesday") shows up in the answer.
+        final when = start == null
+            ? ''
+            : ' for ${_dateWords(start)}'
+                  '${allDay ? '' : ', ${_timeWords(start)}'}';
         return r == 'done'
-            ? 'The calendar is open with "${a['title']}" filled in; the user '
-                  'taps save.'
+            ? 'The calendar is open with "${a['title']}"$when filled in; the '
+                  'user checks it and taps save.'
             : r;
       },
     ),

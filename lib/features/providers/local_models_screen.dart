@@ -298,10 +298,15 @@ class _LocalModelsScreenState extends ConsumerState<LocalModelsScreen> {
             style: muted,
           ),
           _heading(context, 'Recommended'),
-          for (final m in recommendedModels)
+          for (final (i, m) in recommendedFor(device?.totalRam ?? 0).indexed)
             _Downloadable(
               model: m,
               device: device,
+              best:
+                  i == 0 &&
+                  device != null &&
+                  device.totalRam > 0 &&
+                  fitFor(m.size, device.totalRam) != Fit.tooBig,
               have: mine.any((x) => x.repo == m.repo && x.name == m.name),
               onDownload: () => _download(m, device),
             ),
@@ -421,11 +426,15 @@ class _Downloadable extends StatelessWidget {
     required this.device,
     required this.have,
     required this.onDownload,
+    this.best = false,
   });
 
   final ModelFile model;
   final DeviceInfo? device;
   final bool have;
+
+  /// The one to pick on this phone.
+  final bool best;
   final VoidCallback onDownload;
 
   @override
@@ -443,9 +452,24 @@ class _Downloadable extends StatelessWidget {
                   '${model.name}  ·  ${model.size == 0 ? 'size unknown' : formatBytes(model.size)}',
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
+                if (best) ...[
+                  const SizedBox(height: 4),
+                  Chip(
+                    avatar: const Icon(Icons.star, size: 16),
+                    label: const T('Best for this phone'),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
                 if (model.blurb != null) ...[
                   const SizedBox(height: 2),
                   Text(model.blurb!),
+                ],
+                if (model.toolScore != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    'Uses tools: ${model.toolScore}% of our tests',
+                    style: TextStyle(color: context.nexus.muted),
+                  ),
                 ],
                 const SizedBox(height: 4),
                 _FitLabel(size: model.size, device: device),

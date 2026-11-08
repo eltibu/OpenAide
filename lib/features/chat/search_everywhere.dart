@@ -39,8 +39,18 @@ const _kindNames = {
 const _sharingNames = {'all': 'Anyone', 'mine': 'Mine', 'shared': 'Shared'};
 
 class SearchEverywhereScreen extends ConsumerStatefulWidget {
-  const SearchEverywhereScreen({super.key, this.query = ''});
+  const SearchEverywhereScreen({
+    super.key,
+    this.query = '',
+    this.kind = 'all',
+    this.scope = '',
+  });
   final String query;
+
+  /// Open WebUI 0.13.1's channel Search button: messages of one channel
+  /// (kind 'message', scope 'channel:ID').
+  final String kind;
+  final String scope;
 
   @override
   ConsumerState<SearchEverywhereScreen> createState() =>
@@ -50,9 +60,9 @@ class SearchEverywhereScreen extends ConsumerStatefulWidget {
 class _SearchEverywhereScreenState
     extends ConsumerState<SearchEverywhereScreen> {
   late final _query = TextEditingController(text: widget.query);
-  String _kind = 'all';
+  late String _kind = widget.kind;
   String _sharing = 'all';
-  String _scope = '';
+  late String _scope = widget.scope;
   List<Map> _items = const [];
   List<Map> _scopes = const [];
   List<String> _kinds = const ['chat'];

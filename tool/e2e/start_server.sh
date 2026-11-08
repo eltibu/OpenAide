@@ -9,7 +9,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:-${E2E_WORKDIR:-$HOME/.cache/openaide-e2e}}"
-OWUI_VERSION="${OWUI_VERSION:-0.12.5}"
+OWUI_VERSION="${OWUI_VERSION:-0.13.2}"
 OPEN_TERMINAL_VERSION="${OPEN_TERMINAL_VERSION:-0.14.6}"
 PORT="${OWUI_PORT:-8080}"
 TERM_PORT="${TERM_PORT:-8100}"
@@ -69,6 +69,7 @@ export ENABLE_NOTES=true
 export ENABLE_API_KEYS=true
 export ENABLE_ADMIN_CHAT_ACCESS=true
 export ENABLE_CHANNELS=true
+export ENABLE_COMMENTS=true
 export ENABLE_SIGNUP=true
 export ENABLE_TOOL_PERMISSIONS=true
 export OFFLINE_MODE=true

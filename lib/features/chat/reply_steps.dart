@@ -151,9 +151,11 @@ class _StepState extends State<_Step> {
             ? 'Thought for ${seconds}s'
             : 'Thought',
       ),
-      ToolPart(:final name) => (
+      ToolPart(:final name, :final running, :final completed) => (
         failed ? Icons.error_outline : Icons.build_outlined,
-        working ? 'Using ${toolLabel(name)}…' : _capital(toolLabel(name)),
+        working
+            ? running ?? 'Using ${toolLabel(name)}…'
+            : completed ?? _capital(toolLabel(name)),
       ),
       StatusPart(:final description) => (
         Icons.check_circle_outline,

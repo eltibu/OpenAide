@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
+import '../../core/platform_caps.dart';
 import '../../core/auth/session.dart';
 import '../../core/models/chat.dart';
 import '../chat/chat_controller.dart';
@@ -146,7 +147,9 @@ class _CallScreenState extends ConsumerState<CallScreen> {
     } catch (_) {}
     if (!mounted) return;
     // No Realtime calls on this server: the classic call, as on the web.
-    if (!_realtimeOn) {
+    // Realtime audio is Android's own code for now; other devices use the
+    // classic call too.
+    if (!_realtimeOn || !PlatformCaps.nativeVoice) {
       setState(() => _classic = true);
       return;
     }

@@ -1,4 +1,6 @@
 import 'search_everywhere.dart';
+import '../comments/comments.dart' show showComments;
+import '../inbox/inbox.dart' show InboxRow, InboxScreen;
 
 import 'dart:async';
 import 'dart:convert';
@@ -172,6 +174,12 @@ class _ChatDrawerState extends ConsumerState<ChatDrawer> {
               icon: Icons.search,
               label: 'Search',
               onTap: () => setState(() => _searching = true),
+            ),
+          // Open WebUI 0.13: comments, mentions, replies, failed
+          // automations and coming events, with the unread count.
+          if (features['enable_notifications'] == true)
+            InboxRow(
+              onTap: () => openPlace(context, (_) => const InboxScreen()),
             ),
           if (features['enable_notes'] == true)
             _NavRow(
@@ -819,6 +827,26 @@ class ChatTile extends ConsumerWidget {
             ? const TextStyle(fontWeight: FontWeight.w600)
             : null,
       ),
+      subtitle: chat.waitingForApproval
+          ? Row(
+              children: [
+                Icon(
+                  Icons.pause_circle_outline,
+                  size: 14,
+                  color: scheme.tertiary,
+                ),
+                const SizedBox(width: 4),
+                Flexible(
+                  child: T(
+                    'Waiting for approval',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: scheme.tertiary),
+                  ),
+                ),
+              ],
+            )
+          : null,
       trailing: chat.unread && chat.id != current
           ? const Icon(Icons.circle, size: 8, color: NexusColors.accent)
           : null,
@@ -881,6 +909,11 @@ Future<void> showChatActions(
               ),
               ('move', Icons.drive_file_move_outline, 'Move to folder'),
               ('tags', Icons.sell_outlined, 'Tags'),
+              // Open WebUI 0.13, when an admin turns comments on.
+              if ((ref.read(serverConfigProvider).value?['features']
+                      as Map?)?['enable_comments'] ==
+                  true)
+                ('comments', Icons.mode_comment_outlined, 'Comments'),
               if (!chat.unread)
                 ('unread', Icons.mark_chat_unread_outlined, 'Mark as unread'),
               ('share', Icons.ios_share, 'Share'),
@@ -928,6 +961,13 @@ Future<void> showChatActions(
         }
       case 'tags':
         await editTags(context, chat.id);
+      case 'comments':
+        await showComments(
+          context,
+          type: 'chat',
+          id: chat.id,
+          title: chat.title,
+        );
       case 'share':
         await shareChat(context, chat.id);
       case 'export':
@@ -1453,7 +1493,6 @@ void closeDrawer(BuildContext context) {
   final scaffold = Scaffold.maybeOf(context);
   if (scaffold != null && scaffold.isDrawerOpen) scaffold.closeDrawer();
 }
-
 
 /// The last few messages of a chat, for a quick look before opening it.
 class ChatPreview extends ConsumerStatefulWidget {

@@ -35,6 +35,9 @@ class ChatSocket {
         for (final id in _notes) {
           _joinNote(id);
         }
+        for (final r in _commentRooms.entries) {
+          _joinComments(r.key, r.value);
+        }
         for (final c in _waiting) {
           if (!c.isCompleted) c.complete(_socket.id);
         }
@@ -84,6 +87,17 @@ class ChatSocket {
           _noteEvents.add(data.cast<String, dynamic>());
         }
       })
+      // Open WebUI 0.13: the inbox changed (a comment, mention, reply,
+      // failed automation or coming event); only a nudge, no content.
+      ..on('notifications:changed', (_) {
+        if (!_inbox.isClosed) _inbox.add(null);
+      })
+      // Comments on something open here changed.
+      ..on('comments:changed', (data) {
+        if (data is Map && !_comments.isClosed) {
+          _comments.add(data.cast<String, dynamic>());
+        }
+      })
       ..on('events:channel', (data) {
         if (data is Map && !_channelEvents.isClosed) {
           _channelEvents.add(data.cast<String, dynamic>());
@@ -104,6 +118,35 @@ class ChatSocket {
   final _notePresence = StreamController<Map<String, dynamic>>.broadcast();
   final _noteEvents = StreamController<Map<String, dynamic>>.broadcast();
   final _notes = <String>{};
+  final _inbox = StreamController<void>.broadcast();
+  final _comments = StreamController<Map<String, dynamic>>.broadcast();
+  final _commentRooms = <String, (String, String)>{};
+
+  /// The inbox changed: count and list are worth fetching again.
+  Stream<void> get inboxChanged => _inbox.stream;
+
+  /// Comments changed on {resource_type, resource_id} of a joined room.
+  Stream<Map<String, dynamic>> get commentsChanged => _comments.stream;
+
+  /// Hears comment changes on [type]/[id] (under [subscription], as the web
+  /// keeps one per open panel), again after a reconnect.
+  void joinComments(String subscription, String type, String id) {
+    _commentRooms[subscription] = (type, id);
+    if (_socket.connected) _joinComments(subscription, (type, id));
+  }
+
+  void _joinComments(String subscription, (String, String) r) =>
+      _socket.emit('comments:join', {
+        'resource_type': r.$1,
+        'resource_id': r.$2,
+        'subscription_id': subscription,
+      });
+
+  void leaveComments(String subscription) {
+    if (_commentRooms.remove(subscription) != null && _socket.connected) {
+      _socket.emit('comments:leave', {'subscription_id': subscription});
+    }
+  }
 
   /// Who has a note open (0.12.5): {note_id, users: [{id, name, page_id}]}.
   Stream<Map<String, dynamic>> get notePresence => _notePresence.stream;
@@ -225,6 +268,8 @@ class ChatSocket {
     _dropped.close();
     _notePresence.close();
     _noteEvents.close();
+    _inbox.close();
+    _comments.close();
   }
 }
 

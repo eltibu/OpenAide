@@ -39,9 +39,11 @@ class AttachButton extends ConsumerWidget {
           ((ref.read(serverConfigProvider).value?['features']
               as Map?)?['enable_tool_permissions']) ==
           true;
+      final auto = autoApprovalEnabled(ref.read(serverConfigProvider).value);
       final mode = toolApprovalMode(
         ref.read(chatControllerProvider).params,
         ref.read(userSettingsProvider).value?['ui'] as Map?,
+        autoEnabled: auto,
       );
       final choice = await showModalBottomSheet<String>(
         context: context,
@@ -56,7 +58,7 @@ class AttachButton extends ConsumerWidget {
                   ListTile(
                     leading: const Icon(Icons.shield_outlined),
                     title: const T('Tool Permissions'),
-                    subtitle: Text(toolApprovalModes[mode]!.$1),
+                    subtitle: Text(toolApprovalLabel(mode).$1),
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => Navigator.pop(context, 'permissions'),
                   ),
@@ -129,7 +131,7 @@ class AttachButton extends ConsumerWidget {
       if (choice == null || !context.mounted) return;
       if (choice == 'compare') return onCompare?.call();
       if (choice == 'permissions') {
-        return pickToolApprovalMode(context, ref, mode);
+        return pickToolApprovalMode(context, ref, mode, autoEnabled: auto);
       }
       if (choice == 'web') return attachWebpage(context, ref);
       if (const {'note', 'collection', 'chat', 'myfile'}.contains(choice)) {
