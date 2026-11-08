@@ -15,6 +15,7 @@ import android.os.Build
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLEncoder
 
 /**
  * Settings > Notifications > While the app is closed: about every 15
@@ -30,6 +31,9 @@ class BackgroundCheck : JobService() {
         private const val JOB = 4712
         private const val PREFS = "nexus_background"
         private const val CHANNEL = "background"
+
+        /** At most this many inbox pages (of 20) per check. */
+        private const val MAX_INBOX_PAGES = 25
 
         /** True while the app is on screen; it notifies by itself then. */
         @Volatile var appVisible = false
@@ -155,37 +159,51 @@ class BackgroundCheck : JobService() {
         // Open WebUI 0.13 inbox: comments, replies and mentions on your
         // things, failed automations and coming events, unseen and new since
         // the last check. Channel news is counted above already.
+        // Newest first, a page at a time: keep reading until the items are
+        // older than the last check, so a busy spell isn't cut off at one page.
         try {
-            val inbox = org.json.JSONObject(
-                get(base, "/api/v1/notifications/inbox?limit=20", token, cookie),
-            ).optJSONArray("items") ?: JSONArray()
-            for (i in 0 until inbox.length()) {
-                val n = inbox.getJSONObject(i)
-                val event = text(n, "event_type")
-                if (event.startsWith("channel.") || !n.isNull("seen_at")) continue
-                // created_at is epoch nanoseconds, sent as text.
-                val created = (text(n, "created_at").toLongOrNull() ?: 0L) / 1_000_000_000L
-                if (created <= since) continue
-                val who = n.optJSONObject("actor")?.let { text(it, "name") } ?: ""
-                val label = when (event) {
-                    "comment.created" -> "$who commented"
-                    "comment.replied" -> "$who replied"
-                    "comment.mentioned" -> "$who mentioned you"
-                    "calendar.alert" -> "Upcoming event"
-                    "automation.run_failed" -> "Automation failed"
-                    "system.announcement" -> "Announcement"
-                    else -> "Notification"
-                }.trim()
-                val title = text(n, "title")
-                val preview = text(n, "preview")
-                    .replace(Regex("<@[A-Z]:[^|>]+\\|([^>]+)>"), "@$1")
-                post(
-                    ("inbox:" + text(n, "id")).hashCode(),
-                    label,
-                    listOf(title, preview).filter { it.isNotEmpty() }.joinToString("\n")
-                        .ifEmpty { "Open your inbox" },
-                    if (text(n, "resource_type") == "chat") text(n, "resource_id") else null,
+            var cursor: String? = null
+            var pages = 0
+            paging@ while (pages++ < MAX_INBOX_PAGES) {
+                val query = "limit=20" + (cursor?.let { "&cursor=" + URLEncoder.encode(it, "UTF-8") } ?: "")
+                val page = org.json.JSONObject(
+                    get(base, "/api/v1/notifications/inbox?$query", token, cookie),
                 )
+                val inbox = page.optJSONArray("items") ?: JSONArray()
+                var reachedOld = inbox.length() == 0
+                for (i in 0 until inbox.length()) {
+                    val n = inbox.getJSONObject(i)
+                    // created_at is epoch nanoseconds, sent as text.
+                    val created = (text(n, "created_at").toLongOrNull() ?: 0L) / 1_000_000_000L
+                    if (created <= since) {
+                        reachedOld = true
+                        continue
+                    }
+                    val event = text(n, "event_type")
+                    if (event.startsWith("channel.") || !n.isNull("seen_at")) continue
+                    val who = n.optJSONObject("actor")?.let { text(it, "name") } ?: ""
+                    val label = when (event) {
+                        "comment.created" -> "$who commented"
+                        "comment.replied" -> "$who replied"
+                        "comment.mentioned" -> "$who mentioned you"
+                        "calendar.alert" -> "Upcoming event"
+                        "automation.run_failed" -> "Automation failed"
+                        "system.announcement" -> "Announcement"
+                        else -> "Notification"
+                    }.trim()
+                    val title = text(n, "title")
+                    val preview = text(n, "preview")
+                        .replace(Regex("<@[A-Z]:[^|>]+\\|([^>]+)>"), "@$1")
+                    post(
+                        ("inbox:" + text(n, "id")).hashCode(),
+                        label,
+                        listOf(title, preview).filter { it.isNotEmpty() }.joinToString("\n")
+                            .ifEmpty { "Open your inbox" },
+                        if (text(n, "resource_type") == "chat") text(n, "resource_id") else null,
+                    )
+                }
+                cursor = if (page.isNull("next_cursor")) null else page.optString("next_cursor")
+                if (reachedOld || cursor.isNullOrEmpty()) break@paging
             }
         } catch (_: Exception) {
             // Servers before 0.13, or the inbox is off.
