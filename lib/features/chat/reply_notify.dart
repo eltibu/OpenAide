@@ -120,7 +120,7 @@ Future<void> setBackgroundChecks(
       'baseUrl': baseUrl,
       'token': token,
       'cookie': cookie,
-      'instant': instant,
+      'instant': ?instant,
     });
   } on MissingPluginException {
     // Not on a phone.
