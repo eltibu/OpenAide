@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long-press the app icon. The Play build has its own package name. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="call"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_call"
+        android:shortcutShortLabel="@string/shortcut_call">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.eltibu.openaide"
+            android:targetClass="com.nexus.nexus_assistant.MainActivity">
+            <extra android:name="nexus.launch" android:value="call" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="dictate"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_dictate"
+        android:shortcutShortLabel="@string/shortcut_dictate">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.eltibu.openaide"
+            android:targetClass="com.nexus.nexus_assistant.MainActivity">
+            <extra android:name="nexus.launch" android:value="dictate" />
+        </intent>
+    </shortcut>
+    <shortcut
+        android:shortcutId="new"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new"
+        android:shortcutShortLabel="@string/shortcut_new">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.eltibu.openaide"
+            android:targetClass="com.nexus.nexus_assistant.MainActivity">
+            <extra android:name="nexus.launch" android:value="new" />
+        </intent>
+    </shortcut>
+</shortcuts>
