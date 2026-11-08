@@ -14,6 +14,11 @@
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"
         tools:node="remove" />
+    <!-- Play reviews a special-use foreground service too: no Instant, the
+         Play build checks about every 15 minutes. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
+        tools:node="remove" />
     <application>
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -24,6 +29,12 @@
             tools:node="remove" />
         <service
             android:name=".WakeService"
+            tools:node="remove" />
+        <service
+            android:name=".LiveListen"
+            tools:node="remove" />
+        <receiver
+            android:name=".LiveListen$Restart"
             tools:node="remove" />
     </application>
 </manifest>

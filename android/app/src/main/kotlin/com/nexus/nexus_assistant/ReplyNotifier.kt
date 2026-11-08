@@ -115,10 +115,14 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
                     call.argument<String>("baseUrl"),
                     call.argument<String>("token"),
                     call.argument<String>("cookie"),
+                    call.argument<Boolean>("instant"),
                 )
                 result.success(null)
             }
             "backgroundOn" -> result.success(BackgroundCheck.isOn(activity))
+            // Instant: see LiveListen.
+            "instantOn" -> result.success(BackgroundCheck.isOn(activity) && LiveListen.isOn(activity))
+            "instantAvailable" -> result.success(LiveListen.available(activity))
             "initialChat" -> {
                 result.success(initialChat)
                 initialChat = null
