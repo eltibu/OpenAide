@@ -48,9 +48,7 @@ final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
       .watch(providerModelsProvider.future)
       .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
-  final terminal = ref.watch(
-    chatControllerProvider.select((s) => s.terminalId),
-  );
+  final terminal = ref.watch(agentTerminalProvider);
   final agents = terminal == null || terminal.isEmpty
       ? Future.value(const <ModelInfo>[])
       : ref
@@ -68,6 +66,22 @@ final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
     ...await agents,
   ];
 });
+
+/// The terminal picked in the open chat, kept apart from the chat's state
+/// so the model list can follow it without depending on the chat (which
+/// reads the model list).
+class AgentTerminal extends Notifier<String?> {
+  @override
+  String? build() => null;
+
+  void set(String? id) {
+    if (state != id) state = id;
+  }
+}
+
+final agentTerminalProvider = NotifierProvider<AgentTerminal, String?>(
+  AgentTerminal.new,
+);
 
 /// The coding agents (Claude Code, Codex, Pi...) a terminal offers as
 /// models (Open WebUI 0.13.1), for the chat that has that terminal picked.
@@ -446,6 +460,15 @@ class ChatController extends Notifier<ChatState> {
         final sub = ref.read(chatSocketProvider).events.listen(_afterReply);
         ref.onDispose(sub.cancel);
       } catch (_) {}
+    });
+    // The model list offers the picked terminal's coding agents.
+    listenSelf((prev, next) {
+      if (prev?.terminalId == next.terminalId) return;
+      Future.microtask(() {
+        try {
+          ref.read(agentTerminalProvider.notifier).set(next.terminalId);
+        } catch (_) {}
+      });
     });
     // Settings > Interface can start every new chat as a temporary one.
     final view = _view;
