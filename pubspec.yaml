@@ -55,6 +55,7 @@ dependencies:
   xterm: ^4.0.0
   video_player: ^2.14.1
   webview_flutter_android: ^4.14.1
+  webview_flutter_platform_interface: ^2.15.1
   archive: ^4.5.2
   pdf: ^3.13.1
   xml: ^7.1.0
@@ -64,6 +65,8 @@ dependencies:
   camera: ^0.12.2
   geolocator: ^14.0.1
   enough_mail: ^3.0.0
+  record: ^7.1.2
+  audioplayers: ^6.8.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

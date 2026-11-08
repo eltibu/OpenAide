@@ -113,8 +113,10 @@ Stream<AgentEvent> runAgent({
           promptToolInstructions(tools),
         ].join('\n\n');
   var callCount = 0;
+  final done = <String, String>{};
   for (var step = 0; step <= maxSteps; step++) {
     final text = StringBuffer();
+    final said = StringBuffer();
     final calls = <int, _Call>{};
     final parser = nativeTools ? null : ToolCallParser();
     final stream = turn(
@@ -126,9 +128,13 @@ Stream<AgentEvent> runAgent({
     await for (final c in stream) {
       if (c.thinking.isNotEmpty) yield AgentThinking(c.thinking);
       if (c.text.isNotEmpty) {
+        said.write(c.text);
         final shown = parser == null ? c.text : parser.add(c.text);
         text.write(shown);
         if (shown.isNotEmpty) yield AgentText(shown);
+        // Small models don't stop after a call: they go on to write a
+        // made-up result and answer. Stopping here also stops the model.
+        if (parser != null && parser.calls.isNotEmpty) break;
       }
       for (final d in c.tools) {
         final call = calls.putIfAbsent(d.index, _Call.new);
@@ -155,20 +161,44 @@ Stream<AgentEvent> runAgent({
         for (final c in parser.calls)
           AiToolCall('call_${++callCount}', c.$1, c.$2),
     ];
+    if (parser != null && made.isEmpty) {
+      // Written some other way: <set_alarm {...}>, {"directions": {...}}.
+      final loose = looseCall(said.toString(), tools);
+      if (loose != null) {
+        made.add(AiToolCall('call_${++callCount}', loose.$1, loose.$2));
+      } else if (parser.unread > 0 && step < maxSteps) {
+        // A call it meant but got wrong: show it how, and let it try again.
+        made.add(AiToolCall('call_${++callCount}', 'tool_call', '{}'));
+      }
+    }
     if (made.isEmpty || step == maxSteps) return;
     final results = <String>[];
     for (final c in made) {
       yield AgentToolStart(c.id, c.name, c.arguments);
-      final tool = byName[c.name];
+      final tool =
+          byName[c.name] ?? (nativeTools ? null : _closest(c.name, tools));
+      final again =
+          '${tool?.name ?? c.name} ${jsonEncode(_plainKeys(toolArguments(c.arguments)))}';
       String output;
       var failed = false;
-      if (tool == null) {
+      if (c.name == 'tool_call' && tool == null) {
+        output =
+            "That tool call couldn't be read. Write it exactly like this: "
+            '<tool_call>{"name": "tool_name", "arguments": {"arg": "value"}}'
+            '</tool_call>';
+        failed = true;
+      } else if (!nativeTools && done.containsKey(again)) {
+        // Small models repeat a call that worked.
+        output =
+            'Already done: ${done[again]} Answer the user now; '
+            "don't call it again.";
+      } else if (tool == null) {
         output = 'There is no tool called ${c.name}.';
         failed = true;
       } else {
         try {
           output = await tool
-              .run(toolArguments(c.arguments))
+              .run(_plainKeys(toolArguments(c.arguments)))
               .timeout(toolTimeout);
         } on TimeoutException {
           // The call may still finish (an email sent, a file written), so
@@ -188,12 +218,96 @@ Stream<AgentEvent> runAgent({
             '${output.substring(0, most)}\n\n'
             '[Cut: ${output.length - most} more characters]';
       }
+      if (!failed) done[again] = output;
       results.add(output);
       yield AgentToolDone(c.id, output, failed: failed);
     }
     turns.add(AiToolTurn(text.toString(), made, results));
   }
 }
+
+/// A call written without the tags, found by a tool's name: the JSON
+/// right after `<set_alarm`, `{"directions": {...}}`, or a JSON call with
+/// a name. Only names of [tools] (or skills) count.
+(String, String)? looseCall(String text, List<AgentTool> tools) {
+  bool known(String name) => _closest(name, tools) != null;
+  for (var i = text.indexOf('{'); i >= 0; i = text.indexOf('{', i + 1)) {
+    final body = _balanced(text, i);
+    if (body == null) continue;
+    final v =
+        ToolCallParser._json(body) ??
+        ToolCallParser._json(ToolCallParser._repaired(body));
+    if (v is! Map) continue;
+    if (v['name'] is String && known('${v['name']}')) {
+      var args = v['arguments'] ?? v['parameters'] ?? const {};
+      if (args is String) args = toolArguments(args);
+      return ('${v['name']}', jsonEncode(args));
+    }
+    if (v.length == 1 && v.values.first is Map && known('${v.keys.first}')) {
+      return ('${v.keys.first}', jsonEncode(v.values.first));
+    }
+    // The name just before it: <set_alarm {...}>, <calculator>{...}.
+    final before = text.substring((i - 48).clamp(0, i), i);
+    final m = RegExp(r'([A-Za-z][\w-]*)\W{0,3}$').firstMatch(before);
+    if (m != null && m[1] != 'tool_call' && known(m[1]!)) {
+      return (m[1]!, jsonEncode(v));
+    }
+  }
+  return null;
+}
+
+/// The JSON object that starts at [start], to its matching brace.
+String? _balanced(String s, int start) {
+  var depth = 0;
+  var inString = false;
+  for (var i = start; i < s.length; i++) {
+    final ch = s[i];
+    if (inString) {
+      if (ch == r'\') {
+        i++;
+      } else if (ch == '"') {
+        inString = false;
+      }
+    } else if (ch == '"') {
+      inString = true;
+    } else if (ch == '{') {
+      depth++;
+    } else if (ch == '}' && --depth == 0) {
+      return s.substring(start, i + 1);
+    }
+  }
+  return null;
+}
+
+String _squash(String s) =>
+    s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+
+/// Small models misspell names ("home_get_state" for "home__get_state")
+/// and call a skill as if it were a tool.
+AgentTool? _closest(String name, List<AgentTool> tools) {
+  final want = _squash(name);
+  for (final t in tools) {
+    if (_squash(t.name) == want) return t;
+  }
+  final skill = tools.where((t) => t.name == 'load_skill').firstOrNull;
+  final names =
+      (skill?.parameters['properties']?['name']?['enum'] as List?) ?? const [];
+  for (final n in names) {
+    if (_squash('$n') == want) {
+      return AgentTool(
+        name: skill!.name,
+        description: skill.description,
+        run: (_) => skill.run({'name': n}),
+      );
+    }
+  }
+  return null;
+}
+
+/// Argument names without the marks models copy from the list ("label?").
+Map<String, dynamic> _plainKeys(Map<String, dynamic> args) => {
+  for (final e in args.entries) e.key.replaceAll(RegExp(r'\?$'), ''): e.value,
+};
 
 class _Call {
   String? id;
@@ -214,8 +328,18 @@ String promptToolInstructions(List<AgentTool> tools) {
       '<tool_call>{"name": "tool_name", "arguments": {"arg": "value"}}'
       '</tool_call>\n'
       'The result comes back in <tool_response>. Then answer the user '
-      'normally. Use a tool only when it helps; never make up a result.';
+      'normally. Use a tool only when it helps; never make up a result.'
+      '${tools.any((t) => t.name == 'web_search') ? '\n$liveDataRule' : ''}';
 }
+
+/// What you know stops at your training: anything that changes is looked
+/// up, never answered with "I don't have live data".
+const liveDataRule =
+    'What you know is from your training and may be out of date. For '
+    'anything that can change (who holds an office or job, news, prices, '
+    'weather, scores, releases, opening hours), call web_search first and '
+    "answer from the results. Never say you can't get live or current "
+    'information: you can, with web_search.';
 
 /// Small models get each tool's first sentence only.
 String _firstSentence(String text) {
@@ -231,9 +355,10 @@ Map<String, dynamic> _compactSchema(Map<String, dynamic> schema) {
   final required = {...?(schema['required'] as List?)};
   return {
     for (final e in props.entries)
-      '${e.key}${required.contains(e.key) ? '' : '?'}': [
+      '${e.key}': [
         if (e.value is Map && (e.value as Map)['type'] != null)
           '${(e.value as Map)['type']}',
+        if (!required.contains(e.key)) 'optional',
         if (e.value is Map && (e.value as Map)['description'] != null)
           '${(e.value as Map)['description']}',
       ].join(', '),
@@ -256,8 +381,8 @@ List<AiMessage> promptTurns(List<AiToolTurn> turns) => [
       'user',
       [
         for (final (i, c) in t.calls.indexed)
-          '<tool_response name="${c.name}">\n'
-              '${i < t.results.length ? t.results[i] : ''}\n'
+          '<tool_response>\n'
+              '${c.name}: ${i < t.results.length ? t.results[i] : ''}\n'
               '</tool_response>',
       ].join('\n'),
     ),
@@ -265,41 +390,60 @@ List<AiMessage> promptTurns(List<AiToolTurn> turns) => [
 ];
 
 /// Takes `<tool_call>` blocks out of a streaming reply: what [add] returns
-/// is the text to show, and [calls] the calls found.
+/// is the text to show, and [calls] the calls found. Gemma writes them as a
+/// ```tool_call code block, so that counts too.
 class ToolCallParser {
-  static const _open = '<tool_call>';
-  static const _close = '</tool_call>';
+  static const _tags = [
+    ('<tool_call>', '</tool_call>'),
+    ('```tool_call', '```'),
+  ];
 
   final _pending = StringBuffer();
   final calls = <(String, String)>[];
-  bool _inside = false;
+
+  /// Blocks that looked like calls but couldn't be read.
+  int unread = 0;
+  String? _close;
 
   String add(String chunk) {
     _pending.write(chunk);
     final out = StringBuffer();
     while (true) {
       final s = _pending.toString();
-      if (_inside) {
-        final end = s.indexOf(_close);
+      final close = _close;
+      if (close != null) {
+        final end = s.indexOf(close);
         if (end < 0) return out.toString();
         _found(s.substring(0, end));
-        _inside = false;
-        _reset(s.substring(end + _close.length));
+        _close = null;
+        _reset(s.substring(end + close.length));
+        // What a small model writes after its call is a guess at the
+        // result; the real one comes next turn.
+        if (calls.isNotEmpty) {
+          _pending.clear();
+          return out.toString();
+        }
         continue;
       }
-      final start = s.indexOf(_open);
-      if (start >= 0) {
-        out.write(s.substring(0, start));
-        _inside = true;
-        _reset(s.substring(start + _open.length));
+      (int, String, String)? first;
+      for (final (open, close) in _tags) {
+        final i = s.indexOf(open);
+        if (i >= 0 && (first == null || i < first.$1)) first = (i, open, close);
+      }
+      if (first != null) {
+        out.write(s.substring(0, first.$1));
+        _close = first.$3;
+        _reset(s.substring(first.$1 + first.$2.length));
         continue;
       }
       // Keep back what could be the start of a tag.
       var keep = 0;
-      for (var n = _open.length - 1; n > 0; n--) {
-        if (s.endsWith(_open.substring(0, n))) {
-          keep = n;
-          break;
+      for (final (open, _) in _tags) {
+        for (var n = open.length - 1; n > keep; n--) {
+          if (s.endsWith(open.substring(0, n))) {
+            keep = n;
+            break;
+          }
         }
       }
       out.write(s.substring(0, s.length - keep));
@@ -312,9 +456,9 @@ class ToolCallParser {
   String close() {
     final s = _pending.toString();
     _pending.clear();
-    if (_inside) {
+    if (_close != null) {
       _found(s);
-      _inside = false;
+      _close = null;
       return '';
     }
     return s;
@@ -331,14 +475,49 @@ class ToolCallParser {
     // Some models wrap it in a code block.
     b = b.replaceFirst(RegExp(r'^```(?:json)?\s*'), '');
     b = b.replaceFirst(RegExp(r'\s*```$'), '');
-    try {
-      final v = jsonDecode(b);
-      if (v is! Map || v['name'] is! String) return;
-      var args = v['arguments'] ?? v['parameters'] ?? const {};
-      if (args is String) args = toolArguments(args);
-      calls.add(('${v['name']}', jsonEncode(args)));
-    } on FormatException {
-      // Not a call after all.
+    final v = _json(b) ?? _json(_repaired(b));
+    if (v is! Map) {
+      unread++;
+      return;
     }
+    if (v['name'] is! String) {
+      // {"directions": {"place": "airport"}}
+      if (v.length == 1 && v.values.first is Map) {
+        calls.add(('${v.keys.first}', jsonEncode(v.values.first)));
+      } else {
+        unread++;
+      }
+      return;
+    }
+    var args = v['arguments'] ?? v['parameters'] ?? const {};
+    if (args is String) args = toolArguments(args);
+    calls.add(('${v['name']}', jsonEncode(args)));
+  }
+
+  static Object? _json(String s) {
+    try {
+      return jsonDecode(s);
+    } on FormatException {
+      return null;
+    }
+  }
+
+  /// Mistakes small models make: `{"calculator", "arguments": {...}}`,
+  /// `{"directions", "place": "airport"}`, a stray quote after a value.
+  static String _repaired(String b) {
+    b = b.replaceAllMapped(
+      RegExp(r'(true|false|null)"(?=\s*[,}])'),
+      (m) => m[1]!,
+    );
+    final bare = RegExp(r'^\{\s*"([^"]+)"\s*,\s*([\s\S]*)\}$').firstMatch(b);
+    if (bare == null) return b;
+    final rest = bare[2]!.trim();
+    final args =
+        rest.startsWith('"arguments"') || rest.startsWith('"parameters"')
+        ? rest
+        : rest.startsWith('{')
+        ? '"arguments": $rest'
+        : '"arguments": {$rest}';
+    return '{"name": ${jsonEncode(bare[1])}, $args}';
   }
 }

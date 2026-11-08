@@ -8,6 +8,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../settings/settings_screen.dart'
     show settingsApiProvider, uiSettingsProvider;
 import 'chat_controller.dart';
+
+export 'request_options.dart' show autoApprovalEnabled, toolApprovalMode;
 import '../../core/i18n/app_strings.dart';
 
 const toolApprovalModes = {
@@ -18,19 +20,27 @@ const toolApprovalModes = {
   ),
 };
 
-/// The chat's own choice, else your default, as the web reads it.
-String toolApprovalMode(Map<String, dynamic> chatParams, Map? ui) =>
-    (chatParams['tool_approval_mode'] ??
-            (ui?['params'] as Map?)?['tool_approval_mode']) ==
-        'ask'
-    ? 'ask'
-    : 'full';
+/// Open WebUI 0.13.1's third mode, when the admin turns it on.
+const autoApprovalMode = (
+  'Auto',
+  'A review model checks each tool call and runs it right away only when '
+      'no confirmation is needed; anything else asks for approval.',
+);
+
+/// The name and description of [mode].
+(String, String) toolApprovalLabel(String mode) =>
+    mode == 'auto' ? autoApprovalMode : toolApprovalModes[mode]!;
 
 Future<void> pickToolApprovalMode(
   BuildContext context,
   WidgetRef ref,
-  String current,
-) async {
+  String current, {
+  bool autoEnabled = false,
+}) async {
+  final modes = {
+    ...toolApprovalModes,
+    if (autoEnabled) 'auto': autoApprovalMode,
+  };
   final picked = await showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
@@ -39,7 +49,7 @@ Future<void> pickToolApprovalMode(
         mainAxisSize: MainAxisSize.min,
         children: [
           const ListTile(title: T('Tool Permissions')),
-          for (final m in toolApprovalModes.entries)
+          for (final m in modes.entries)
             ListTile(
               leading: Icon(
                 m.key == current ? Icons.check : null,

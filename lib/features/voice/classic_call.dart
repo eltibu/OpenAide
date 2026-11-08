@@ -9,6 +9,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/mic.dart';
 import '../studio/listen.dart' show Cutter, frameLevel, wavFile;
 
 enum CallPhase { starting, listening, hearing, thinking, speaking, ended }
@@ -36,14 +37,17 @@ abstract class ClassicCallHost {
 
 class ClassicCall extends ChangeNotifier {
   ClassicCall(this.host, {MethodChannel? method, Stream<dynamic>? events})
-    : _method = method ?? const MethodChannel('nexus/voice'),
-      _events =
-          events ??
-          const EventChannel('nexus/voice/events').receiveBroadcastStream();
+    : _mic = method != null || events != null
+          ? Mic.fromChannel(
+              method ?? const MethodChannel('nexus/voice'),
+              events ??
+                  const EventChannel('nexus/voice/events')
+                      .receiveBroadcastStream(),
+            )
+          : Mic();
 
   final ClassicCallHost host;
-  final MethodChannel _method;
-  final Stream<dynamic> _events;
+  final Mic _mic;
 
   CallPhase phase = CallPhase.starting;
   bool muted = false;
@@ -66,10 +70,8 @@ class ClassicCall extends ChangeNotifier {
 
   Future<void> start() async {
     host.speaking.addListener(update);
-    _sub = _events.listen(_onEvent);
-    final status =
-        await _method.invokeMethod<String>('start') ??
-        'The microphone could not be started';
+    _sub = _mic.events.listen(_onEvent);
+    final status = await _mic.start();
     if (status != 'started') {
       problem = status == 'denied'
           ? 'OpenAide needs the microphone for calls.'
@@ -78,7 +80,7 @@ class ClassicCall extends ChangeNotifier {
       return;
     }
     if (phase == CallPhase.ended) return;
-    await _method.invokeMethod('capture', {'enabled': true});
+    await _mic.capture(true);
     if (phase != CallPhase.ended) _listen();
   }
 
@@ -176,7 +178,7 @@ class ClassicCall extends ChangeNotifier {
     notifyListeners();
     await _sub?.cancel();
     try {
-      await _method.invokeMethod('stop');
+      await _mic.stop();
     } on MissingPluginException {
       // Not on a phone.
     }

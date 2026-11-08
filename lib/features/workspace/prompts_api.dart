@@ -109,6 +109,7 @@ const systemVariables = {
   'USER_LOCATION',
   'USER_NAME',
   'USER_EMAIL',
+  'USER_ROLE',
   'USER_BIO',
   'USER_GENDER',
   'USER_BIRTH_DATE',
@@ -204,6 +205,7 @@ String fillSystemVariables(
   String text, {
   String? userName,
   String? userEmail,
+  String? userRole,
   String? clipboard,
   String language = 'en-US',
   DateTime? now,
@@ -224,6 +226,8 @@ String fillSystemVariables(
   return text
       .replaceAll('{{USER_NAME}}', userName ?? 'User')
       .replaceAll('{{USER_EMAIL}}', userEmail ?? '{{USER_EMAIL}}')
+      // Open WebUI 0.13: the signed-in person's role, such as admin or user.
+      .replaceAll('{{USER_ROLE}}', userRole ?? 'Unknown')
       .replaceAll('{{CLIPBOARD}}', clipboard ?? '')
       .replaceAll('{{USER_LANGUAGE}}', language)
       .replaceAll('{{CURRENT_DATE}}', date)

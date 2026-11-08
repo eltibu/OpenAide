@@ -59,10 +59,35 @@ def _sample(schema, name=""):
     return "x"
 
 
+# Open WebUI 0.13.1 adds memories, the skills list and attached knowledge
+# as hidden tool results after the person's message; a real model reads
+# them as context, so the fake one looks past them.
+HIDDEN_CONTEXT = {"recall_memories", "list_available_skills",
+                  "list_attached_knowledge"}
+
+
+def _without_context(msgs):
+    """The messages without the server's hidden context calls."""
+    hidden = set()
+    out = []
+    for m in msgs:
+        calls = m.get("tool_calls") or []
+        if m.get("role") == "assistant" and calls and all(
+                (c.get("function") or {}).get("name") in HIDDEN_CONTEXT
+                for c in calls):
+            hidden.update(c.get("id") for c in calls)
+            if not _text(m.get("content")).strip():
+                continue
+        if m.get("role") == "tool" and m.get("tool_call_id") in hidden:
+            continue
+        out.append(m)
+    return out
+
+
 def _tool_call(body):
     """The tool the fake model calls for this request, or None."""
     tools = body.get("tools") or []
-    msgs = body.get("messages") or []
+    msgs = _without_context(body.get("messages") or [])
     if not tools or not msgs or msgs[-1].get("role") != "user":
         return None
     if _email(_text(msgs[-1].get("content"))) is not None:
@@ -107,7 +132,7 @@ def _ask_args(params):
 
 def _reply(body):
     model = body.get("model", "fake")
-    msgs = body.get("messages") or []
+    msgs = _without_context(body.get("messages") or [])
     last = msgs[-1] if msgs else {}
     if last.get("role") == "tool":
         return None, f"Tool said: {_text(last.get('content'))}"

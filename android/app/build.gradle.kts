@@ -19,7 +19,8 @@ val hasKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.nexus.nexus_assistant"
-    compileSdk = flutter.compileSdkVersion
+    // Google Play wants the newest Android (API 36) as the target.
+    compileSdk = maxOf(flutter.compileSdkVersion, 36)
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -35,7 +36,7 @@ android {
         // Android 9 (API 28) is the first to accept a key rotation proof, which
         // lets builds signed with the release key install over the old key.
         minSdk = maxOf(flutter.minSdkVersion, 28)
-        targetSdk = flutter.targetSdkVersion
+        targetSdk = 36
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
@@ -50,6 +51,22 @@ android {
                 abiFilters += listOf("arm64-v8a")
                 arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_STL=c++_shared")
             }
+        }
+    }
+
+    // Two builds of the same app. "direct" is the APK from GitHub, with the
+    // in-app updater, under the name phones already have. "play" is for
+    // Google Play: its own permanent name, and no self-updater (Play
+    // updates it and doesn't allow apps that install APKs). Build with
+    // --flavor direct or --flavor play.
+    flavorDimensions += "store"
+    productFlavors {
+        create("direct") {
+            dimension = "store"
+        }
+        create("play") {
+            dimension = "store"
+            applicationId = "com.eltibu.openaide"
         }
     }
 

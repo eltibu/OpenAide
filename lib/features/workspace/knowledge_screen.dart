@@ -1,4 +1,4 @@
-
+import '../comments/comments.dart' show CommentsButton;
 import '../../core/widgets/empty_state.dart';
 
 import 'package:file_picker/file_picker.dart';
@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Uint8List;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/api/openwebui_client.dart' show ApiException;
 import '../../core/auth/session.dart';
+import '../chat/chat_controller.dart' show serverConfigProvider;
 import '../../core/phone_folder.dart';
 import '../../core/theme.dart';
 import '../studio/record_notes.dart' show dictate;
@@ -23,14 +25,19 @@ final knowledgeListProvider = FutureProvider<List<Knowledge>>(
   (ref) => ref.watch(knowledgeApiProvider).list(),
 );
 
-Future<(String, String)?> _askNameAndDescription(
+/// Name and description; with [limits] (Open WebUI 0.13) also the
+/// knowledge base's own file count and size caps, under Advanced.
+Future<(String, String, ({int? count, int? size})?)?> _askNameAndDescription(
   BuildContext context,
   String title, {
   String name = '',
   String description = '',
+  ({int? count, int? size})? limits,
 }) async {
   final n = TextEditingController(text: name);
   final d = TextEditingController(text: description);
+  final count = TextEditingController(text: '${limits?.count ?? ''}');
+  final size = TextEditingController(text: '${limits?.size ?? ''}');
   final ok = await showDialog<bool>(
     context: context,
     builder: (c) => AlertDialog(
@@ -48,6 +55,30 @@ Future<(String, String)?> _askNameAndDescription(
             maxLines: null,
             decoration: InputDecoration(labelText: tr('What it\'s about')),
           ),
+          if (limits != null)
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const T('Advanced'),
+              initiallyExpanded: limits.count != null || limits.size != null,
+              children: [
+                TextField(
+                  controller: count,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: tr('File count limit'),
+                    hintText: tr('No limit'),
+                  ),
+                ),
+                TextField(
+                  controller: size,
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: tr('File size limit (MB)'),
+                    hintText: tr('No limit'),
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
       actions: [
@@ -63,7 +94,30 @@ Future<(String, String)?> _askNameAndDescription(
     ),
   );
   if (ok != true || n.text.trim().isEmpty) return null;
-  return (n.text.trim(), d.text.trim());
+  int? whole(String v) {
+    final i = int.tryParse(v.trim());
+    return i == null || i <= 0 ? null : i;
+  }
+
+  return (
+    n.text.trim(),
+    d.text.trim(),
+    limits == null ? null : (count: whole(count.text), size: whole(size.text)),
+  );
+}
+
+/// Whether the server is Open WebUI [version] or newer.
+bool _serverAtLeast(WidgetRef ref, String version) {
+  final have = '${ref.read(serverConfigProvider).value?['version'] ?? ''}';
+  List<int> parts(String v) => [
+    for (final p in v.split(RegExp(r'[.\-+]')).take(3)) int.tryParse(p) ?? 0,
+  ];
+  final a = parts(have), b = parts(version);
+  for (var i = 0; i < 3; i++) {
+    final x = i < a.length ? a[i] : 0, y = i < b.length ? b[i] : 0;
+    if (x != y) return x > y;
+  }
+  return true;
 }
 
 void _say(BuildContext context, String text) =>
@@ -86,10 +140,18 @@ class KnowledgeScreen extends ConsumerWidget {
       floatingActionButton: FloatingActionButton(
         tooltip: tr('New knowledge base'),
         onPressed: () async {
-          final v = await _askNameAndDescription(context, 'New knowledge base');
+          final v = await _askNameAndDescription(
+            context,
+            'New knowledge base',
+            limits: _serverAtLeast(ref, '0.13.0')
+                ? (count: null, size: null)
+                : null,
+          );
           if (v == null) return;
           try {
-            final k = await ref.read(knowledgeApiProvider).create(v.$1, v.$2);
+            final k = await ref
+                .read(knowledgeApiProvider)
+                .create(v.$1, v.$2, limits: v.$3);
             ref.invalidate(knowledgeListProvider);
             if (context.mounted) {
               Navigator.push(
@@ -198,6 +260,20 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
 
   Future<void> _add() async {
     final picked = await FilePicker.pickFiles();
+    if (picked.isEmpty) return;
+    // The knowledge base's file limits (Open WebUI 0.13), before uploading.
+    try {
+      await _api.checkUpload(
+        _k.id,
+        picked.length,
+        size: picked
+            .map((f) => f.lengthSync() ?? 0)
+            .reduce((a, b) => a > b ? a : b),
+      );
+    } catch (e) {
+      if (mounted) _say(context, e is ApiException ? e.message : '$e');
+      return;
+    }
     for (final f in picked) {
       setState(() => _uploading.add(f.name));
       try {
@@ -524,16 +600,24 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
         'Edit knowledge base',
         name: _k.name,
         description: _k.description,
+        limits: _serverAtLeast(ref, '0.13.0')
+            ? (count: _k.maxFileCount, size: _k.maxFileSize)
+            : null,
       );
       if (v == null) return;
       try {
-        await _api.update(_k.id, v.$1, v.$2);
+        await _api.update(_k.id, v.$1, v.$2, limits: v.$3);
         setState(
           () => _k = Knowledge(
             id: _k.id,
             name: v.$1,
             description: v.$2,
             updated: DateTime.now(),
+            writable: _k.writable,
+            userId: _k.userId,
+            meta: v.$3 == null
+                ? _k.meta
+                : {'max_file_count': v.$3!.count, 'max_file_size': v.$3!.size},
           ),
         );
       } catch (e) {
@@ -591,11 +675,12 @@ class _KnowledgeDetailState extends ConsumerState<KnowledgeDetail> {
         appBar: AppBar(
           title: Text(_k.name),
           actions: [
+            CommentsButton(type: 'knowledge', id: _k.id, title: _k.name),
             if (_k.writable)
               PopupMenuButton<String>(
                 onSelected: _menu,
                 itemBuilder: (_) => [
-                  const PopupMenuItem(value: 'edit', child: T('Rename')),
+                  const PopupMenuItem(value: 'edit', child: T('Settings')),
                   const PopupMenuItem(value: 'access', child: T('Access')),
                   // The server lets only admins export.
                   if (ref.read(sessionProvider).value?.user?['role'] == 'admin')

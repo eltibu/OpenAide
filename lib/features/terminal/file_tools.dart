@@ -11,7 +11,7 @@ import 'terminal_api.dart';
 import '../../core/widgets/markdown_style.dart';
 import '../../core/i18n/app_strings.dart';
 
-enum FileSort { name, size, modified }
+enum FileSort { name, size, modified, created }
 
 /// Folders first, then by [by]; [descending] flips the order within each.
 List<TerminalEntry> sortEntries(
@@ -25,6 +25,11 @@ List<TerminalEntry> sortEntries(
       FileSort.modified => (a.modified?.millisecondsSinceEpoch ?? 0).compareTo(
         b.modified?.millisecondsSinceEpoch ?? 0,
       ),
+      // Date added: files the terminal can't date go last, as on the web.
+      FileSort.created =>
+        a.created == null || b.created == null
+            ? (a.created == null ? 1 : 0) - (b.created == null ? 1 : 0)
+            : a.created!.compareTo(b.created!),
       FileSort.name => 0,
     };
     return r != 0 ? r : a.name.toLowerCase().compareTo(b.name.toLowerCase());
@@ -32,6 +37,10 @@ List<TerminalEntry> sortEntries(
 
   return [...entries]..sort((a, b) {
     if (a.isDir != b.isDir) return a.isDir ? -1 : 1;
+    // Undated files stay last in both directions.
+    if (by == FileSort.created && (a.created == null) != (b.created == null)) {
+      return a.created == null ? 1 : -1;
+    }
     final r = compare(a, b);
     return descending ? -r : r;
   });

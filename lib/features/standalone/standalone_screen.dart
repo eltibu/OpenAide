@@ -2,6 +2,7 @@
 /// in to on the phone, with chats kept on the phone.
 library;
 
+import '../../core/platform_caps.dart';
 import '../../core/widgets/search_field.dart';
 
 import 'dart:async';
@@ -478,17 +479,20 @@ class _StandaloneScreenState extends ConsumerState<StandaloneScreen> {
                 );
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.phone_android),
-              title: const T('Models on this phone'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const LocalModelsScreen()),
-                );
-              },
-            ),
+            if (PlatformCaps.localModels)
+              ListTile(
+                leading: const Icon(Icons.phone_android),
+                title: const T('Models on this phone'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const LocalModelsScreen(),
+                    ),
+                  );
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.dns_outlined),
               title: const T('Connect an Open WebUI server'),

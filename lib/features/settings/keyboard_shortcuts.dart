@@ -116,12 +116,7 @@ String chordOf(
     '}' => ']',
     _ => name,
   };
-  return [
-    if (ctrl) 'Cmd',
-    if (alt) 'Alt',
-    if (shift) 'Shift',
-    name,
-  ].join('+');
+  return [if (ctrl) 'Cmd', if (alt) 'Alt', if (shift) 'Shift', name].join('+');
 }
 
 /// The chord for a key going down right now.
@@ -183,9 +178,8 @@ class _KeyboardShortcutsState extends ConsumerState<KeyboardShortcutsScreen> {
       await ref.read(settingsApiProvider).patchUi(fields);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('$e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
       }
     }
     ref
@@ -226,8 +220,7 @@ class _KeyboardShortcutsState extends ConsumerState<KeyboardShortcutsScreen> {
         title: const T('Keyboard shortcuts'),
         actions: [
           TextButton(
-            onPressed: () =>
-                _save({'keybindings': Map.of(defaultKeybindings)}),
+            onPressed: () => _save({'keybindings': Map.of(defaultKeybindings)}),
             child: const T('Reset Defaults'),
           ),
         ],

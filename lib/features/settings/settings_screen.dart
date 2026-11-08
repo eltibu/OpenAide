@@ -14,6 +14,7 @@ import '../../core/theme.dart';
 import '../accounts/accounts_screen.dart';
 import '../chat/advanced_params.dart';
 import '../chat/chat_controller.dart';
+import '../../core/platform_caps.dart';
 import '../update/update_screen.dart';
 import 'audio_settings.dart';
 import 'account_extras.dart';
@@ -29,6 +30,7 @@ import 'terminal_connections.dart';
 import 'two_step_settings.dart';
 import 'usage_screen.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/store.dart';
 import 'language_settings.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
@@ -192,27 +194,33 @@ class SettingsScreen extends ConsumerWidget {
           ListTile(
             leading: const Icon(Icons.manage_accounts_outlined),
             title: const T('Accounts'),
-            subtitle: const T('Email and other services the app signs in to'),
+            subtitle: const T(
+              'Sign in with Google or Microsoft, and other email',
+            ),
             onTap: () => open(const AccountsScreen()),
           ),
-          ListTile(
-            leading: const Icon(Icons.phone_android),
-            title: const T('Phone and assistant'),
-            subtitle: const T('Default assistant, shortcuts, Share, app lock'),
-            onTap: () => open(const PhoneSettings()),
-          ),
+          if (PlatformCaps.phoneAssistant)
+            ListTile(
+              leading: const Icon(Icons.phone_android),
+              title: const T('Phone and assistant'),
+              subtitle: const T(
+                'Default assistant, shortcuts, Share, app lock',
+              ),
+              onTap: () => open(const PhoneSettings()),
+            ),
           ListTile(
             leading: const Icon(Icons.hub_outlined),
             title: const T('AI providers'),
-            subtitle: const T('OpenRouter, Claude and OpenAI'),
+            subtitle: const T('OpenRouter, Claude, OpenAI and GitHub Copilot'),
             onTap: () => open(const AiProvidersScreen()),
           ),
-          ListTile(
-            leading: const Icon(Icons.download_for_offline_outlined),
-            title: const T('Models on this phone'),
-            subtitle: const T('Download models that run offline'),
-            onTap: () => open(const LocalModelsScreen()),
-          ),
+          if (PlatformCaps.localModels)
+            ListTile(
+              leading: const Icon(Icons.download_for_offline_outlined),
+              title: const T('Models on this phone'),
+              subtitle: const T('Download models that run offline'),
+              onTap: () => open(const LocalModelsScreen()),
+            ),
           ListTile(
             leading: const Icon(Icons.handyman_outlined),
             title: const T('Tools and skills on this phone'),
@@ -268,11 +276,13 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const AboutScreen()),
           ),
           const Divider(),
-          ListTile(
-            leading: const Icon(Icons.system_update_outlined),
-            title: const T('App updates'),
-            onTap: () => open(const UpdateScreen()),
-          ),
+          // Play and the App Store (iPhone, iPad) update the app themselves.
+          if (!playBuild && !PlatformCaps.ios)
+            ListTile(
+              leading: const Icon(Icons.system_update_outlined),
+              title: const T('App updates'),
+              onTap: () => open(const UpdateScreen()),
+            ),
           ListTile(
             leading: const Icon(Icons.logout),
             title: const T('Sign out'),

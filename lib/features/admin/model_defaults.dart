@@ -9,7 +9,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../chat/advanced_params.dart';
-import '../chat/chat_controller.dart' show modelsProvider, serverConfigProvider;
+import '../chat/chat_controller.dart'
+    show modelsProvider, serverConfigProvider, toolsProvider;
+import '../chat/request_options.dart' show Pickable;
 import '../workspace/models_api.dart';
 import '../../core/i18n/app_strings.dart';
 import '../workspace/models_screen.dart'
@@ -43,8 +45,15 @@ Map<String, dynamic> withDefaults(
   Map<String, dynamic> config, {
   required Map<String, dynamic> capabilities,
   required Map<String, dynamic> params,
+  List<String>? toolIds,
 }) {
-  final meta = (config['DEFAULT_MODEL_METADATA'] as Map?) ?? const {};
+  final meta = {
+    ...?(config['DEFAULT_MODEL_METADATA'] as Map?)?.cast<String, dynamic>(),
+  };
+  // Open WebUI 0.13.1: tools every model without its own list starts with.
+  if (toolIds != null) {
+    toolIds.isEmpty ? meta.remove('toolIds') : meta['toolIds'] = toolIds;
+  }
   return {
     'DEFAULT_MODELS': config['DEFAULT_MODELS'],
     'DEFAULT_PINNED_MODELS': config['DEFAULT_PINNED_MODELS'],
@@ -69,6 +78,7 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
   Map<String, dynamic>? _config;
   Map<String, dynamic> _caps = {};
   Map<String, dynamic> _params = {};
+  List<String> _tools = [];
   List<Map<String, dynamic>>? _suggestions;
   Object? _i18n;
   Object? _error;
@@ -91,6 +101,12 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
         _params = {
           ...?(config['DEFAULT_MODEL_PARAMS'] as Map?)?.cast<String, dynamic>(),
         };
+        _tools = [
+          ...(((config['DEFAULT_MODEL_METADATA'] as Map?)?['toolIds']
+                      as List?) ??
+                  const [])
+              .whereType<String>(),
+        ];
         _suggestions = readSuggestions(server['default_prompt_suggestions']);
         _i18n = server['default_prompt_suggestions_i18n'];
       });
@@ -107,7 +123,12 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
       // Read again, so a change made elsewhere meanwhile isn't undone.
       final fresh = await api.config();
       await api.saveConfig(
-        withDefaults(fresh, capabilities: _caps, params: _params),
+        withDefaults(
+          fresh,
+          capabilities: _caps,
+          params: _params,
+          toolIds: _tools,
+        ),
       );
       await ref
           .read(clientProvider)
@@ -140,10 +161,7 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
   @override
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
-    final labels = {
-      'file_context': 'Uses attached files',
-      ...modelCapabilities,
-    };
+    final labels = {'file_context': 'Preload files', ...modelCapabilities};
     return Scaffold(
       appBar: AppBar(
         title: const T('Model Defaults'),
@@ -189,6 +207,32 @@ class _ModelDefaultsScreenState extends ConsumerState<ModelDefaultsScreen> {
                         value: _caps[c.key] == true,
                         onChanged: (on) =>
                             setState(() => _caps[c.key] = on == true),
+                      ),
+                  ],
+                ),
+                // Open WebUI 0.13.1: default tools for models.
+                ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  title: const T('Tools'),
+                  subtitle: Text(
+                    _tools.isEmpty ? tr('None') : '${_tools.length} on',
+                  ),
+                  children: [
+                    for (final t
+                        in ref.watch(toolsProvider).value ?? const <Pickable>[])
+                      CheckboxListTile(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: Text(t.name),
+                        subtitle: (t.description ?? '').isEmpty
+                            ? null
+                            : Text(t.description!, maxLines: 2),
+                        value: _tools.contains(t.id),
+                        onChanged: (on) => setState(
+                          () => on == true
+                              ? _tools.add(t.id)
+                              : _tools.remove(t.id),
+                        ),
                       ),
                   ],
                 ),

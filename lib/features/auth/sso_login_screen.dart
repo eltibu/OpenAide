@@ -67,6 +67,9 @@ class _SsoLoginScreenState extends State<SsoLoginScreen> {
       });
     } on PlatformException {
       cookie = null;
+    } on MissingPluginException {
+      // No cookie reader on this platform: the token alone signs in.
+      cookie = null;
     }
     if (mounted) {
       Navigator.pop(context, SsoResult(token: token, cookie: cookie));

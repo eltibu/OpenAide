@@ -19,8 +19,9 @@ import java.net.URL
 /**
  * Settings > Notifications > While the app is closed: about every 15
  * minutes Android lets this ask the server for chats with a new, unread
- * reply and channels with unread messages, and posts a notification for
- * each. Nothing is kept but the time of the last check and the sign-in
+ * reply, channels with unread messages and new inbox items (comments,
+ * mentions, failed automations, coming events), and posts a notification
+ * for each. Nothing is kept but the time of the last check and the sign-in
  * (sealed by [KeystoreBox]); the server stays the source of truth. Dart hands over the address and sign-in through
  * [configure] (see reply_notify.dart).
  */
@@ -150,6 +151,44 @@ class BackgroundCheck : JobService() {
             }
         } catch (_: Exception) {
             // Channels may be off on this server.
+        }
+        // Open WebUI 0.13 inbox: comments, replies and mentions on your
+        // things, failed automations and coming events, unseen and new since
+        // the last check. Channel news is counted above already.
+        try {
+            val inbox = org.json.JSONObject(
+                get(base, "/api/v1/notifications/inbox?limit=20", token, cookie),
+            ).optJSONArray("items") ?: JSONArray()
+            for (i in 0 until inbox.length()) {
+                val n = inbox.getJSONObject(i)
+                val event = text(n, "event_type")
+                if (event.startsWith("channel.") || !n.isNull("seen_at")) continue
+                // created_at is epoch nanoseconds, sent as text.
+                val created = (text(n, "created_at").toLongOrNull() ?: 0L) / 1_000_000_000L
+                if (created <= since) continue
+                val who = n.optJSONObject("actor")?.let { text(it, "name") } ?: ""
+                val label = when (event) {
+                    "comment.created" -> "$who commented"
+                    "comment.replied" -> "$who replied"
+                    "comment.mentioned" -> "$who mentioned you"
+                    "calendar.alert" -> "Upcoming event"
+                    "automation.run_failed" -> "Automation failed"
+                    "system.announcement" -> "Announcement"
+                    else -> "Notification"
+                }.trim()
+                val title = text(n, "title")
+                val preview = text(n, "preview")
+                    .replace(Regex("<@[A-Z]:[^|>]+\\|([^>]+)>"), "@$1")
+                post(
+                    ("inbox:" + text(n, "id")).hashCode(),
+                    label,
+                    listOf(title, preview).filter { it.isNotEmpty() }.joinToString("\n")
+                        .ifEmpty { "Open your inbox" },
+                    if (text(n, "resource_type") == "chat") text(n, "resource_id") else null,
+                )
+            }
+        } catch (_: Exception) {
+            // Servers before 0.13, or the inbox is off.
         }
         prefs.edit().putLong("since", now).apply()
     }

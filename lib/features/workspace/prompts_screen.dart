@@ -1,3 +1,5 @@
+import '../comments/comments.dart' show CommentsButton;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -43,6 +45,7 @@ Future<String?> resolvePrompt(
     prompt.content,
     userName: user?['name'] as String?,
     userEmail: user?['email'] as String?,
+    userRole: user?['role'] as String?,
     clipboard: clip,
   );
   final vars = inputVariables(text);
@@ -434,6 +437,8 @@ class _PromptEditorState extends ConsumerState<PromptEditor> {
     appBar: AppBar(
       title: Text(_p == null ? 'New prompt' : 'Edit prompt'),
       actions: [
+        if (_p != null)
+          CommentsButton(type: 'prompt', id: _p.id, title: _p.name),
         IconButton(
           tooltip: tr('Copy content'),
           icon: const Icon(Icons.copy),

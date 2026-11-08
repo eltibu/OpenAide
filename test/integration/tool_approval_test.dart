@@ -122,6 +122,14 @@ void main() {
       await settle();
       waiting = pendingCall(last());
       expect(waiting?.name, 'get_current_timestamp');
+      // Open WebUI 0.13 marks the chat in the list while it waits.
+      final version =
+          '${((await client.send('GET', '/api/version')) as Map)['version']}';
+      if (!version.startsWith('0.12.') && !version.startsWith('0.11.')) {
+        final id = container.read(chatControllerProvider).chat!.id;
+        final listed = (await client.chats()).firstWhere((c) => c.id == id);
+        expect(listed.waitingForApproval, isTrue);
+      }
       await controller.resolveTool(last(), waiting!.callId, 'approve');
       await settle();
       expect(pendingCall(last()), isNull);

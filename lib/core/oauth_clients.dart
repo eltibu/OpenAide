@@ -4,7 +4,11 @@
 library;
 
 /// GitHub OAuth App (Device Flow on), shared by Accounts and Copilot.
-const githubClientId = String.fromEnvironment('NEXUS_GITHUB_CLIENT_ID');
+/// OpenAide's own app unless a build names another.
+const githubClientId = _githubFromBuild == ''
+    ? 'Ov23liaLSTPoberudhyC'
+    : _githubFromBuild;
+const _githubFromBuild = String.fromEnvironment('NEXUS_GITHUB_CLIENT_ID');
 
 /// Microsoft Entra app (personal and work accounts, public client flows
 /// on), used with a device code for Outlook mail.

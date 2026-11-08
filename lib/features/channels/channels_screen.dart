@@ -21,6 +21,7 @@ import 'person_card.dart';
 import '../workspace/access_editor.dart' show editAccess;
 import '../settings/settings_screen.dart' show meProvider;
 import 'channels_api.dart';
+import '../chat/search_everywhere.dart' show SearchEverywhereScreen;
 import '../../core/widgets/markdown_style.dart';
 import '../../core/i18n/app_strings.dart';
 
@@ -920,6 +921,20 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
         actions: _isThread
             ? null
             : [
+                // Open WebUI 0.13.1: search this channel's messages.
+                IconButton(
+                  tooltip: tr('Search'),
+                  icon: const Icon(Icons.search),
+                  onPressed: () => Navigator.push(
+                    context,
+                    MaterialPageRoute<void>(
+                      builder: (_) => SearchEverywhereScreen(
+                        kind: 'message',
+                        scope: 'channel:$_id',
+                      ),
+                    ),
+                  ),
+                ),
                 IconButton(
                   tooltip: tr('Pinned messages'),
                   icon: const Icon(Icons.push_pin_outlined),
