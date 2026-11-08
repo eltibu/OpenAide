@@ -1438,7 +1438,8 @@ class _MessageActions extends ConsumerWidget {
               'Bad reply',
               () => rateReply(context, ref, message, -1),
             ),
-            RegenerateButton(reply: message, color: muted),
+            if (!controller.isAgentChat)
+              RegenerateButton(reply: message, color: muted),
             action(
               Icons.call_split,
               'Fork from here',

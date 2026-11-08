@@ -530,8 +530,28 @@ final adminConfigSections = <ConfigSection>[
     title: 'Chats',
     read: '/api/v1/chats/config',
     save: '/api/v1/chats/config',
+    // Open WebUI 0.13.1: the defaults and the embedding model in use are
+    // shown by the server but not saved.
+    exclude: {
+      'DEFAULT_TOOL_PERMISSIONS_AUTO_PROMPT',
+      'DEFAULT_TOOL_SEARCH_DECISIONS_PROMPT',
+      'TOOL_SEARCH_EMBEDDING_MODEL',
+    },
+    choices: {
+      'TOOL_SEARCH_ENGINE': ['bm25', 'embeddings', 'decisions'],
+      'TOOL_PERMISSIONS_AUTO_ENGINE': ['', 'decisions'],
+    },
+    engines: {
+      'TOOL_SEARCH_ENGINE': {
+        'decisions': ['TOOL_SEARCH_DECISIONS_'],
+      },
+      'TOOL_PERMISSIONS_AUTO_ENGINE': {
+        'decisions': ['TOOL_PERMISSIONS_AUTO_DECISIONS_'],
+      },
+    },
     help:
-        'Context compaction (/compact), asking before tools run, and tool '
+        'Context compaction (/compact), asking before tools run (Ask, Full '
+        'access, or Auto with a review model), tool call labels, and tool '
         'search.',
   ),
   const ConfigSection(

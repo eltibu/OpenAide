@@ -1,5 +1,7 @@
 /// A folder's settings, as the web's Edit Folder window: its name, a system
-/// prompt and knowledge every chat in it uses. The server applies them.
+/// prompt and knowledge every chat in it uses, and (Open WebUI 0.13.1) the
+/// terminal and working folder new chats in it start with. The server
+/// applies them.
 library;
 
 import 'package:flutter/material.dart';
@@ -7,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../workspace/knowledge_screen.dart' show knowledgeListProvider;
+import '../terminal/terminal_screen.dart' show chatTerminalsProvider;
 import 'chat_controller.dart';
 import '../../core/i18n/app_strings.dart';
 
@@ -29,6 +32,8 @@ class _FolderSettings extends ConsumerStatefulWidget {
 class _FolderSettingsState extends ConsumerState<_FolderSettings> {
   final _name = TextEditingController();
   final _system = TextEditingController();
+  final _directory = TextEditingController();
+  String _terminal = '';
   Map<String, dynamic> _data = {};
   List<Map<String, dynamic>> _files = [];
   bool _loading = true;
@@ -45,6 +50,7 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
   void dispose() {
     _name.dispose();
     _system.dispose();
+    _directory.dispose();
     super.dispose();
   }
 
@@ -59,6 +65,8 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
       _name.text = '${f['name'] ?? ''}';
       _data = ((f['data'] as Map?) ?? const {}).cast<String, dynamic>();
       _system.text = '${_data['system_prompt'] ?? ''}';
+      _terminal = '${_data['terminal_id'] ?? ''}';
+      _directory.text = '${_data['working_directory'] ?? ''}';
       _files = [
         for (final x in (_data['files'] as List? ?? const []).whereType<Map>())
           x.cast<String, dynamic>(),
@@ -86,6 +94,11 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
                 ..._data,
                 'system_prompt': _system.text.trim(),
                 'files': _files,
+                'terminal_id': _terminal.isEmpty ? null : _terminal,
+                'working_directory':
+                    _terminal.isEmpty || _directory.text.trim().isEmpty
+                    ? null
+                    : _directory.text.trim(),
               },
             },
           );
@@ -99,6 +112,42 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
         });
       }
     }
+  }
+
+  /// Advanced (Open WebUI 0.13.1): the terminal and working folder new
+  /// chats in this folder start with.
+  List<Widget> _terminalSettings(ThemeData theme) {
+    final terminals = ref.watch(chatTerminalsProvider).value ?? const [];
+    if (terminals.isEmpty && _terminal.isEmpty) return const [];
+    return [
+      const SizedBox(height: 16),
+      T('Default terminal', style: theme.textTheme.titleSmall),
+      const SizedBox(height: 6),
+      DropdownButtonFormField<String>(
+        initialValue: _terminal,
+        isExpanded: true,
+        decoration: const InputDecoration(border: OutlineInputBorder()),
+        items: [
+          DropdownMenuItem(value: '', child: T('None')),
+          for (final t in terminals)
+            DropdownMenuItem(value: t.id, child: Text(t.name)),
+          if (_terminal.isNotEmpty && !terminals.any((t) => t.id == _terminal))
+            DropdownMenuItem(value: _terminal, child: Text(_terminal)),
+        ],
+        onChanged: (v) => setState(() => _terminal = v ?? ''),
+      ),
+      if (_terminal.isNotEmpty) ...[
+        const SizedBox(height: 12),
+        TextField(
+          controller: _directory,
+          decoration: InputDecoration(
+            labelText: tr('Working directory'),
+            hintText: '/home/user/project',
+            border: const OutlineInputBorder(),
+          ),
+        ),
+      ],
+    ];
   }
 
   @override
@@ -175,6 +224,7 @@ class _FolderSettingsState extends ConsumerState<_FolderSettings> {
                         }
                       }),
                     ),
+                  ..._terminalSettings(theme),
                   if (_error != null)
                     Text(
                       _error!,

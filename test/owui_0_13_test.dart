@@ -51,7 +51,8 @@ void main() {
           'chat': {'side_chat': true, 'temporary': false},
         },
       }),
-      isFalse,
+      // Open WebUI 0.13.1 dropped the need for Temporary Chat.
+      isTrue,
     );
     expect(sideChatAllowed({'role': 'pending'}), isFalse);
   });

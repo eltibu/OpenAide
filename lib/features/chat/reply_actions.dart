@@ -318,7 +318,7 @@ class ReplyMoreButton extends ConsumerWidget {
         }
       },
       itemBuilder: (_) => [
-        if (isLast)
+        if (isLast && !ref.read(chatControllerProvider.notifier).isAgentChat)
           const PopupMenuItem(
             value: 'continue',
             child: ListTile(

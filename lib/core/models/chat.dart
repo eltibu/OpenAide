@@ -98,7 +98,8 @@ class ChatMessage {
     };
     return [
       for (final item in output.whereType<Map>())
-        if (item['type'] == 'function_call')
+        // Hidden ones are the server's own context (Open WebUI 0.13.1).
+        if (item['type'] == 'function_call' && item['hidden'] != true)
           ToolCall(
             name: '${item['name']}',
             arguments: '${item['arguments'] ?? ''}',

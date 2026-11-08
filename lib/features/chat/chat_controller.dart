@@ -48,6 +48,15 @@ final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
       .watch(providerModelsProvider.future)
       .timeout(const Duration(seconds: 12))
       .catchError((_) => const <ModelInfo>[]);
+  final terminal = ref.watch(
+    chatControllerProvider.select((s) => s.terminalId),
+  );
+  final agents = terminal == null || terminal.isEmpty
+      ? Future.value(const <ModelInfo>[])
+      : ref
+            .watch(agentModelsProvider(terminal).future)
+            .timeout(const Duration(seconds: 12))
+            .catchError((_) => const <ModelInfo>[]);
   final server = await ref.watch(clientProvider).models();
   final mine = await direct;
   final ids = {for (final m in mine) m.id};
@@ -56,6 +65,20 @@ final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
       if (!ids.contains(m.id)) m,
     ...mine,
     ...await providers,
+    ...await agents,
+  ];
+});
+
+/// The coding agents (Claude Code, Codex, Pi...) a terminal offers as
+/// models (Open WebUI 0.13.1), for the chat that has that terminal picked.
+final agentModelsProvider = FutureProvider.family<List<ModelInfo>, String>((
+  ref,
+  terminalId,
+) async {
+  final all = await ref.watch(clientProvider).models(terminalId: terminalId);
+  return [
+    for (final m in all)
+      if (m.isAgent) m,
   ];
 });
 
@@ -459,7 +482,9 @@ class ChatController extends Notifier<ChatState> {
     state = state.copyWith(
       modelId: id,
       toolIds: tools,
-      terminalId: tid is String && terminals.any((t) => t.id == tid)
+      terminalId: next?.agent != null
+          ? next!.terminalId
+          : tid is String && terminals.any((t) => t.id == tid)
           ? tid
           : null,
     );
@@ -906,7 +931,29 @@ class ChatController extends Notifier<ChatState> {
   /// edited version of that message: a new branch next to it, as on the web.
   /// The composer's photos and files go with it; an edit keeps the
   /// original's. Returns false if nothing was sent.
+  /// Whether the chat talks to a coding agent (Open WebUI 0.13.1): one
+  /// agent per chat, and its replies can't be regenerated, continued, or
+  /// edited and resent.
+  bool get isAgentChat {
+    bool agent(String? id) =>
+        id != null &&
+        (id.startsWith('agent:') ||
+            (ref.read(modelsProvider).value ?? const []).any(
+              (m) => m.id == id && m.isAgent,
+            ));
+    return agent(state.modelId) ||
+        (state.chat?.messages.values.any((m) => agent(m.model)) ?? false);
+  }
+
+  static const agentLimit =
+      "Coding agent chats can't be regenerated, continued, or edited and "
+      'resent. Start a new chat instead.';
+
   Future<bool> send(String text, {ChatMessage? editOf}) async {
+    if (editOf != null && isAgentChat) {
+      state = state.copyWith(error: agentLimit);
+      return false;
+    }
     // A model picked with "@" answers this one message, as on the web.
     // Since 0.12.5 it also switches the chat to that model.
     final at = ref.read(atModelProvider);
@@ -1278,6 +1325,10 @@ class ChatController extends Notifier<ChatState> {
   /// for a different answer than the old one, as the web's regenerate menu
   /// does.
   Future<void> regenerate(ChatMessage reply, {String? hint}) async {
+    if (isAgentChat) {
+      state = state.copyWith(error: agentLimit);
+      return;
+    }
     final chat = state.chat;
     final modelId = state.modelId;
     final user = chat?.messages[reply.parentId];
@@ -1309,6 +1360,10 @@ class ChatController extends Notifier<ChatState> {
   /// Has the model keep writing [reply] where it stopped (Continue
   /// Response).
   Future<void> continueReply(ChatMessage reply) async {
+    if (isAgentChat) {
+      state = state.copyWith(error: agentLimit);
+      return;
+    }
     final chat = state.chat;
     final modelId = reply.model ?? state.modelId;
     final user = chat?.messages[reply.parentId];
@@ -1912,7 +1967,11 @@ class ChatController extends Notifier<ChatState> {
         if (data['type'] == 'response.output_item.added' &&
             item is Map &&
             item['type'] == 'function_call') {
-          state = state.copyWith(status: 'Using ${item['name']}…');
+          // Hidden context (memories, skills, knowledge) isn't shown.
+          if (item['hidden'] == true) return;
+          state = state.copyWith(
+            status: toolCallLabels(item).running ?? 'Using ${item['name']}…',
+          );
           return;
         }
       case 'chat:completion' when data is Map:

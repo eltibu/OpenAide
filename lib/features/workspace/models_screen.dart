@@ -331,6 +331,11 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
     if (mounted) setState(() => _loading = false);
   }
 
+  /// "Preload files" as the web reads it (Open WebUI 0.13.1): unset means
+  /// on only with legacy function calling.
+  bool get _preloadFiles =>
+      _caps['file_context'] as bool? ?? _params['function_calling'] == 'legacy';
+
   /// The web's Built-in Tools: which of them this model may use, and
   /// (Open WebUI 0.13) the models its sub-agents may run on.
   Widget _builtinTools() {
@@ -341,8 +346,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
       for (final (key, label, feature) in builtinToolList)
         if ((feature == null || features[feature] == true) &&
             (key == 'files'
-                ? _caps['file_upload'] != false &&
-                      _caps['file_context'] == false
+                ? _caps['file_upload'] != false && !_preloadFiles
                 : _caps[key] != false))
           (key, label),
     ];
@@ -1036,12 +1040,28 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                     style: TextStyle(color: context.nexus.muted),
                   ),
                 ),
-                for (final c in modelCapabilities.entries)
+                for (final c in modelCapabilities.entries) ...[
                   SwitchListTile(
                     title: Text(c.value),
                     value: _caps[c.key] == true,
                     onChanged: (on) => setState(() => _caps[c.key] = on),
                   ),
+                  // Open WebUI 0.13.1: attached files are no longer put in
+                  // the conversation unless this is on (off by default with
+                  // native function calling, on with legacy), so a model
+                  // without tools needs it to see files.
+                  if (c.key == 'file_upload' && _caps['file_upload'] == true)
+                    SwitchListTile(
+                      title: const T('Preload files'),
+                      subtitle: const T(
+                        'Put attached files in the conversation, instead of '
+                        'the model reading them with its file tools.',
+                      ),
+                      value: _preloadFiles,
+                      onChanged: (on) =>
+                          setState(() => _caps['file_context'] = on),
+                    ),
+                ],
                 if (_caps['builtin_tools'] == true) _builtinTools(),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),

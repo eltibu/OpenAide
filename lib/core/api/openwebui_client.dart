@@ -336,8 +336,19 @@ class OpenWebUiClient {
 
   // ---- Models ----
 
-  Future<List<ModelInfo>> models() async {
-    final res = await _send('GET', '/api/models');
+  /// With [terminalId] (Open WebUI 0.13.1), the list also has the coding
+  /// agents that terminal offers, as `agent:` models.
+  Future<List<ModelInfo>> models({String? terminalId, String? chatId}) async {
+    final res = await _send(
+      'GET',
+      '/api/models',
+      query: {
+        if (terminalId != null && terminalId.isNotEmpty)
+          'terminal_id': terminalId,
+        if (terminalId != null && chatId != null && chatId.isNotEmpty)
+          'chat_id': chatId,
+      },
+    );
     final list = res is Map ? res['data'] as List? ?? [] : res as List;
     return [
       for (final m in list.whereType<Map>())
@@ -365,6 +376,47 @@ class OpenWebUiClient {
     final body = draft.toServerBody()..remove('id');
     final res = await _send('POST', '/api/v1/chats/new', body: {'chat': body});
     return Chat.fromServer((res as Map).cast<String, dynamic>());
+  }
+
+  /// Saves a side chat (Open WebUI 0.13.1) as its own chat, with the chat
+  /// so far as its start and a link back to where it branched off, as the
+  /// web does. Returns its id.
+  Future<String> createSideChat({
+    required String title,
+    required String? model,
+    required String system,
+    required Map<String, dynamic> history,
+    required List<Map<String, dynamic>> messages,
+    String? originalChatId,
+    String? branchPointMessageId,
+    String? folderId,
+  }) async {
+    final res = await _send(
+      'POST',
+      '/api/v1/chats/new',
+      body: {
+        'chat': {
+          'title': title.trim().isEmpty ? 'New Chat' : title.trim(),
+          'originalChatId': ?originalChatId,
+          if (originalChatId != null)
+            'branchPointMessageId': branchPointMessageId,
+          'models': [?model],
+          'params': {'system': system},
+          'history': history,
+          'messages': messages,
+          'files': [
+            for (final m in messages) ...((m['files'] as List?) ?? const []),
+          ],
+          'tags': <String>[],
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        },
+        'folder_id': ?folderId,
+      },
+    );
+    if (res is! Map || res['id'] is! String) {
+      throw ApiException(500, _notOpenWebUi);
+    }
+    return res['id'] as String;
   }
 
   Future<void> saveChat(Chat chat) => _send(
