@@ -14,6 +14,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:video_player/video_player.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/mic.dart';
 import '../studio/listen.dart';
 import 'chat_controller.dart';
 import 'speech_prefs.dart';
@@ -21,8 +22,7 @@ import '../../core/i18n/app_strings.dart';
 
 /// The whole recording, kept in memory until it is sent.
 class VoiceNoteRecorder {
-  static const _method = MethodChannel('nexus/voice');
-  static const _events = EventChannel('nexus/voice/events');
+  final _mic = Mic();
 
   final _pcm = BytesBuilder(copy: false);
   StreamSubscription<dynamic>? _sub;
@@ -35,21 +35,19 @@ class VoiceNoteRecorder {
 
   /// "started", "denied" or a problem.
   Future<String> start() async {
-    _sub = _events.receiveBroadcastStream().listen((e) {
+    _sub = _mic.events.listen((e) {
       if (e is! Map || e['type'] != 'input') return;
       final frame = e['pcm'] as Uint8List;
       _pcm.add(frame);
       _samples += frame.length ~/ 2;
       level.add(frameLevel(frame));
     });
-    final status =
-        await _method.invokeMethod<String>('start', {'record': true}) ??
-        'The microphone could not be started';
+    final status = await _mic.start(record: true);
     if (status != 'started') {
       await _sub?.cancel();
       return status;
     }
-    await _method.invokeMethod('capture', {'enabled': true});
+    await _mic.capture(true);
     return status;
   }
 
@@ -66,7 +64,7 @@ class VoiceNoteRecorder {
 
   Future<void> _close() async {
     try {
-      await _method.invokeMethod('stop');
+      await _mic.stop();
     } catch (_) {}
     await _sub?.cancel();
     _sub = null;

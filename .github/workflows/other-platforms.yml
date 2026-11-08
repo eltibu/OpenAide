@@ -1,0 +1,193 @@
+name: Windows, Linux, Mac, iPhone and iPad
+
+# Builds OpenAide for every platform other than Android, on GitHub's own
+# servers (free for this public repo), never on Joel's PC. It only runs when
+# someone starts it: the Run workflow button on the Actions tab, or a push
+# whose commit message contains [build other platforms].
+#
+# Windows, Linux and Mac builds can be attached to an existing release (the
+# Android one with the same version), where the app's update check finds
+# them. iPhone/iPad and Mac builds are unsigned: shipping those to people
+# needs an Apple Developer account (App Store / TestFlight / notarizing).
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Attach the builds to this existing release (e.g. v0.1.272). Empty = just test builds.
+        type: string
+        default: ''
+  push:
+    branches-ignore: [Main-Repository]
+
+concurrency:
+  group: other-platforms-${{ github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  # Sign-in registrations, as in build.yml. Empty keeps that sign-in hidden.
+  NEXUS_GITHUB_CLIENT_ID: ${{ vars.NEXUS_GITHUB_CLIENT_ID }}
+  NEXUS_MICROSOFT_CLIENT_ID: ${{ vars.NEXUS_MICROSOFT_CLIENT_ID }}
+  NEXUS_GOOGLE_CLIENT_ID: ${{ vars.NEXUS_GOOGLE_CLIENT_ID }}
+  NEXUS_GOOGLE_CLIENT_SECRET: ${{ vars.NEXUS_GOOGLE_CLIENT_SECRET || secrets.NEXUS_GOOGLE_CLIENT_SECRET }}
+
+jobs:
+  version:
+    # A plain push builds nothing unless its message asks for it.
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build other platforms]') }}
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.v.outputs.build }}
+      tag: ${{ steps.v.outputs.tag }}
+    steps:
+      - id: v
+        env:
+          TAG: ${{ inputs.release_tag }}
+        run: |
+          if [ -n "$TAG" ]; then
+            BUILD="${TAG#v0.1.}"
+            case "$BUILD" in (*[!0-9]*|'') echo "::error::Release tags look like v0.1.272, not $TAG"; exit 1;; esac
+          else
+            # Test builds: a number above every release, so they never
+            # look older than the version installed.
+            BUILD=$((90000 + ${{ github.run_number }}))
+          fi
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  linux:
+    needs: version
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      # Pinned to a commit (v2.23.0), as in build.yml.
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build libgtk-3-dev libsecret-1-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libpulse-dev
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
+      - name: Build
+        run: |
+          flutter build linux --release \
+            --build-name=0.1.${{ needs.version.outputs.build }} \
+            --build-number=${{ needs.version.outputs.build }} \
+            --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID" \
+            --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET"
+          NAME="OpenAide-linux-x64-0.1.${{ needs.version.outputs.build }}"
+          mv build/linux/x64/release/bundle "$NAME"
+          tar czf "$NAME.tar.gz" "$NAME"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: OpenAide-linux-*.tar.gz
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build
+        shell: bash
+        run: |
+          flutter build windows --release \
+            --build-name=0.1.${{ needs.version.outputs.build }} \
+            --build-number=${{ needs.version.outputs.build }} \
+            --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID" \
+            --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET"
+      - name: Zip
+        shell: pwsh
+        run: |
+          $name = "OpenAide-windows-x64-0.1.${{ needs.version.outputs.build }}"
+          Rename-Item build/windows/x64/runner/Release $name
+          Compress-Archive -Path "build/windows/x64/runner/$name" -DestinationPath "$name.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: OpenAide-windows-*.zip
+
+  apple:
+    needs: version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Build for Mac
+        run: |
+          flutter build macos --release \
+            --build-name=0.1.${{ needs.version.outputs.build }} \
+            --build-number=${{ needs.version.outputs.build }} \
+            --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID" \
+            --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET"
+          NAME="OpenAide-macos-0.1.${{ needs.version.outputs.build }}"
+          ditto -c -k --keepParent build/macos/Build/Products/Release/OpenAide.app "$NAME.zip"
+      # Unsigned: proves it builds. Putting it on an iPhone or iPad needs
+      # signing with an Apple Developer account.
+      - name: Build for iPhone and iPad (unsigned)
+        run: |
+          flutter build ios --release --no-codesign \
+            --build-name=0.1.${{ needs.version.outputs.build }} \
+            --build-number=${{ needs.version.outputs.build }} \
+            --dart-define=NEXUS_GITHUB_CLIENT_ID="$NEXUS_GITHUB_CLIENT_ID" \
+            --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
+            --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: OpenAide-macos-*.zip
+
+  # The Android app with this branch's new plugins, built on GitHub's
+  # servers so a broken Android build shows up here first, not on Joel's PC.
+  # Not signed and not published anywhere.
+  android-check:
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter build apk --debug
+
+  attach:
+    needs: [version, linux, windows, apple]
+    if: ${{ needs.version.outputs.tag != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: gh release upload "$TAG" out/* --clobber --repo "${{ github.repository }}"

@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../../core/platform_caps.dart';
 
 /// Where CI publishes builds: a pre-release per dev build, and a normal
 /// release per public (stable) build.
@@ -18,6 +21,21 @@ const _kChannel = 'update_channel';
 bool isAppAsset(String? name) =>
     name == 'nexus-assistant.apk' ||
     RegExp(r'^OpenAide[-\w.]*\.apk$').hasMatch(name ?? '');
+
+/// The download for a computer in a release: `OpenAide-windows-...`,
+/// `OpenAide-linux-...` or `OpenAide-macos-...`.
+bool Function(String?) desktopAsset(String platform) =>
+    (name) =>
+        RegExp('^OpenAide-$platform[-\\w.]*\\.(zip|tar\\.gz|dmg|exe|msix)\$')
+            .hasMatch(name ?? '');
+
+/// Which release file this device installs from.
+bool Function(String?) get assetForThisDevice {
+  if (PlatformCaps.windows) return desktopAsset('windows');
+  if (PlatformCaps.linux) return desktopAsset('linux');
+  if (PlatformCaps.macos) return desktopAsset('macos');
+  return isAppAsset;
+}
 
 /// Read-only token baked in at build time from the repo secret
 /// NEXUS_UPDATE_TOKEN while the repo is private, so updates work without
@@ -37,10 +55,14 @@ class AvailableUpdate {
     required this.build,
     required this.assetApiUrl,
     required this.notes,
+    this.pageUrl,
   });
   final int build;
   final String assetApiUrl;
   final String notes;
+
+  /// The release's page on GitHub, where computers download it.
+  final String? pageUrl;
 }
 
 sealed class UpdateState {
@@ -90,6 +112,7 @@ int? buildFromTag(String? tag) {
 AvailableUpdate? newestRelease(
   List<dynamic> releases, {
   bool includeDev = true,
+  bool Function(String?) isAsset = isAppAsset,
 }) {
   AvailableUpdate? best;
   for (final r in releases.whereType<Map>()) {
@@ -98,7 +121,7 @@ AvailableUpdate? newestRelease(
     final build = buildFromTag(r['tag_name'] as String?);
     final asset = (r['assets'] as List? ?? [])
         .whereType<Map>()
-        .where((a) => isAppAsset(a['name'] as String?))
+        .where((a) => isAsset(a['name'] as String?))
         .firstOrNull;
     if (build == null || asset == null) continue;
     if (best == null || build > best.build) {
@@ -106,6 +129,7 @@ AvailableUpdate? newestRelease(
         build: build,
         assetApiUrl: asset['url'] as String,
         notes: (r['body'] as String? ?? '').trim(),
+        pageUrl: r['html_url'] as String?,
       );
     }
   }
@@ -224,6 +248,7 @@ class Updater extends Notifier<UpdateState> {
       final newest = newestRelease(
         body is List ? body : [body],
         includeDev: channel == UpdateChannel.dev,
+        isAsset: assetForThisDevice,
       );
       if (newest == null || newest.build <= current) {
         state = UpToDate(current);
@@ -239,6 +264,14 @@ class Updater extends Notifier<UpdateState> {
 
   /// Downloads [update] and opens Android's installer.
   Future<void> install(AvailableUpdate update) async {
+    // Computers download the new version from its release page.
+    if (!PlatformCaps.selfInstallUpdates) {
+      final page = update.pageUrl;
+      if (page != null) {
+        await launchUrl(Uri.parse(page), mode: LaunchMode.externalApplication);
+      }
+      return;
+    }
     final token = await this.token();
     state = const UpdateDownloading(null);
     final client = http.Client();

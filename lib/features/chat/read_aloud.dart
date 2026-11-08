@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/speech_out.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/phone_voice.dart';
@@ -88,7 +89,7 @@ class ReadAloud {
     this.rate = rate;
   }
 
-  static const _channel = MethodChannel('nexus/speech');
+  final _out = SpeechOut();
 
   final _queue = <String>[];
   int _gen = 0;
@@ -118,7 +119,7 @@ class ReadAloud {
     _running = false;
     speaking.value = false;
     try {
-      await _channel.invokeMethod('stop');
+      await _out.stop();
     } on MissingPluginException {
       // Not on a phone.
     }
@@ -197,16 +198,13 @@ class ReadAloud {
         next = _queue.isEmpty ? null : fetch(_take());
         if (audio.isNotEmpty) {
           saying.value = text;
-          dir ??= await _channel.invokeMethod<String>('dir');
+          dir ??= await _out.dir();
           final wav =
               audio.length > 4 && String.fromCharCodes(audio.take(4)) == 'RIFF';
           final file = File('$dir/piece${_piece++ % 3}.${wav ? 'wav' : 'mp3'}');
           await file.writeAsBytes(audio, flush: true);
           if (gen != _gen) return;
-          await _channel.invokeMethod('play', {
-            'path': file.path,
-            'rate': rate,
-          });
+          await _out.play(file.path, rate: rate);
         }
         if (next == null && _queue.isNotEmpty && gen == _gen) {
           next = fetch(_take());
