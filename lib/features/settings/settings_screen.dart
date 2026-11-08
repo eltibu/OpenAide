@@ -30,6 +30,7 @@ import 'terminal_connections.dart';
 import 'two_step_settings.dart';
 import 'usage_screen.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/store.dart';
 import 'language_settings.dart';
 
 final settingsApiProvider = Provider<SettingsApi>(
@@ -275,8 +276,8 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => open(const AboutScreen()),
           ),
           const Divider(),
-          // iPhone and iPad update from the App Store.
-          if (!PlatformCaps.ios)
+          // Play and the App Store (iPhone, iPad) update the app themselves.
+          if (!playBuild && !PlatformCaps.ios)
             ListTile(
               leading: const Icon(Icons.system_update_outlined),
               title: const T('App updates'),

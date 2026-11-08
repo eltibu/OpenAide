@@ -19,6 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/copilot.dart' show DeviceCode;
 import '../../core/oauth_clients.dart';
+import '../../core/store.dart';
 
 enum MailSignIn {
   google('google', 'Google'),
@@ -256,7 +257,7 @@ class GoogleSignIn {
         'border-radius:2rem;background:#0d6e66;color:#fff;'
         'text-decoration:none}</style></head><body><h1>$title</h1>'
         '<p>$body</p><a href="intent://#Intent;'
-        'package=com.nexus.nexus_assistant;end">Back to OpenAide</a>'
+        'package=$appPackage;end">Back to OpenAide</a>'
         '</body></html>';
   }
 }

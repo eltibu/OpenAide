@@ -1,9 +1,11 @@
 name: Windows, Linux, Mac, iPhone and iPad
 
-# Builds OpenAide for every platform other than Android, on GitHub's own
-# servers (free for this public repo), never on Joel's PC. It only runs when
-# someone starts it: the Run workflow button on the Actions tab, or a push
-# whose commit message contains [build other platforms].
+# Builds OpenAide for every platform other than Android. Linux builds on
+# Joel's PC (the same runner as build.yml); Windows, Mac and iPhone/iPad
+# need those systems, so they use GitHub's servers, kept to as few runs as
+# possible. It only runs when someone starts it: the Run workflow button on
+# the Actions tab, or a push whose commit message contains
+# [build other platforms]. The Android app is checked by build.yml.
 #
 # Windows, Linux and Mac builds can be attached to an existing release (the
 # Android one with the same version), where the app's update check finds
@@ -34,7 +36,7 @@ jobs:
   version:
     # A plain push builds nothing unless its message asks for it.
     if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[build other platforms]') }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nexus-build]
     outputs:
       build: ${{ steps.v.outputs.build }}
       tag: ${{ steps.v.outputs.tag }}
@@ -56,7 +58,8 @@ jobs:
 
   linux:
     needs: version
-    runs-on: ubuntu-22.04
+    # Joel's PC (WSL Ubuntu), one job at a time like the Android builds.
+    runs-on: [self-hosted, nexus-build]
     steps:
       - uses: actions/checkout@v4
       # Pinned to a commit (v2.23.0), as in build.yml.
@@ -64,13 +67,20 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q ninja-build libgtk-3-dev libsecret-1-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libpulse-dev
+      # Installed once on the PC by hand (the runner has no sudo):
+      # sudo apt-get install ninja-build libgtk-3-dev libsecret-1-dev
+      #   libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libpulse-dev
+      - name: Check the Linux build tools
+        run: |
+          for p in gtk+-3.0 libsecret-1 gstreamer-1.0 gstreamer-app-1.0 gstreamer-audio-1.0 libpulse; do
+            pkg-config --exists "$p" || MISSING="$MISSING $p"
+          done
+          command -v ninja >/dev/null || MISSING="$MISSING ninja"
+          if [ -n "$MISSING" ]; then
+            echo "::error::Missing on this PC:$MISSING. Install: sudo apt-get install ninja-build libgtk-3-dev libsecret-1-dev libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libpulse-dev"
+            exit 1
+          fi
       - run: flutter pub get
-      - run: flutter analyze
-      - run: flutter test
       - name: Build
         run: |
           flutter build linux --release \
@@ -156,29 +166,11 @@ jobs:
           name: macos
           path: OpenAide-macos-*.zip
 
-  # The Android app with this branch's new plugins, built on GitHub's
-  # servers so a broken Android build shows up here first, not on Joel's PC.
-  # Not signed and not published anywhere.
-  android-check:
-    needs: version
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
-        with:
-          channel: stable
-          cache: true
-      - run: flutter pub get
-      - run: flutter build apk --debug
 
   attach:
     needs: [version, linux, windows, apple]
     if: ${{ needs.version.outputs.tag != '' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, nexus-build]
     permissions:
       contents: write
     steps:

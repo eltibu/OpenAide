@@ -13,6 +13,7 @@ import 'phone_actions.dart';
 import 'phone_launch.dart';
 import 'wake_phrase.dart';
 import '../../core/i18n/app_strings.dart';
+import '../../core/store.dart';
 
 class PhoneSettings extends ConsumerStatefulWidget {
   const PhoneSettings({super.key});
@@ -151,7 +152,8 @@ class _PhoneSettingsState extends ConsumerState<PhoneSettings>
               _set({assistantOpensKey: 'panel'});
             },
           ),
-          const WakePhraseTile(),
+          // The Play build has no microphone service, so no wake phrase.
+          if (!playBuild) const WakePhraseTile(),
           title('Shortcuts'),
           ListTile(
             leading: const Icon(Icons.dashboard_customize_outlined),
