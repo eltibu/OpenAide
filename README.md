@@ -5,18 +5,22 @@
 <p align="center">
   <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/eltibu/Nexus-assistant?label=download&color=7c4dff" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/Android-9%2B-3ddc84?logo=android&logoColor=white" alt="Android 9+">
+  <img src="https://img.shields.io/badge/also%20on-iPhone%20%C2%B7%20iPad%20%C2%B7%20Windows%20%C2%B7%20Mac%20%C2%B7%20Linux-555" alt="Also on iPhone, iPad, Windows, Mac and Linux">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
   <a href="https://github.com/open-webui/open-webui"><img src="https://img.shields.io/badge/works%20with-Open%20WebUI%200.13.2-black" alt="Works with Open WebUI 0.13.2"></a>
 </p>
 
 <p align="center">
   <b><a href="../../releases/latest">Download the latest APK</a></b> ·
+  <a href="#other-devices">iPhone, iPad, Windows, Mac, Linux</a> ·
   <a href="#install">Install guide</a> ·
   <a href="#getting-started">Getting started</a> ·
   <a href="#features">Features</a>
 </p>
 
 **OpenAide** is a free, open-source AI assistant for Android. Connect it to your own [Open WebUI](https://github.com/open-webui/open-webui) server for full feature parity with the web UI, or use it on its own with an AI provider (OpenRouter, Claude, OpenAI) or a model that runs entirely on your phone. It can even replace the default Android assistant.
+
+**New:** OpenAide now also runs on **iPhone, iPad, Windows, Mac and Linux**, all syncing with the same server. See [Other devices](#other-devices).
 
 > **Status:** early (0.1.x). New versions come out often, and some screens are still rough. Bug reports are very welcome.
 
@@ -81,6 +85,19 @@ OpenAide isn't on Google Play yet, so you install it straight from GitHub. It ta
 5. **Open OpenAide.**
 
 Needs Android 9 or newer.
+
+### Other devices
+
+Every release also has downloads for computers, iPhones and iPads. They sync with the same Open WebUI server as the phone. What works where is in [PLATFORMS.md](PLATFORMS.md).
+
+| Device | Download (under **Assets** on the [latest release](../../releases/latest)) | How to install |
+|---|---|---|
+| **iPhone / iPad** (iOS 15+) | `OpenAide-ios-<version>.ipa` | Free with [SideStore](https://sidestore.io) or [AltStore](https://altstore.io) and your own Apple ID. Add the source `https://github.com/eltibu/OpenAide/releases/latest/download/altstore.json` to get updates. A free Apple ID needs a refresh every 7 days. |
+| **Mac** | `OpenAide-macos-<version>.zip` | Unzip, drag to Applications, open once, then **System Settings → Privacy & Security → Open Anyway**. |
+| **Windows** 10/11 (64-bit) | `OpenAide-windows-x64-<version>.zip` | Unzip anywhere and run `openaide.exe`. |
+| **Linux** (64-bit) | `OpenAide-linux-x64-<version>.tar.gz` | Unpack and run `openaide`. Needs a desktop keyring (GNOME Keyring or KWallet) for sign-ins. |
+
+On computers, sign in with email and password or an API key (browser SSO is coming to Windows and Linux). The default-assistant features and models on the device are Android only for now.
 
 ## Getting started
 
