@@ -186,7 +186,8 @@ class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
   }
 
   Future<void> _set(bool on, {bool? instant}) async {
-    if (on && !await allowNotifications()) {
+    // Turning Instant off needs no permission.
+    if (on && instant != false && !await allowNotifications()) {
       if (mounted) {
         _say(context, 'Turn on notifications for OpenAide, then try again');
       }

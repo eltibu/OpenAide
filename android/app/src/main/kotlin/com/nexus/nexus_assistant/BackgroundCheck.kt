@@ -148,10 +148,12 @@ class BackgroundCheck : JobService() {
                 for (i in 0 until channels.length()) {
                     val ch = channels.getJSONObject(i)
                     val unread = ch.optInt("unread_count")
-                    // last_message_at is in nanoseconds.
-                    val last = ch.optLong("last_message_at") / 1_000_000_000L
+                    // last_message_at is in nanoseconds: the whole value tells
+                    // apart two messages in the same second.
+                    val exact = ch.optLong("last_message_at")
+                    val last = exact / 1_000_000_000L
                     if (unread <= 0 || last <= since || ch.optBoolean("is_channel_muted")) continue
-                    if (!news("channel:" + text(ch, "id"), last)) continue
+                    if (!news("channel:" + text(ch, "id") + "@" + exact, last)) continue
                     val name = text(ch, "name").ifEmpty { "Channel" }
                     post(
                         context,

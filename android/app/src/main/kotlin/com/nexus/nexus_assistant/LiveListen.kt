@@ -215,8 +215,11 @@ class LiveListen : Service() {
         }
         val s = IO.socket(URI(uri.scheme, null, uri.host, uri.port, null, null, null), options)
         s.on(Socket.EVENT_CONNECT) {
-            // Channel messages come to the channels' rooms, joined here.
+            // Channel messages come to the channels' rooms, joined here:
+            // user-join joins them on Open WebUI 0.13, join-channels on older
+            // servers (as chat_socket.dart does).
             s.emit("user-join", JSONObject().put("auth", JSONObject().put("token", token)))
+            s.emit("join-channels", JSONObject().put("auth", JSONObject().put("token", token)))
             // Anything that came while the line was down.
             ring()
         }
