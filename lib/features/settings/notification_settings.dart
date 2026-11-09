@@ -156,8 +156,11 @@ class NotificationSettings extends ConsumerWidget {
   }
 }
 
-/// This phone's own setting: checks about every 15 minutes while the app
-/// is closed, since the server can't reach a closed app by itself.
+/// This phone's own setting: notifications while the app is closed. With
+/// Instant (on by default where the build has it) a light live connection
+/// to the server shows them right away; the check about every 15 minutes
+/// stays on as a safety net, since the server can't reach a closed app by
+/// itself.
 class _ClosedAppChecks extends ConsumerStatefulWidget {
   const _ClosedAppChecks();
 
@@ -165,14 +168,43 @@ class _ClosedAppChecks extends ConsumerStatefulWidget {
   ConsumerState<_ClosedAppChecks> createState() => _ClosedAppChecksState();
 }
 
-class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
+class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks>
+    with WidgetsBindingObserver {
   bool? _on;
+  bool _canInstant = false;
+  bool _instant = false;
+  bool _batteryFree = true;
 
   @override
   void initState() {
     super.initState();
-    backgroundChecksOn().then((on) {
-      if (mounted) setState(() => _on = on);
+    WidgetsBinding.instance.addObserver(this);
+    _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Back from Android's battery question: show the answer.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _load();
+  }
+
+  Future<void> _load() async {
+    final on = await backgroundChecksOn();
+    final can = await instantAvailable();
+    final instant = can && await instantOn();
+    final free = await batteryFree();
+    if (!mounted) return;
+    setState(() {
+      _on = on;
+      _canInstant = can;
+      _instant = instant;
+      _batteryFree = free;
     });
   }
 
@@ -190,19 +222,59 @@ class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
       token: client.token,
       cookie: client.cookie,
     );
-    if (mounted) setState(() => _on = on);
+    if (on && _instant && !await batteryFree()) await askBatteryFree();
+    await _load();
+  }
+
+  Future<void> _setInstant(bool on) async {
+    await setInstant(on);
+    if (on && !await batteryFree()) await askBatteryFree();
+    await _load();
   }
 
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    title: const T('While the app is closed'),
-    subtitle: const T(
-      'Checks about every 15 minutes for new replies and channel messages '
-      '(this phone only)',
-    ),
-    value: _on ?? false,
-    onChanged: _on == null ? null : _set,
-  );
+  Widget build(BuildContext context) {
+    final on = _on ?? false;
+    return Column(
+      children: [
+        SwitchListTile(
+          title: const T('While the app is closed'),
+          subtitle: on && _canInstant && _instant
+              ? const T(
+                  'New replies, channel messages and inbox news arrive '
+                  'right away (this phone only)',
+                )
+              : const T(
+                  'Checks about every 15 minutes for new replies and channel '
+                  'messages (this phone only)',
+                ),
+          value: on,
+          onChanged: _on == null ? null : _set,
+        ),
+        if (on && _canInstant)
+          SwitchListTile(
+            title: const T('Instant'),
+            subtitle: const T(
+              'Keeps a light connection to your server so notifications '
+              'arrive right away. Android shows a small silent notification '
+              'while it\'s on.',
+            ),
+            value: _instant,
+            onChanged: _setInstant,
+          ),
+        if (on && _canInstant && _instant && !_batteryFree)
+          ListTile(
+            leading: const Icon(Icons.battery_alert_outlined),
+            title: const T('Let OpenAide run while the phone sleeps'),
+            subtitle: const T(
+              'Otherwise Android may pause the connection and notifications '
+              'can be late',
+            ),
+            onTap: askBatteryFree,
+          ),
+      ],
+    );
+  }
 }
 
 class _Webhook extends ConsumerWidget {

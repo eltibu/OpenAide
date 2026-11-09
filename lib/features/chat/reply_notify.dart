@@ -123,3 +123,49 @@ Future<void> setBackgroundChecks(
     // Not on a phone.
   }
 }
+
+/// Whether this build can keep a live connection for instant notifications
+/// (the Google Play build checks every 15 minutes instead).
+Future<bool> instantAvailable() async {
+  try {
+    return await _channel.invokeMethod<bool>('instantAvailable') ?? false;
+  } on MissingPluginException {
+    return false;
+  }
+}
+
+/// Whether closed-app notifications come instantly, over a live connection
+/// to the server, rather than at the next 15-minute check. On by default.
+Future<bool> instantOn() async {
+  try {
+    return await _channel.invokeMethod<bool>('instantOn') ?? false;
+  } on MissingPluginException {
+    return false;
+  }
+}
+
+Future<void> setInstant(bool on) async {
+  try {
+    await _channel.invokeMethod('instant', {'enabled': on});
+  } on MissingPluginException {
+    // Not on a phone.
+  }
+}
+
+/// Whether Android lets OpenAide keep its connection while the phone sleeps.
+Future<bool> batteryFree() async {
+  try {
+    return await _channel.invokeMethod<bool>('batteryFree') ?? true;
+  } on MissingPluginException {
+    return true;
+  }
+}
+
+/// Asks Android to let OpenAide run while the phone sleeps.
+Future<void> askBatteryFree() async {
+  try {
+    await _channel.invokeMethod('askBattery');
+  } on MissingPluginException {
+    // Not on a phone.
+  }
+}
