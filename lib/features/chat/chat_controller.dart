@@ -67,6 +67,17 @@ final modelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
   ];
 });
 
+/// The models without terminal coding agents, for every picker that can't
+/// use one: admin and workspace model editors, base models, Arena, group
+/// defaults, channel mentions, the Playground, notes and Studio (as Open
+/// WebUI 0.13.3 does; the server refuses agents there).
+final nonAgentModelsProvider = FutureProvider<List<ModelInfo>>((ref) async {
+  return [
+    for (final m in await ref.watch(modelsProvider.future))
+      if (!m.isAgent) m,
+  ];
+});
+
 /// The terminal picked in the open chat, kept apart from the chat's state
 /// so the model list can follow it without depending on the chat (which
 /// reads the model list).

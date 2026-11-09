@@ -11,6 +11,10 @@
     <!-- Calls and recordings keep going with the phone locked. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Instant notifications while the app is closed (LiveListen): its
+         line to the server, and the phone kept awake for one check. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Hands-free: open the assistant over other apps when it hears you. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Phone actions: timers and alarms, and finding who to call or text. -->
@@ -117,6 +121,23 @@
             android:name=".BackgroundCheck"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Settings > Notifications > While the app is closed > Instant. -->
+        <service
+            android:name=".LiveListen"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a connection to the person's own Open WebUI server open, so new replies and messages are announced within seconds while the app is closed. Turned on by the person in Settings." />
+        </service>
+        <receiver
+            android:name=".LiveListen$Restart"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- Home-screen widget: Ask Nexus, Dictate, Voice call. -->
         <receiver
             android:name=".NexusWidget"

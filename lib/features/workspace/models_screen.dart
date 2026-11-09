@@ -351,7 +351,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
           (key, label),
     ];
     final on = tools.where((t) => _builtin[t.$1] != false).length;
-    final models = ref.watch(modelsProvider).value ?? const [];
+    final models = ref.watch(nonAgentModelsProvider).value ?? const [];
     final self = _isNew ? modelIdFrom(_id.text.trim()) : _m?.id;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -840,7 +840,7 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final models = ref.watch(modelsProvider).value ?? const [];
+    final models = ref.watch(nonAgentModelsProvider).value ?? const [];
     final kbs = ref.watch(knowledgeListProvider).value ?? const [];
     final tools = ref.watch(toolsProvider).value ?? const [];
     final skills = ref.watch(skillsProvider).value ?? const [];

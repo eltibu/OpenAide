@@ -42,6 +42,8 @@ void main() {
         'OpenAide-0.1.301.apk',
         'OpenAide-windows-x64-0.1.301.zip',
         'OpenAide-linux-x64-0.1.301.tar.gz',
+        'OpenAide-ios-0.1.301.ipa',
+        'altstore.json',
       ]),
     ];
     final win = newestRelease(releases, isAsset: desktopAsset('windows'));
@@ -53,6 +55,10 @@ void main() {
       'u-OpenAide-linux-x64-0.1.301.tar.gz',
     );
     expect(newestRelease(releases, isAsset: desktopAsset('macos')), isNull);
+    expect(
+      newestRelease(releases, isAsset: desktopAsset('ios'))?.assetApiUrl,
+      'u-OpenAide-ios-0.1.301.ipa',
+    );
     expect(newestRelease(releases)?.assetApiUrl, 'u-OpenAide-0.1.301.apk');
   });
 

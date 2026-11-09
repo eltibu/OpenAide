@@ -1,10 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import '../../features/auth/sso_login_screen.dart' show clearBrowserCookies;
 import '../../features/chat/reply_notify.dart' show setBackgroundChecks;
 import '../api/chat_socket.dart';
 import '../api/openwebui_client.dart';
+import '../secure_storage.dart';
 
 /// Server URL plus token (JWT from sign-in, or an `sk-` API key), and the
 /// browser cookies from an SSO sign-in when a login gate sits in front.
@@ -26,7 +26,7 @@ class Session {
       OpenWebUiClient(baseUrl: serverUrl, token: token, cookie: cookie);
 }
 
-const _storage = FlutterSecureStorage();
+const _storage = appSecureStorage;
 const _kUrl = 'server_url';
 const _kToken = 'token';
 const _kCookie = 'cookie';

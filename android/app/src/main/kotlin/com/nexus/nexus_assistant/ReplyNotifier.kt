@@ -28,6 +28,8 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
         const val PERMISSION_REQUEST = 4721
         const val EXTRA_CHAT = "nexus.chatId"
         private const val SOUND = "replies"
+        // A reply shown this recently under the same id is updated quietly.
+        private const val RECENT_MS = 120_000L
         private const val QUIET = "replies_quiet"
     }
 
@@ -115,10 +117,14 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
                     call.argument<String>("baseUrl"),
                     call.argument<String>("token"),
                     call.argument<String>("cookie"),
+                    call.argument<Boolean>("instant"),
                 )
                 result.success(null)
             }
             "backgroundOn" -> result.success(BackgroundCheck.isOn(activity))
+            // Instant: see LiveListen.
+            "instantOn" -> result.success(BackgroundCheck.isOn(activity) && LiveListen.isOn(activity))
+            "instantAvailable" -> result.success(LiveListen.available(activity))
             "initialChat" -> {
                 result.success(initialChat)
                 initialChat = null
@@ -148,7 +154,15 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
                     Notification.Builder(activity)
                 }
                 val body = call.argument<String>("body") ?: ""
+                // The closed-app check (LiveListen / BackgroundCheck) may have
+                // just shown this chat's reply under the same id: update it
+                // quietly instead of ringing a second time.
+                val shownRecently = manager.activeNotifications.any {
+                    it.id == chat.hashCode() &&
+                        System.currentTimeMillis() - it.postTime < RECENT_MS
+                }
                 val notification = builder
+                    .setOnlyAlertOnce(shownRecently)
                     .setSmallIcon(R.mipmap.ic_launcher)
                     .setContentTitle(call.argument<String>("title") ?: "OpenAide")
                     .setContentText(body)

@@ -7,9 +7,9 @@ import 'dart:convert';
 
 import 'package:enough_mail/enough_mail.dart' as mail;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'mail_sign_in.dart';
+import '../../core/secure_storage.dart';
 
 /// One email account: where its mail is and how to sign in.
 class MailAccountConfig {
@@ -442,7 +442,7 @@ class MailAccounts {
 const nexusMailSource = 'nexus';
 
 class MailAccountsNotifier extends AsyncNotifier<MailAccounts> {
-  static const _storage = FlutterSecureStorage();
+  static const _storage = appSecureStorage;
   static const _accountsKey = 'nexusAccount.mail';
   static const _sourceKey = 'nexusAccount.mailSource';
 

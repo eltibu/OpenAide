@@ -36,9 +36,12 @@ bool sideChatAllowed(Map? me) {
   return me['role'] == 'user' && (chat?['side_chat'] ?? false) == true;
 }
 
-/// Whether [me] may keep side chats (not when every chat must be temporary).
+/// Whether [me] may keep side chats (not when every chat must be
+/// temporary). "Enforce" only counts while temporary chats are allowed at
+/// all (Open WebUI 0.13.3).
 bool sideChatCanSave(Map? me) =>
     me?['role'] == 'admin' ||
+    !sideChatCanBeTemporary(me) ||
     ((me?['permissions'] as Map?)?['chat'] as Map?)?['temporary_enforced'] !=
         true;
 

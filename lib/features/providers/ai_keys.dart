@@ -7,15 +7,15 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/ai/ai_providers.dart';
 import '../../core/models/model_info.dart';
 import '../../core/store.dart';
 import 'local_models.dart';
+import '../../core/secure_storage.dart';
 
-const _storage = FlutterSecureStorage();
+const _storage = appSecureStorage;
 String _keyName(AiProvider p) => 'ai_key_${p.id}';
 
 class AiKeys extends AsyncNotifier<Map<AiProvider, String>> {

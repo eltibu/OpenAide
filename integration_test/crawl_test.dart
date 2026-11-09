@@ -25,6 +25,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
 import 'package:nexus_assistant/core/auth/session.dart';
+import 'package:nexus_assistant/core/desktop_web_view.dart';
 import 'package:nexus_assistant/features/standalone/local_chats.dart';
 import 'package:nexus_assistant/main.dart';
 
@@ -680,6 +681,8 @@ Future<void> _crawlMenus(_Crawler c, {required bool account}) async {
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  // As main() does: Windows and Linux open web pages in the browser.
+  installDesktopWebViewFallback();
   final url = Platform.environment['OWUI_URL'];
   final email = Platform.environment['OWUI_EMAIL'];
   final password = Platform.environment['OWUI_PASSWORD'];

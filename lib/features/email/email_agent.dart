@@ -8,12 +8,12 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/api/chat_socket.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/models/chat.dart';
+import '../../core/secure_storage.dart';
 
 const _uuid = Uuid();
 
@@ -272,7 +272,7 @@ Map<String, dynamic> pruneRead(Map<String, dynamic> store) {
 class EmailCache {
   const EmailCache();
   static const _key = 'nexusEmailCache';
-  static const _storage = FlutterSecureStorage();
+  static const _storage = appSecureStorage;
 
   Future<Map<String, dynamic>> read() async {
     try {
