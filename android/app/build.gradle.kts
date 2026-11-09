@@ -114,6 +114,11 @@ dependencies {
     // Hands-free "Hey OpenAide": offline speech on the phone (Apache 2.0).
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
+    // Instant notifications: the server's live line (Socket.IO) while the
+    // app is closed (MIT). Android has its own org.json.
+    implementation("io.socket:socket.io-client:2.1.2") {
+        exclude(group = "org.json", module = "json")
+    }
 }
 
 kotlin {

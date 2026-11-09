@@ -37,6 +37,39 @@ void main() {
     expect(await backgroundChecksOn(), isFalse);
   });
 
+  test('Instant is set only when asked, and only where the build has it',
+      () async {
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('nexus/notify'), (
+          c,
+        ) async {
+          calls.add(c);
+          if (c.method == 'instantAvailable') return true;
+          if (c.method == 'instantOn') return true;
+          return null;
+        });
+    expect(await instantChecksAvailable(), isTrue);
+    expect(await instantChecksOn(), isTrue);
+    await setBackgroundChecks(
+      true,
+      baseUrl: 'https://chat.example',
+      token: 't',
+      instant: true,
+    );
+    expect((calls.last.arguments as Map)['instant'], isTrue);
+    // A new sign-in handed over at start leaves Instant as it is.
+    await setBackgroundChecks(true, baseUrl: 'https://chat.example', token: 't');
+    expect((calls.last.arguments as Map).containsKey('instant'), isFalse);
+  });
+
+  test('without the phone side, Instant reads as off', () async {
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(const MethodChannel('nexus/notify'), null);
+    expect(await instantChecksAvailable(), isFalse);
+    expect(await instantChecksOn(), isFalse);
+  });
+
   test('turned-down notifications open Android settings', () async {
     final calls = <String>[];
     var granted = false;

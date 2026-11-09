@@ -157,7 +157,8 @@ class NotificationSettings extends ConsumerWidget {
 }
 
 /// This phone's own setting: checks about every 15 minutes while the app
-/// is closed, since the server can't reach a closed app by itself.
+/// is closed, since the server can't reach a closed app by itself; or,
+/// with Instant, keeps a quiet line to the server so news shows at once.
 class _ClosedAppChecks extends ConsumerStatefulWidget {
   const _ClosedAppChecks();
 
@@ -167,6 +168,8 @@ class _ClosedAppChecks extends ConsumerStatefulWidget {
 
 class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
   bool? _on;
+  var _canInstant = false;
+  var _instant = false;
 
   @override
   void initState() {
@@ -174,10 +177,17 @@ class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
     backgroundChecksOn().then((on) {
       if (mounted) setState(() => _on = on);
     });
+    instantChecksAvailable().then((can) {
+      if (mounted) setState(() => _canInstant = can);
+    });
+    instantChecksOn().then((on) {
+      if (mounted) setState(() => _instant = on);
+    });
   }
 
-  Future<void> _set(bool on) async {
-    if (on && !await allowNotifications()) {
+  Future<void> _set(bool on, {bool? instant}) async {
+    // Turning Instant off needs no permission.
+    if (on && instant != false && !await allowNotifications()) {
       if (mounted) {
         _say(context, 'Turn on notifications for OpenAide, then try again');
       }
@@ -189,19 +199,42 @@ class _ClosedAppChecksState extends ConsumerState<_ClosedAppChecks> {
       baseUrl: client.baseUrl,
       token: client.token,
       cookie: client.cookie,
+      instant: instant,
     );
-    if (mounted) setState(() => _on = on);
+    if (mounted) {
+      setState(() {
+        _on = on;
+        // Turning the checks off turns Instant off with them.
+        _instant = on && (instant ?? _instant);
+      });
+    }
   }
 
   @override
-  Widget build(BuildContext context) => SwitchListTile(
-    title: const T('While the app is closed'),
-    subtitle: const T(
-      'Checks about every 15 minutes for new replies and channel messages '
-      '(this phone only)',
-    ),
-    value: _on ?? false,
-    onChanged: _on == null ? null : _set,
+  Widget build(BuildContext context) => Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      SwitchListTile(
+        title: const T('While the app is closed'),
+        subtitle: const T(
+          'Checks about every 15 minutes for new replies and channel messages '
+          '(this phone only)',
+        ),
+        value: _on ?? false,
+        onChanged: _on == null ? null : _set,
+      ),
+      if (_canInstant && _on == true)
+        SwitchListTile(
+          title: const T('Instant'),
+          subtitle: const T(
+            'Keeps a quiet line to the server open, so news shows up in '
+            'seconds. Uses a little more battery; Android shows a silent '
+            'notification while it listens',
+          ),
+          value: _instant,
+          onChanged: (on) => _set(true, instant: on),
+        ),
+    ],
   );
 }
 
