@@ -13,6 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../core/api/chat_socket.dart';
 import '../../core/api/openwebui_client.dart';
 import '../../core/auth/session.dart';
 import '../../core/i18n/app_strings.dart';
@@ -361,6 +362,8 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   final _input = TextEditingController();
   final _focus = FocusNode();
   final _sub = 'app-${const Uuid().v4()}';
+  // Kept for dispose, where ref may no longer be used.
+  late final ChatSocket _socket;
   List<Comment> _items = const [];
   final _replies = <String, List<Comment>>{};
   final _open = <String>{};
@@ -382,7 +385,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   @override
   void initState() {
     super.initState();
-    final socket = ref.read(chatSocketProvider);
+    final socket = _socket = ref.read(chatSocketProvider);
     socket.joinComments(_sub, widget.type, widget.id);
     _changes = socket.commentsChanged
         .where(
@@ -402,7 +405,7 @@ class _CommentsPanelState extends ConsumerState<CommentsPanel> {
   void dispose() {
     _debounce?.cancel();
     _changes?.cancel();
-    ref.read(chatSocketProvider).leaveComments(_sub);
+    _socket.leaveComments(_sub);
     _input.dispose();
     _focus.dispose();
     super.dispose();
