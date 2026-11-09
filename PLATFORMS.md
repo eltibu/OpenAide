@@ -2,8 +2,10 @@
 
 OpenAide is one Flutter app. Since November 2026 the repo also has Windows,
 Linux, macOS and iOS/iPadOS targets. Android stays the main platform; this
-page says what works where. Only the Linux build has been run so far;
-the others are built by CI but not yet tried on real devices.
+page says what works where. Every release has downloads for all of them.
+The Linux build is checked automatically (every page and button, signed in
+and without a server); Windows, Mac and iPhone/iPad are built by CI and are
+newer, so please [report anything odd](https://github.com/eltibu/OpenAide/issues/new).
 
 | | Android | iPhone / iPad | Mac | Windows | Linux |
 |---|---|---|---|---|---|
