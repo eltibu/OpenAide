@@ -84,8 +84,10 @@ String modelLink(String serverUrl, String id) {
 }
 
 /// Who may edit a model from the picker: its owner for workspace models,
-/// admins for the server's own.
+/// admins for the server's own. Never a terminal's coding agent.
 bool canEditModel(ModelInfo m, Map? me) {
+  // Terminal agents aren't models the server can save (Open WebUI 0.13.3).
+  if (m.isAgent) return false;
   final info = m.raw['info'] as Map?;
   final custom = m.raw['preset'] == true || info?['base_model_id'] != null;
   if (custom) return info?['user_id'] == me?['id'];

@@ -95,19 +95,23 @@ void main() {
       expect(Schedule.parse(a.rrule).days, ['MO', 'FR']);
       expect((await api.list()).any((x) => x.id == a.id), isTrue);
 
-      // A terminal to run commands on comes back as it was saved.
+      // A terminal to run commands on comes back as it was saved. Since
+      // Open WebUI 0.13.3 it must be one the server can reach (the test
+      // server's "local").
       final withTerminal = await api.save(a.id, {
         'name': a.name,
         'data': {
           ...a.data,
-          'terminal': {'server_id': 'box', 'cwd': '/work'},
+          'terminal': {'server_id': 'local', 'cwd': '/work'},
         },
         'is_active': true,
       });
       expect(withTerminal.data['terminal'], {
-        'server_id': 'box',
+        'server_id': 'local',
         'cwd': '/work',
       });
+      expect(withTerminal.terminalId, 'local');
+      expect(withTerminal.cwd, '/work');
 
       await api.toggle(a.id);
       expect((await api.get(a.id)).active, isFalse);
