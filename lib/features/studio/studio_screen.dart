@@ -56,7 +56,7 @@ String? studioModel(WidgetRef ref) {
   if (picked != null) return picked;
   final preferred = ref.read(defaultModelProvider).value;
   if (preferred != null) return preferred;
-  final models = ref.read(modelsProvider).value ?? const [];
+  final models = ref.read(nonAgentModelsProvider).value ?? const [];
   return models.isEmpty ? null : models.first.id;
 }
 
@@ -885,7 +885,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
   }
 
   Future<void> _pickModel() async {
-    final models = await ref.read(modelsProvider.future);
+    final models = await ref.read(nonAgentModelsProvider.future);
     if (!mounted) return;
     final picked = await showModalBottomSheet<String>(
       context: context,
@@ -959,7 +959,7 @@ class _StudioEditorState extends ConsumerState<StudioEditor> {
   @override
   Widget build(BuildContext context) {
     final muted = context.nexus.muted;
-    final models = ref.watch(modelsProvider).value ?? const [];
+    final models = ref.watch(nonAgentModelsProvider).value ?? const [];
     _model ??= models.isEmpty ? null : models.first.id;
     final modelName =
         models.where((m) => m.id == _model).firstOrNull?.name ?? _model ?? '';

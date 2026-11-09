@@ -9,7 +9,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 WORK="${1:-${E2E_WORKDIR:-$HOME/.cache/openaide-e2e}}"
-OWUI_VERSION="${OWUI_VERSION:-0.13.2}"
+OWUI_VERSION="${OWUI_VERSION:-0.13.3}"
 OPEN_TERMINAL_VERSION="${OPEN_TERMINAL_VERSION:-0.14.6}"
 PORT="${OWUI_PORT:-8080}"
 TERM_PORT="${TERM_PORT:-8100}"

@@ -541,7 +541,7 @@ class _ChannelScreenState extends ConsumerState<ChannelScreen> {
   }
 
   Future<void> _mention() async {
-    final models = ref.read(modelsProvider).value ?? const [];
+    final models = ref.read(nonAgentModelsProvider).value ?? const [];
     final picked = await showModalBottomSheet<(String, String)>(
       context: context,
       showDragHandle: true,

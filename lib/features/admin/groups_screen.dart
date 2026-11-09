@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
-import '../chat/chat_controller.dart' show modelsProvider;
+import '../chat/chat_controller.dart' show nonAgentModelsProvider;
 import 'admin_api.dart';
 import 'config_editor.dart' show settingLabel;
 import '../../core/i18n/app_strings.dart';
@@ -698,7 +698,7 @@ class _GroupEditorState extends ConsumerState<GroupEditor> {
   }
 
   Future<void> _pickDefaultModels() async {
-    final models = await ref.read(modelsProvider.future);
+    final models = await ref.read(nonAgentModelsProvider.future);
     if (!mounted) return;
     final chosen = {..._defaultModels};
     final ok = await showModalBottomSheet<bool>(
