@@ -114,6 +114,8 @@ dependencies {
     // Hands-free "Hey OpenAide": offline speech on the phone (Apache 2.0).
     implementation("com.alphacephei:vosk-android:0.3.75@aar")
     implementation("net.java.dev.jna:jna:5.18.1@aar")
+    // Instant notifications: the live connection to your server (Apache 2.0).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 }
 
 kotlin {

@@ -11,6 +11,9 @@
     <!-- Calls and recordings keep going with the phone locked. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <!-- Instant notifications: one live connection to your own server. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <!-- Hands-free: open the assistant over other apps when it hears you. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Phone actions: timers and alarms, and finding who to call or text. -->
@@ -117,6 +120,19 @@
             android:name=".BackgroundCheck"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
+        <!-- Settings > Notifications > Instant: the live connection. -->
+        <service
+            android:name=".InstantService"
+            android:exported="false"
+            android:foregroundServiceType="remoteMessaging" />
+        <receiver
+            android:name=".InstantStarter"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
         <!-- Home-screen widget: Ask Nexus, Dictate, Voice call. -->
         <receiver
             android:name=".NexusWidget"

@@ -155,6 +155,8 @@ open class MainActivity : FlutterActivity() {
         super.onResume()
         BackgroundCheck.appVisible = true
         WakeService.appOnScreen(this, true)
+        // Android lets the instant connection start while the app is open.
+        InstantService.sync(this)
     }
 
     override fun onPause() {

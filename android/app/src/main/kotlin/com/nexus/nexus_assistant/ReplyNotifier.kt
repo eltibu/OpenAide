@@ -119,6 +119,20 @@ class ReplyNotifier(private val activity: Activity) : MethodChannel.MethodCallHa
                 result.success(null)
             }
             "backgroundOn" -> result.success(BackgroundCheck.isOn(activity))
+            // Instant notifications: see InstantService.
+            "instantAvailable" -> result.success(InstantService.available(activity))
+            "instantOn" -> result.success(
+                InstantService.available(activity) && InstantService.wanted(activity),
+            )
+            "instant" -> {
+                InstantService.setWanted(activity, call.argument<Boolean>("enabled") ?: true)
+                result.success(null)
+            }
+            "batteryFree" -> result.success(InstantService.ignoringBattery(activity))
+            "askBattery" -> {
+                InstantService.askBattery(activity)
+                result.success(null)
+            }
             "initialChat" -> {
                 result.success(initialChat)
                 initialChat = null

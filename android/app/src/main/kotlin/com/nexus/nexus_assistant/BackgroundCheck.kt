@@ -10,6 +10,7 @@ import android.app.job.JobScheduler
 import android.app.job.JobService
 import android.content.ComponentName
 import android.content.Context
+import android.content.ContextWrapper
 import android.content.Intent
 import android.os.Build
 import org.json.JSONArray
@@ -19,7 +20,8 @@ import java.net.URLEncoder
 
 /**
  * Settings > Notifications > While the app is closed: about every 15
- * minutes Android lets this ask the server for chats with a new, unread
+ * minutes (and right away when [InstantService] hears from the server)
+ * Android lets this ask the server for chats with a new, unread
  * reply, channels with unread messages and new inbox items (comments,
  * mentions, failed automations, coming events), and posts a notification
  * for each. Nothing is kept but the time of the last check and the sign-in
@@ -29,11 +31,11 @@ import java.net.URLEncoder
 class BackgroundCheck : JobService() {
     companion object {
         private const val JOB = 4712
-        private const val PREFS = "nexus_background"
-        private const val CHANNEL = "background"
+        internal const val PREFS = "nexus_background"
+        internal const val CHANNEL = "background"
 
         /** At most this many inbox pages (of 20) per check. */
-        private const val MAX_INBOX_PAGES = 25
+        internal const val MAX_INBOX_PAGES = 25
 
         /** True while the app is on screen; it notifies by itself then. */
         @Volatile var appVisible = false
@@ -53,6 +55,7 @@ class BackgroundCheck : JobService() {
             if (!enabled || baseUrl.isNullOrEmpty() || token.isNullOrEmpty()) {
                 prefs.edit().clear().apply()
                 scheduler.cancel(JOB)
+                InstantService.sync(context)
                 return
             }
             val edit = prefs.edit()
@@ -61,7 +64,9 @@ class BackgroundCheck : JobService() {
                 .putString("cookie", KeystoreBox.seal(cookie ?: ""))
             // Start from now: only what arrives later is news.
             if (!prefs.contains("since")) edit.putLong("since", System.currentTimeMillis() / 1000)
-            edit.apply()
+            edit.commit()
+            // A new sign-in: the live connection starts again with it.
+            InstantService.sync(context, restart = true)
             if (scheduler.getPendingJob(JOB) != null) return
             scheduler.schedule(
                 JobInfo.Builder(JOB, ComponentName(context, BackgroundCheck::class.java))
@@ -78,7 +83,10 @@ class BackgroundCheck : JobService() {
     override fun onStartJob(params: JobParameters): Boolean {
         worker = Thread {
             try {
-                check()
+                // The live connection may have been stopped by Android;
+                // this brings it back where Android allows it.
+                InstantService.sync(this)
+                ServerCheck(this).run()
             } catch (_: Exception) {
                 // Offline or signed out: try again next time.
             }
@@ -90,6 +98,20 @@ class BackgroundCheck : JobService() {
     override fun onStopJob(params: JobParameters): Boolean {
         worker?.interrupt()
         return true
+    }
+}
+
+/**
+ * The check itself, shared by the 15-minute job and [InstantService] (which
+ * runs it the moment the server says something changed).
+ */
+class ServerCheck(base: Context) : ContextWrapper(base) {
+    private companion object {
+        val LOCK = Any()
+        const val PREFS = BackgroundCheck.PREFS
+        const val CHANNEL = BackgroundCheck.CHANNEL
+        const val MAX_INBOX_PAGES = BackgroundCheck.MAX_INBOX_PAGES
+        val appVisible: Boolean get() = BackgroundCheck.appVisible
     }
 
     private fun get(base: String, path: String, token: String, cookie: String): String {
@@ -107,8 +129,19 @@ class BackgroundCheck : JobService() {
         }
     }
 
+    /** One check at a time, whether the 15-minute job or [InstantService] asked. */
+    fun run() = synchronized(LOCK) { check() }
+
+    /** What was already shown, so a second look doesn't show it again. */
+    private var told = org.json.JSONObject()
+
     private fun check() {
         val prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        told = try {
+            org.json.JSONObject(prefs.getString("told", "{}") ?: "{}")
+        } catch (_: Exception) {
+            org.json.JSONObject()
+        }
         val base = prefs.getString("baseUrl", null) ?: return
         val token = prefs.getString("token", null)?.let(KeystoreBox::open) ?: return
         val cookie = prefs.getString("cookie", "")?.let(KeystoreBox::open) ?: ""
@@ -133,6 +166,7 @@ class BackgroundCheck : JobService() {
                 title,
                 text(c, "snippet").ifEmpty { "New reply" },
                 text(c, "id"),
+                "$updated",
             )
         }
 
@@ -151,6 +185,7 @@ class BackgroundCheck : JobService() {
                     if (text(ch, "type") == "dm") name else "#$name",
                     if (unread == 1) "1 new message" else "$unread new messages",
                     null,
+                    "$last",
                 )
             }
         } catch (_: Exception) {
@@ -200,6 +235,7 @@ class BackgroundCheck : JobService() {
                         listOf(title, preview).filter { it.isNotEmpty() }.joinToString("\n")
                             .ifEmpty { "Open your inbox" },
                         if (text(n, "resource_type") == "chat") text(n, "resource_id") else null,
+                        "1",
                     )
                 }
                 cursor = if (page.isNull("next_cursor")) null else page.optString("next_cursor")
@@ -208,14 +244,22 @@ class BackgroundCheck : JobService() {
         } catch (_: Exception) {
             // Servers before 0.13, or the inbox is off.
         }
-        prefs.edit().putLong("since", now).apply()
+        // A second back: something saved in the same second as this check
+        // started is still news next time (at worst it updates quietly).
+        if (told.length() > 300) told = org.json.JSONObject()
+        prefs.edit()
+            .putLong("since", now - 1)
+            .putString("told", told.toString())
+            .apply()
     }
 
     /** A string field; JSON null and missing read as empty. */
     private fun text(o: org.json.JSONObject, key: String): String =
         if (o.isNull(key)) "" else o.optString(key)
 
-    private fun post(id: Int, title: String, body: String, chatId: String?) {
+    private fun post(id: Int, title: String, body: String, chatId: String?, marker: String) {
+        if (told.optString("$id") == marker) return
+        told.put("$id", marker)
         if (Build.VERSION.SDK_INT >= 33 &&
             checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
             android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -248,9 +292,15 @@ class BackgroundCheck : JobService() {
             @Suppress("DEPRECATION")
             Notification.Builder(this)
         }
+        // The app may have just shown this one itself (its own live
+        // connection was still up): update it without a second sound.
+        val recent = manager.activeNotifications.any {
+            it.id == id && System.currentTimeMillis() - it.postTime < 60_000
+        }
         manager.notify(
             id,
             builder
+                .setOnlyAlertOnce(recent)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
                 .setContentText(body)
