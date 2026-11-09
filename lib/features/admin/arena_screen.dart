@@ -11,7 +11,8 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
-import '../chat/chat_controller.dart' show modelsProvider;
+import '../chat/chat_controller.dart'
+    show modelsProvider, nonAgentModelsProvider;
 import '../workspace/models_api.dart' show modelIdFrom;
 import '../../core/i18n/app_strings.dart';
 
@@ -295,7 +296,7 @@ class _ArenaEditorState extends ConsumerState<_ArenaEditor> {
   @override
   Widget build(BuildContext context) {
     final models = [
-      for (final m in ref.watch(modelsProvider).value ?? const [])
+      for (final m in ref.watch(nonAgentModelsProvider).value ?? const [])
         // Arena models can't pick each other.
         if (m.raw['owned_by'] != 'arena') m,
     ];

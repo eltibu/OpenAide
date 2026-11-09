@@ -105,12 +105,14 @@ Future<bool> backgroundChecksOn() async {
 }
 
 /// Turns the closed-app checks on or off; on, it also hands over the
-/// current sign-in, so call it again after signing in anew.
+/// current sign-in, so call it again after signing in anew. [instant] null
+/// keeps Instant as it is.
 Future<void> setBackgroundChecks(
   bool on, {
   String? baseUrl,
   String? token,
   String? cookie,
+  bool? instant,
 }) async {
   try {
     await _channel.invokeMethod('background', {
@@ -118,8 +120,28 @@ Future<void> setBackgroundChecks(
       'baseUrl': baseUrl,
       'token': token,
       'cookie': cookie,
+      'instant': ?instant,
     });
   } on MissingPluginException {
     // Not on a phone.
+  }
+}
+
+/// Whether the closed-app checks are Instant: a quiet line to the server
+/// that hears news at once instead of about every 15 minutes.
+Future<bool> instantChecksOn() async {
+  try {
+    return await _channel.invokeMethod<bool>('instantOn') ?? false;
+  } on MissingPluginException {
+    return false;
+  }
+}
+
+/// Whether this build can keep that line open (the Google Play build can't).
+Future<bool> instantChecksAvailable() async {
+  try {
+    return await _channel.invokeMethod<bool>('instantAvailable') ?? false;
+  } on MissingPluginException {
+    return false;
   }
 }

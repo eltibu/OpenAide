@@ -9,8 +9,9 @@ name: Windows, Linux, Mac, iPhone and iPad
 #
 # Windows, Linux and Mac builds can be attached to an existing release (the
 # Android one with the same version), where the app's update check finds
-# them. iPhone/iPad and Mac builds are unsigned: shipping those to people
-# needs an Apple Developer account (App Store / TestFlight / notarizing).
+# them. Without an Apple Developer account the Mac app is ad-hoc signed and
+# the iPhone/iPad app is an unsigned .ipa for AltStore / SideStore, with an
+# altstore.json source attached next to it (see PLATFORMS.md).
 on:
   workflow_dispatch:
     inputs:
@@ -148,10 +149,16 @@ jobs:
             --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
             --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
             --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET"
+          APP=build/macos/Build/Products/Release/OpenAide.app
+          # Ad-hoc signed (no Apple account): runs on Intel and Apple Silicon
+          # Macs once the person allows it in Privacy & Security.
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP"
           NAME="OpenAide-macos-0.1.${{ needs.version.outputs.build }}"
-          ditto -c -k --keepParent build/macos/Build/Products/Release/OpenAide.app "$NAME.zip"
-      # Unsigned: proves it builds. Putting it on an iPhone or iPad needs
-      # signing with an Apple Developer account.
+          ditto -c -k --keepParent "$APP" "$NAME.zip"
+      # Unsigned .ipa: AltStore or SideStore signs it on the person's own
+      # iPhone or iPad with their free Apple ID. The App Store and TestFlight
+      # need an Apple Developer account.
       - name: Build for iPhone and iPad (unsigned)
         run: |
           flutter build ios --release --no-codesign \
@@ -161,10 +168,69 @@ jobs:
             --dart-define=NEXUS_MICROSOFT_CLIENT_ID="$NEXUS_MICROSOFT_CLIENT_ID" \
             --dart-define=NEXUS_GOOGLE_CLIENT_ID="$NEXUS_GOOGLE_CLIENT_ID" \
             --dart-define=NEXUS_GOOGLE_CLIENT_SECRET="$NEXUS_GOOGLE_CLIENT_SECRET"
+          V="0.1.${{ needs.version.outputs.build }}"
+          mkdir -p ipa/Payload
+          cp -R build/ios/iphoneos/Runner.app ipa/Payload/
+          (cd ipa && zip -qr "../OpenAide-ios-$V.ipa" Payload)
+      # The AltStore / SideStore source: people add
+      # https://github.com/<repo>/releases/latest/download/altstore.json once
+      # and get each new release as an update.
+      - name: AltStore source
+        env:
+          TAG: ${{ needs.version.outputs.tag }}
+          REPO: ${{ github.repository }}
+          BUILD: ${{ needs.version.outputs.build }}
+        run: |
+          V="0.1.$BUILD"
+          IPA="OpenAide-ios-$V.ipa"
+          python3 - "$IPA" <<'PY'
+          import json, os, sys, datetime
+          ipa = sys.argv[1]
+          repo, tag, build = os.environ["REPO"], os.environ["TAG"], os.environ["BUILD"]
+          owner, name = repo.split("/")
+          pages = f"https://{owner.lower()}.github.io/{name}"
+          privacy = {
+              "NSMicrophoneUsageDescription": "Dictation, voice notes and voice calls.",
+              "NSCameraUsageDescription": "Taking photos to send in a chat.",
+              "NSPhotoLibraryUsageDescription": "Choosing photos to send in a chat.",
+              "NSLocationWhenInUseUsageDescription": "Answering questions about where you are, only when you ask.",
+          }
+          source = {
+              "name": "OpenAide",
+              "identifier": "com.eltibu.openaide.source",
+              "subtitle": "Open WebUI on your iPhone and iPad",
+              "website": pages,
+              "iconURL": f"{pages}/logo.png",
+              "apps": [{
+                  "name": "OpenAide",
+                  "bundleIdentifier": "com.eltibu.openaide",
+                  "developerName": owner,
+                  "subtitle": "Open WebUI on your iPhone and iPad",
+                  "localizedDescription": "Chat with your Open WebUI server, or straight with OpenRouter, Claude, OpenAI or Copilot.",
+                  "iconURL": f"{pages}/logo.png",
+                  "tintColor": "#C96442",
+                  "category": "productivity",
+                  "versions": [{
+                      "version": f"0.1.{build}",
+                      "buildVersion": build,
+                      "date": datetime.date.today().isoformat(),
+                      "downloadURL": f"https://github.com/{repo}/releases/download/{tag}/{ipa}",
+                      "size": os.path.getsize(ipa),
+                      "minOSVersion": "15.0",
+                  }],
+                  "appPermissions": {"entitlements": [], "privacy": privacy},
+              }],
+              "news": [],
+          }
+          json.dump(source, open("altstore.json", "w"), indent=2)
+          PY
       - uses: actions/upload-artifact@v4
         with:
-          name: macos
-          path: OpenAide-macos-*.zip
+          name: apple
+          path: |
+            OpenAide-macos-*.zip
+            OpenAide-ios-*.ipa
+            altstore.json
 
 
   attach:

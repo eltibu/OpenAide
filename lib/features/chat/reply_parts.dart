@@ -361,6 +361,17 @@ String stepsSummary(List<StepPart> steps) {
           : 'Thought',
     );
   }
+  // Tool Call Labels (Open WebUI 0.13.3): finished calls show the model's
+  // own words; a call without one shows its tool name instead of the whole
+  // group losing its labels.
+  if (thinking.isEmpty &&
+      tools.isNotEmpty &&
+      tools.every((t) => t.done && !t.failed) &&
+      tools.any((t) => t.completed != null)) {
+    final line = [for (final t in tools) t.completed ?? toolLabel(t.name)]
+        .join(', ');
+    return line[0].toUpperCase() + line.substring(1);
+  }
   if (tools.isNotEmpty) {
     final names = {for (final t in tools) toolLabel(t.name)}.toList();
     bits.add(

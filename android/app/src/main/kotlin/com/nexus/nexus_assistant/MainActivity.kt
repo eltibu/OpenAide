@@ -155,6 +155,8 @@ open class MainActivity : FlutterActivity() {
         super.onResume()
         BackgroundCheck.appVisible = true
         WakeService.appOnScreen(this, true)
+        // Instant: Android only lets it start while the app is open.
+        LiveListen.update(this)
     }
 
     override fun onPause() {

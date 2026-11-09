@@ -1,4 +1,5 @@
 import '../../core/api/openwebui_client.dart';
+import '../../core/models/model_info.dart';
 import '../notes/notes_api.dart' show fromServerTime;
 
 /// A prompt the server runs on a schedule, into a new chat or a channel.
@@ -46,9 +47,22 @@ class Automation {
   String get prompt => '${data['prompt'] ?? ''}';
   String get modelId => '${data['model_id'] ?? ''}';
   String get rrule => '${data['rrule'] ?? ''}';
+  String get terminalId => '${(data['terminal'] as Map?)?['server_id'] ?? ''}';
+  String get cwd => '${(data['terminal'] as Map?)?['cwd'] ?? ''}';
+
+  /// Runs a terminal's coding agent (Open WebUI 0.13.3).
+  bool get isAgent => modelId.startsWith('agent:');
   String? get channelId => (data['target'] as Map?)?['type'] == 'channel'
       ? (data['target'] as Map)['channel_id'] as String?
       : null;
+}
+
+/// "claude/sonnet" for `agent:<terminal>:claude:sonnet`, as the web
+/// names a terminal's agent; anything else as it is.
+String agentLabel(String id) {
+  final parts = id.split(':');
+  if (parts.length < 4 || parts.first != 'agent') return id;
+  return '${parts[2]}/${Uri.decodeComponent(parts.sublist(3).join(':'))}';
 }
 
 class AutomationRun {
@@ -120,6 +134,32 @@ class AutomationsApi {
           body: form,
         ) as Map,
       );
+
+  /// The coding agents [terminalId] offers in [cwd], for an automation
+  /// (Open WebUI 0.13.3). Older servers have no such list: empty.
+  Future<List<ModelInfo>> agentModels(
+    String terminalId, {
+    String? cwd,
+    String? automationId,
+  }) async {
+    try {
+      final res = await client.send(
+        'GET',
+        '$_base/models',
+        query: {
+          'terminal_id': terminalId,
+          if (cwd != null && cwd.isNotEmpty) 'cwd': cwd,
+          'automation_id': ?automationId,
+        },
+      );
+      return [
+        for (final m in (res as List? ?? const []).whereType<Map>())
+          ModelInfo.fromJson(m.cast<String, dynamic>()),
+      ];
+    } on ApiException {
+      return const [];
+    }
+  }
 
   Future<void> toggle(String id) => client.send('POST', '${_id(id)}/toggle');
   Future<void> run(String id) => client.send('POST', '${_id(id)}/run');

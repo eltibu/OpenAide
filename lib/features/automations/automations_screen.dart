@@ -10,6 +10,7 @@ import '../channels/channels_screen.dart';
 import '../chat/chat_controller.dart';
 import '../chat/chat_drawer.dart' show channelsProvider;
 import '../terminal/terminal_screen.dart' show terminalServersProvider;
+import '../../core/models/model_info.dart';
 import 'automations_api.dart';
 import '../../core/i18n/app_strings.dart';
 
@@ -207,11 +208,11 @@ class _AutomationDetailState extends ConsumerState<AutomationDetail> {
   Widget build(BuildContext context) {
     final a = _a;
     final muted = context.nexus.muted;
-    final models = ref.watch(modelsProvider).value ?? const [];
+    final models = ref.watch(nonAgentModelsProvider).value ?? const [];
     final channels = ref.watch(channelsProvider).value ?? const [];
     final terminals = ref.watch(terminalServersProvider).value ?? const [];
     String modelName(String id) =>
-        models.where((m) => m.id == id).firstOrNull?.name ?? id;
+        models.where((m) => m.id == id).firstOrNull?.name ?? agentLabel(id);
     return Scaffold(
       appBar: AppBar(
         title: Text(a?.name ?? 'Automation'),
@@ -464,11 +465,40 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
   );
   bool _busy = false;
 
+  /// The coding agents the picked terminal offers (Open WebUI 0.13.3).
+  List<ModelInfo> _agents = const [];
+  bool get _isAgent => _model.startsWith('agent:');
+
+  @override
+  void initState() {
+    super.initState();
+    if (_terminal.isNotEmpty) _loadAgents();
+  }
+
+  Future<void> _loadAgents() async {
+    final terminal = _terminal;
+    if (terminal.isEmpty) {
+      _agents = const [];
+      return;
+    }
+    final agents = await widget.api.agentModels(
+      terminal,
+      cwd: _cwd.text.trim(),
+      automationId: _a?.id,
+    );
+    // A list for a terminal left meanwhile never replaces the current one.
+    if (mounted && terminal == _terminal) setState(() => _agents = agents);
+  }
+
   Future<void> _save() async {
     if (_name.text.trim().isEmpty ||
         _prompt.text.trim().isEmpty ||
         _model.isEmpty) {
       _say(context, 'Name, instructions and model are needed');
+      return;
+    }
+    if (_isAgent && _terminal.isEmpty) {
+      _say(context, 'Select a terminal for the agent');
       return;
     }
     if (_schedule.frequency == 'ONCE' &&
@@ -481,14 +511,17 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
     try {
       await widget.api.save(_a?.id, {
         'name': _name.text.trim(),
-        'folder_id': _channel.isNotEmpty || _folder.isEmpty ? null : _folder,
+        'folder_id': (_channel.isNotEmpty && !_isAgent) || _folder.isEmpty
+            ? null
+            : _folder,
         'data': {
           // Anything else it carries stays as it was.
           ...?_from?.data,
           'prompt': _prompt.text.trim(),
           'model_id': _model,
           'rrule': _schedule.build(),
-          'target': _channel.isEmpty
+          // Agents reply into a chat only.
+          'target': _channel.isEmpty || _isAgent
               ? {'type': 'chat'}
               : {'type': 'channel', 'channel_id': _channel},
           'terminal': _terminal.isEmpty
@@ -511,7 +544,7 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final models = ref.watch(modelsProvider).value ?? const [];
+    final models = ref.watch(nonAgentModelsProvider).value ?? const [];
     final channels = ref.watch(channelsProvider).value ?? const [];
     final folders = ref.watch(foldersProvider).value ?? const [];
     final terminals = ref.watch(terminalServersProvider).value ?? const [];
@@ -720,26 +753,47 @@ class _AutomationEditorState extends ConsumerState<AutomationEditor> {
           const Divider(),
           dropdown<String>(Icons.auto_awesome_outlined, _model, [
             for (final m in models) (m.id, m.name),
+            for (final m in _agents) (m.id, '${m.name} · agent'),
+            // A saved agent while its terminal's list loads.
+            if (_isAgent && !_agents.any((m) => m.id == _model))
+              (_model, agentLabel(_model)),
           ], (v) => _model = v),
-          dropdown<String>(Icons.send_outlined, _channel, [
-            ('', 'A new chat'),
-            for (final c in channels) (c.id, '# ${c.name}'),
-          ], (v) => _channel = v),
-          if (_channel.isEmpty)
+          if (_isAgent)
+            const ListTile(
+              leading: Icon(Icons.send_outlined),
+              title: T('A new chat'),
+              subtitle: T('Agents reply in a chat'),
+            )
+          else
+            dropdown<String>(Icons.send_outlined, _channel, [
+              ('', 'A new chat'),
+              for (final c in channels) (c.id, '# ${c.name}'),
+            ], (v) => _channel = v),
+          if (_channel.isEmpty || _isAgent)
             dropdown<String>(Icons.folder_outlined, _folder, [
               ('', 'No folder'),
               for (final f in folders) (f.id, f.name),
             ], (v) => _folder = v),
           if (terminals.isNotEmpty || _terminal.isNotEmpty)
-            dropdown<String>(Icons.terminal, _terminal, [
-              ('', 'No terminal'),
-              for (final t in terminals) (t.id, t.name),
-            ], (v) => _terminal = v),
+            dropdown<String>(
+              Icons.terminal,
+              _terminal,
+              [('', 'No terminal'), for (final t in terminals) (t.id, t.name)],
+              (v) {
+                if (v == _terminal) return;
+                _terminal = v;
+                // The old terminal's agents go at once; the new list follows.
+                _agents = const [];
+                if (_isAgent) _model = '';
+                _loadAgents();
+              },
+            ),
           if (_terminal.isNotEmpty)
             Padding(
               padding: const EdgeInsets.fromLTRB(72, 0, 20, 8),
               child: TextField(
                 controller: _cwd,
+                onSubmitted: (_) => _loadAgents(),
                 decoration: InputDecoration(
                   labelText: tr('Working folder (optional)'),
                   hintText: tr('Where its commands run'),

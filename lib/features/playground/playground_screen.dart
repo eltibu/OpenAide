@@ -192,7 +192,7 @@ class _ChatPlaygroundState extends ConsumerState<ChatPlayground> {
 
   @override
   Widget build(BuildContext context) {
-    final models = ref.watch(modelsProvider).value ?? const [];
+    final models = ref.watch(nonAgentModelsProvider).value ?? const [];
     _model ??= models.isEmpty ? null : models.first.id;
     final muted = context.nexus.muted;
     final scheme = Theme.of(context).colorScheme;
@@ -451,7 +451,7 @@ class _CompletionPlaygroundState extends ConsumerState<CompletionPlayground> {
   @override
   Widget build(BuildContext context) {
     final models = <({String id, String name})>[
-      for (final m in ref.watch(modelsProvider).value ?? const [])
+      for (final m in ref.watch(nonAgentModelsProvider).value ?? const [])
         (id: m.id, name: m.name),
     ];
     _model ??= models.isEmpty ? null : models.first.id;

@@ -3085,7 +3085,12 @@ class _TerminalChip extends ConsumerWidget {
             size: 16,
           ),
           label: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-          onPressed: () => _pick(context, ref),
+          // Switchable any time in the chat, but not while a reply is
+          // being written (as Open WebUI 0.13.3).
+          onPressed:
+              ref.watch(chatControllerProvider.select((s) => s.streaming))
+              ? null
+              : () => _pick(context, ref),
         ),
       ),
     );

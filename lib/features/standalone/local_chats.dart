@@ -7,12 +7,12 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../../core/models/chat.dart';
+import '../../core/secure_storage.dart';
 
-const _storage = FlutterSecureStorage();
+const _storage = appSecureStorage;
 const _kStandalone = 'standalone_mode';
 const _kModel = 'standalone_model';
 
