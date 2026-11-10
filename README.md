@@ -90,6 +90,21 @@ Needs Android 9 or newer.
 
 Every release also has downloads for computers, iPhones and iPads. They sync with the same Open WebUI server as the phone. What works where is in [PLATFORMS.md](PLATFORMS.md).
 
+<p align="center">
+  <img src="docs/images/devices/windows.png" alt="OpenAide on Windows" width="49%">
+  <img src="docs/images/devices/mac.png" alt="OpenAide on a Mac" width="49%">
+</p>
+<p align="center"><sub>Windows · Mac</sub></p>
+<p align="center">
+  <img src="docs/images/devices/linux.png" alt="OpenAide on Linux" width="49%">
+  <img src="docs/images/devices/ipad.png" alt="OpenAide on an iPad" width="49%">
+</p>
+<p align="center"><sub>Linux · iPad</sub></p>
+<p align="center">
+  <img src="docs/images/devices/iphone.png" alt="OpenAide on an iPhone" width="24%">
+</p>
+<p align="center"><sub>iPhone</sub></p>
+
 | Device | Download (under **Assets** on the [latest release](../../releases/latest)) | How to install |
 |---|---|---|
 | **iPhone / iPad** (iOS 15+) | `OpenAide-ios-<version>.ipa` | Free with [SideStore](https://sidestore.io) or [AltStore](https://altstore.io) and your own Apple ID. Add the source `https://github.com/eltibu/OpenAide/releases/latest/download/altstore.json` to get updates. A free Apple ID needs a refresh every 7 days. |
