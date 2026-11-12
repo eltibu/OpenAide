@@ -152,6 +152,14 @@ body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset
 .ed .new{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--magenta)}
 .ed .btn{margin-top:auto;align-self:flex-start;white-space:nowrap}
 .ed code{font:400 12.5px var(--mono);color:var(--fg);background:var(--panel-2);padding:2px 6px;border-radius:6px;overflow-wrap:anywhere}
+.devshots{margin-top:28px;display:grid;grid-template-columns:repeat(6,1fr);gap:22px;align-items:end}
+.devshots figure{margin:0;display:flex;flex-direction:column;gap:10px;min-width:0}
+.devshots img{display:block;width:100%;height:auto;border-radius:14px;border:1px solid var(--line);box-shadow:0 24px 50px -28px rgba(0,0,0,.55);background:var(--panel)}
+.devshots .wide{grid-column:span 3}
+.devshots .phn{grid-column:1/-1;justify-self:center;width:min(250px,62%)}
+.devshots .phn img{border-radius:34px;border:6px solid var(--panel-2)}
+.devshots figcaption{font:500 13px var(--mono);color:var(--muted);letter-spacing:.04em;text-transform:uppercase;text-align:center}
+@media (max-width:760px){.devshots{grid-template-columns:repeat(2,1fr)}.devshots .wide{grid-column:span 2}}
 .howto{margin-top:28px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
 .howto details{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px 20px;color:var(--muted);font-size:15.5px}
 .howto summary{cursor:pointer;color:var(--fg);font-weight:600}
@@ -522,6 +530,13 @@ footer .sp{margin-right:auto}
       <div class="ed"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg></div><span class="new">New</span><h3>Mac</h3><p>A normal Mac app. Unzip, drag it to Applications, and allow it once in Privacy &amp; Security.</p><a class="btn btn-ghost btn-sm" data-asset="macos" href="https://github.com/eltibu/OpenAide/releases/latest">Download .zip</a></div>
       <div class="ed"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="13" rx="1.5"/><path d="M8 21h8M12 16v5"/></svg></div><span class="new">New</span><h3>Windows</h3><p>Windows 10 and 11, 64-bit. Unzip anywhere and run <b>openaide.exe</b>. No installer needed.</p><a class="btn btn-ghost btn-sm" data-asset="windows" href="https://github.com/eltibu/OpenAide/releases/latest">Download .zip</a></div>
       <div class="ed"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></div><span class="new">New</span><h3>Linux</h3><p>64-bit, any modern desktop. Unpack and run <b>openaide</b>. Sign-ins are kept in your desktop keyring.</p><a class="btn btn-ghost btn-sm" data-asset="linux" href="https://github.com/eltibu/OpenAide/releases/latest">Download .tar.gz</a></div>
+    </div>
+    <div class="devshots">
+      <figure class="wide"><img src="images/devices/windows.png" alt="OpenAide on Windows: a chat summarising meeting notes, with the chat list in a side bar" loading="lazy" width="1280" height="832"><figcaption>Windows</figcaption></figure>
+      <figure class="wide"><img src="images/devices/mac.png" alt="OpenAide on a Mac: a chat explaining RAG, with the chat list in a side bar" loading="lazy" width="1600" height="1000"><figcaption>Mac</figcaption></figure>
+      <figure class="wide"><img src="images/devices/linux.png" alt="OpenAide on Linux: a weekend plan for Lisbon with a budget table" loading="lazy" width="1280" height="846"><figcaption>Linux</figcaption></figure>
+      <figure class="wide"><img src="images/devices/ipad.png" alt="OpenAide on an iPad in landscape: a weekend plan for Lisbon" loading="lazy" width="1600" height="1112"><figcaption>iPad</figcaption></figure>
+      <figure class="phn"><img src="images/devices/iphone.png" alt="OpenAide on an iPhone: dinner ideas in a chat" loading="lazy" width="786" height="1704"><figcaption>iPhone</figcaption></figure>
     </div>
     <div class="howto">
       <details><summary>Install on iPhone or iPad</summary><ol>
