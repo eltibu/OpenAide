@@ -66,7 +66,9 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: flutter analyze
+      # Flutter 3.50 (stable, 2026-11) marks package:flutter/material.dart deprecated: every
+      # screen imports it, so infos would fail every build. Errors and warnings still fail it.
+      - run: flutter analyze --no-fatal-infos
       # Encrypted chats in channels run the web's own encryption code
       # (native/encryption, Rust). Built for the phone and for this PC's
       # tests; Rust and the build output stay on the PC between builds. If

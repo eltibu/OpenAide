@@ -44,7 +44,10 @@ class ChatSocket {
         _waiting.clear();
       })
       ..on('events', (data) {
-        if (data is Map && !_events.isClosed) {
+        if (data is Map && _routeTyped(data)) {
+          // Open WebUI 0.13.4+: a note, presence, comment, inbox or access
+          // update - sent to its own stream below, not to the chat events.
+        } else if (data is Map && !_events.isClosed) {
           _events.add(data.cast<String, dynamic>());
         } else if (data is List &&
             data.length > 1 &&
@@ -104,6 +107,43 @@ class ChatSocket {
         }
       })
       ..connect();
+  }
+
+  /// Open WebUI 0.13.4 sends note, note presence, comment, inbox and access
+  /// updates as typed messages on `events` - `{'data': {'type': 'note:updated',
+  /// 'data': {...}}}` - instead of under their own names (`events:note`,
+  /// `note:presence`, `comments:changed`, `notifications:changed`,
+  /// `access:updated`). Routes one to the stream its old name fed and returns
+  /// true; anything else (chat events carry a chat_id) returns false. The
+  /// listeners for the old names stay, so older servers keep working.
+  bool _routeTyped(Map data) {
+    final inner = data['data'];
+    if (data.containsKey('chat_id') || inner is! Map) return false;
+    final payload = inner['data'];
+    switch (inner['type']) {
+      case 'note:updated':
+        if (payload is Map && !_noteEvents.isClosed) {
+          _noteEvents.add(payload.cast<String, dynamic>());
+        }
+        return true;
+      case 'note:presence':
+        if (payload is Map && !_notePresence.isClosed) {
+          _notePresence.add(payload.cast<String, dynamic>());
+        }
+        return true;
+      case 'notifications:changed':
+        if (!_inbox.isClosed) _inbox.add(null);
+        return true;
+      case 'comments:changed':
+        if (payload is Map && !_comments.isClosed) {
+          _comments.add(payload.cast<String, dynamic>());
+        }
+        return true;
+      case 'access:updated':
+        if (!_dropped.isClosed) _dropped.add(null);
+        return true;
+    }
+    return false;
   }
 
   late final io.Socket _socket;
