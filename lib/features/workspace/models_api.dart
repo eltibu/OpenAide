@@ -41,6 +41,8 @@ const modelCapabilities = <String, String>{
   'file_upload': 'Accepts files',
   'web_search': 'Can search the web',
   'image_generation': 'Can make images',
+  // Open WebUI 0.13.4, shown when the admin turned video generation on.
+  'video_generation': 'Can make videos',
   'code_interpreter': 'Can run code',
   'terminal': 'Can use the terminal',
   'citations': 'Shows sources',
@@ -64,6 +66,8 @@ const builtinToolList = <(String, String, String?)>[
   ('notifications', 'Notifications', 'enable_user_webhooks'),
   ('web_search', 'Web Search', 'enable_web_search'),
   ('image_generation', 'Image Generation', 'enable_image_generation'),
+  // Open WebUI 0.13.4.
+  ('video_generation', 'Video Generation', 'enable_video_generation'),
   ('code_interpreter', 'Code Interpreter', 'enable_code_interpreter'),
   ('tasks', 'Task Management', null),
   ('automations', 'Automations', 'enable_automations'),
@@ -72,7 +76,28 @@ const builtinToolList = <(String, String, String?)>[
   ('skills', 'Skills', null),
   // Open WebUI 0.13: the model may write a private Python tool for you.
   ('tools', 'Tool Creation', 'enable_tools'),
+  // Open WebUI 0.13.4: interactive charts, diagrams and calculators in the
+  // chat. Off unless switched on for the model ([optInBuiltinTools]).
+  ('visualizations', 'Visualizations', '?enable_video_generation'),
 ];
+
+/// Built-in tools that are off until switched on (the rest are on until
+/// switched off), as the web reads them.
+const optInBuiltinTools = {'visualizations'};
+
+/// Whether built-in tool [key] is on in a model's `meta.builtinTools`.
+bool builtinToolOn(Map builtin, String key) => optInBuiltinTools.contains(key)
+    ? builtin[key] == true
+    : builtin[key] != false;
+
+/// Whether the server offers a built-in tool that needs [feature]: null is
+/// always; '?name' only asks that the server knows the feature (a 0.13.4
+/// server sends it even when off), else it must be on.
+bool builtinToolOffered(String? feature, Map features) => feature == null
+    ? true
+    : feature.startsWith('?')
+    ? features.containsKey(feature.substring(1))
+    : features[feature] == true;
 
 /// The abilities a new model starts with, as on the web.
 const defaultModelCapabilities = [

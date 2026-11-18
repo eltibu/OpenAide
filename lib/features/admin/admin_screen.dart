@@ -10,10 +10,13 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/session.dart';
+import '../../core/api/server_version.dart';
 import '../../core/theme.dart';
 import '../chat/chat_controller.dart' show serverConfigProvider;
 import '../server/community_share.dart';
+
 import 'package:url_launcher/url_launcher.dart';
+
 import '../server/server_page.dart';
 import '../settings/settings_screen.dart' show Avatar;
 import '../workspace/tools_skills.dart' show ValvesScreen;
@@ -53,6 +56,7 @@ const _sectionIcons = {
   'Web Search': Icons.travel_explore,
   'Audio': Icons.graphic_eq,
   'Images': Icons.image_outlined,
+  'Videos': Icons.movie_outlined,
   'Code Execution': Icons.code,
   'Interface and tasks': Icons.view_quilt_outlined,
   'Connections': Icons.cable,
@@ -72,11 +76,11 @@ void _say(BuildContext context, String text) =>
 
 /// The Admin Panel: people, site switches, functions and the server's
 /// settings pages are native; what isn't yet opens as the server's page.
-class AdminScreen extends StatelessWidget {
+class AdminScreen extends ConsumerWidget {
   const AdminScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     void open(Widget page) =>
         Navigator.push(context, MaterialPageRoute<void>(builder: (_) => page));
     return Scaffold(
@@ -185,12 +189,19 @@ class AdminScreen extends StatelessWidget {
             onTap: () => open(const EventsScreen()),
           ),
           for (final section in adminConfigSections)
-            ListTile(
-              leading: Icon(_sectionIcons[section.title] ?? Icons.tune),
-              title: Text(section.title),
-              subtitle: section.help == null ? null : Text(section.help!),
-              onTap: () => open(ConfigEditorScreen(section: section)),
-            ),
+            if (section.since == null ||
+                serverAtLeast(
+                  '${ref.watch(serverConfigProvider).value?['version'] ?? ''}',
+                  section.since!.$1,
+                  section.since!.$2,
+                  section.since!.$3,
+                ))
+              ListTile(
+                leading: Icon(_sectionIcons[section.title] ?? Icons.tune),
+                title: Text(section.title),
+                subtitle: section.help == null ? null : Text(section.help!),
+                onTap: () => open(ConfigEditorScreen(section: section)),
+              ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.settings_applications_outlined),

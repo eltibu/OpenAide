@@ -15,6 +15,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/auth/session.dart';
 import '../../core/theme.dart';
 import '../../core/i18n/app_strings.dart';
+import 'media_connections.dart';
 
 /// Words written in capitals in a setting's name.
 const _acronyms = {
@@ -99,9 +100,19 @@ class ConfigSection {
     this.help,
     this.toSave,
     this.actions = const [],
+    this.since,
+    this.enginesOptional = false,
   });
 
   final String title;
+
+  /// The Open WebUI version that has this page, as (major, minor, patch);
+  /// null for all.
+  final (int, int, int)? since;
+
+  /// [engines] are the older server's settings (0.13.4 moved images to
+  /// connections), so a newer server may not send them.
+  final bool enginesOptional;
 
   /// Where the server's settings are read and saved.
   final String read;
@@ -138,7 +149,12 @@ class ConfigAction {
     this.bodyFrom,
     this.fileInto,
     this.showIf,
+    this.connections,
   });
+
+  /// Opens the native editor for this list of image or video connections
+  /// (Open WebUI 0.13.4); Save keeps the edited list.
+  final MediaKind? connections;
 
   /// Sends what's on the page now (saved or not), as this body.
   final Map<String, dynamic> Function(Map<String, dynamic> data)? bodyFrom;
@@ -414,6 +430,8 @@ final adminConfigSections = <ConfigSection>[
     read: '/api/v1/images/config',
     save: '/api/v1/images/config/update',
     choices: {},
+    enginesOptional: true,
+    exclude: {'IMAGE_CONNECTIONS', 'USER_PERMISSIONS'},
     engines: {
       'IMAGE_GENERATION_ENGINE': {
         'openai': ['IMAGES_OPENAI_'],
@@ -429,6 +447,14 @@ final adminConfigSections = <ConfigSection>[
     },
     help: 'Making and changing pictures.',
     actions: [
+      // Open WebUI 0.13.4: several image servers, each with its models.
+      ConfigAction(
+        label: 'Image connections',
+        path: '',
+        icon: Icons.hub_outlined,
+        connections: MediaKind.images,
+        showIf: (d) => d.containsKey('IMAGE_CONNECTIONS'),
+      ),
       for (final (engine, url, key, label) in const [
         (
           'automatic1111',
@@ -469,6 +495,24 @@ final adminConfigSections = <ConfigSection>[
         icon: Icons.upload_file,
         fileInto: 'IMAGES_EDIT_COMFYUI_WORKFLOW',
         showIf: (d) => d['IMAGE_EDIT_ENGINE'] == 'comfyui',
+      ),
+    ],
+  ),
+  // Open WebUI 0.13.4: video generation, from video connections.
+  ConfigSection(
+    title: 'Videos',
+    read: '/api/v1/videos/config',
+    save: '/api/v1/videos/config/update',
+    since: (0, 13, 4),
+    exclude: {'VIDEO_CONNECTIONS'},
+    help: 'Making videos.',
+    actions: [
+      ConfigAction(
+        label: 'Video connections',
+        path: '',
+        icon: Icons.hub_outlined,
+        connections: MediaKind.videos,
+        showIf: (d) => d.containsKey('VIDEO_CONNECTIONS'),
       ),
     ],
   ),
@@ -665,6 +709,28 @@ class _ConfigEditorScreenState extends ConsumerState<ConfigEditorScreen> {
       if (ok != true || !mounted) return;
     }
     final client = ref.read(clientProvider);
+    if (a.connections != null) {
+      final kind = a.connections!;
+      final edited = await Navigator.push<List>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => MediaConnectionsScreen(
+            kind: kind,
+            connections: (_data[kind.key] as List?) ?? const [],
+          ),
+        ),
+      );
+      if (edited != null && mounted) {
+        final before = jsonEncode(_data[kind.key] ?? const []);
+        if (before != jsonEncode(edited)) {
+          setState(() {
+            _set(_data, kind.key, edited);
+            _generation++;
+          });
+        }
+      }
+      return;
+    }
     try {
       if (a.fileInto != null) {
         final picked = await FilePicker.pickFiles();

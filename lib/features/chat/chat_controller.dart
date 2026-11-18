@@ -9,6 +9,7 @@ import 'package:uuid/uuid.dart';
 import '../../core/ai/ai_providers.dart'
     show isProviderModel, parseProviderModel;
 import '../../core/api/openwebui_client.dart' show ApiException;
+import '../../core/api/server_version.dart';
 import '../../core/auth/session.dart';
 import '../email/email_agent.dart' show appWorkingChats, emailChatTitle;
 import '../../core/models/chat.dart';
@@ -296,6 +297,7 @@ class ChatState {
     this.variables = const {},
     this.folderId,
     this.revision = 0,
+    this.mediaModels = const {},
   });
 
   final Chat? chat;
@@ -306,6 +308,10 @@ class ChatState {
 
   /// What the server says the reply is doing ("Searching the web", a tool).
   final String? status;
+
+  /// The image or video model picked for this chat, by feature (Open WebUI
+  /// 0.13.4: "connection:model"; absent means the default).
+  final Map<String, String> mediaModels;
 
   /// Features the person switched on or off in this chat (web search...).
   final Map<String, bool> features;
@@ -370,6 +376,7 @@ class ChatState {
     Map<String, dynamic>? params,
     Map<String, dynamic>? variables,
     bool clearFolder = false,
+    Map<String, String>? mediaModels,
   }) => ChatState(
     chat: clearChat ? null : chat ?? this.chat,
     modelId: modelId ?? this.modelId,
@@ -389,6 +396,7 @@ class ChatState {
     variables: variables ?? this.variables,
     folderId: clearFolder ? null : folderId,
     revision: revision + 1,
+    mediaModels: mediaModels ?? this.mediaModels,
   );
 }
 
@@ -545,6 +553,16 @@ class ChatController extends Notifier<ChatState> {
   void setFeature(String id, bool on) =>
       state = state.copyWith(features: {...state.features, id: on});
 
+  /// Picks the model [feature] (image or video generation) uses in this
+  /// chat; '' goes back to the default.
+  void setMediaModel(String feature, String model) => state = state.copyWith(
+    mediaModels: {
+      for (final e in state.mediaModels.entries)
+        if (e.key != feature) e.key: e.value,
+      if (model.isNotEmpty) feature: model,
+    },
+  );
+
   /// Switches a tool for this chat, starting from the model's own tools.
   void setTool(String id, bool on) {
     final model = ref
@@ -564,7 +582,30 @@ class ChatController extends Notifier<ChatState> {
   }
 
   /// '' switches the terminal off for this chat.
-  void setTerminal(String id) => state = state.copyWith(terminalId: id);
+  /// Picks the terminal ('' for none). Open WebUI 0.13.4 keeps it with the
+  /// chat, so it comes back when the chat is opened again, as on the web.
+  void setTerminal(String id) {
+    state = state.copyWith(terminalId: id);
+    final chat = state.chat;
+    if (chat == null ||
+        chat.id.isEmpty ||
+        state.temporary ||
+        !isOwui0134(ref.read(serverConfigProvider).value)) {
+      return;
+    }
+    chat.extra
+      ..['terminal_id'] = id.isEmpty ? null : id
+      ..['working_directory'] = '';
+    unawaited(
+      ref
+          .read(clientProvider)
+          .patchChat(chat.id, {
+            'terminal_id': id.isEmpty ? null : id,
+            'working_directory': '',
+          })
+          .catchError((_) {}),
+    );
+  }
 
   /// A new chat; temporary unless asked otherwise when Settings > Interface
   /// says to start chats that way.
@@ -914,6 +955,8 @@ class ChatController extends Notifier<ChatState> {
         modelId:
             chat.models.where((m) => m.isNotEmpty).firstOrNull ?? state.modelId,
         compareIds: chat.models.skip(1).where((m) => m.isNotEmpty).toList(),
+        // Open WebUI 0.13.4: the chat's own terminal, or none.
+        terminalId: chatTerminalChoice(chat),
         params: {
           for (final e in ((chat.extra['params'] as Map?) ?? const {}).entries)
             if (e.value != null) '${e.key}': e.value,
@@ -925,6 +968,15 @@ class ChatController extends Notifier<ChatState> {
       if (view != _view) return;
       state = state.copyWith(loading: false, error: '$e');
     }
+  }
+
+  /// Shows the branch that holds message [messageId] in the open chat, as
+  /// an inbox mention opens a chat at its reply (Open WebUI 0.13.4).
+  void showMessage(String messageId) {
+    final chat = state.chat;
+    if (chat == null || !chat.messages.containsKey(messageId)) return;
+    chat.currentId = chat.latestUnder(messageId);
+    state = state.copyWith(chat: chat);
   }
 
   /// Clears the chat's unread mark, here and on the web.
@@ -979,12 +1031,21 @@ class ChatController extends Notifier<ChatState> {
         (state.chat?.messages.values.any((m) => agent(m.model)) ?? false);
   }
 
+  /// Whether this agent chat can't regenerate or edit and resend: Open
+  /// WebUI 0.13.4 lets agents do both (only Continue stays off).
+  bool get agentLimited =>
+      isAgentChat && !isOwui0134(ref.read(serverConfigProvider).value);
+
   static const agentLimit =
       "Coding agent chats can't be regenerated, continued, or edited and "
-      'resent. Start a new chat instead.';
+      'resent on this Open WebUI. Start a new chat instead.';
+
+  static const agentContinueLimit =
+      "A coding agent's reply can't be continued. Send a new message "
+      'instead.';
 
   Future<bool> send(String text, {ChatMessage? editOf}) async {
-    if (editOf != null && isAgentChat) {
+    if (editOf != null && agentLimited) {
       state = state.copyWith(error: agentLimit);
       return false;
     }
@@ -1359,7 +1420,7 @@ class ChatController extends Notifier<ChatState> {
   /// for a different answer than the old one, as the web's regenerate menu
   /// does.
   Future<void> regenerate(ChatMessage reply, {String? hint}) async {
-    if (isAgentChat) {
+    if (agentLimited) {
       state = state.copyWith(error: agentLimit);
       return;
     }
@@ -1395,7 +1456,9 @@ class ChatController extends Notifier<ChatState> {
   /// Response).
   Future<void> continueReply(ChatMessage reply) async {
     if (isAgentChat) {
-      state = state.copyWith(error: agentLimit);
+      state = state.copyWith(
+        error: agentLimited ? agentLimit : agentContinueLimit,
+      );
       return;
     }
     final chat = state.chat;
@@ -1661,6 +1724,7 @@ class ChatController extends Notifier<ChatState> {
       for (final r in [run, ...run.also]) r.reply.id: r,
     };
     final view = _view;
+    var queuedOnServer = false;
     state = state.copyWith(
       chat: chat,
       streaming: true,
@@ -1745,6 +1809,7 @@ class ChatController extends Notifier<ChatState> {
               settings,
               await _optional(serverConfigProvider),
               overrides: state.features,
+              mediaModels: state.mediaModels,
               toolIds: state.toolIds,
               skillIds: state.skillIds,
               terminalId: state.terminalId,
@@ -1799,6 +1864,13 @@ class ChatController extends Notifier<ChatState> {
       }
       run.taskIds = turn.taskIds;
       started?.complete((replyId: reply.id, taskIds: turn.taskIds));
+      // Open WebUI 0.13.4: another reply in this chat (from another device
+      // or an automation) is still running, so the server holds this
+      // message and answers it next; nothing comes for our empty reply.
+      if (turn.queued) {
+        queuedOnServer = true;
+        run.cancel();
+      }
       // Stop tapped while the request was on its way: stop it now.
       if (run.stopped) await _stopTasks(run);
       if (!temporary) {
@@ -1817,6 +1889,15 @@ class ChatController extends Notifier<ChatState> {
     }
     if (view != _view) return; // the person moved on
 
+    if (queuedOnServer) {
+      state = state.copyWith(
+        streaming: false,
+        clearError: true,
+        status: queuedNote,
+      );
+      unawaited(_awaitQueued(chat.id, user.id, view));
+      return;
+    }
     // The server's copy is the truth: it has the saved reply, its title,
     // sources and tool results.
     if (chat.id.isNotEmpty) {
@@ -2436,6 +2517,33 @@ class ChatController extends Notifier<ChatState> {
   }
 
   /// Backup for a lost socket: checks the saved chat until the reply is done.
+  static const queuedNote =
+      'Sent. A reply is still being written in this chat; yours is answered '
+      'right after it.';
+
+  /// Follows a message the server queued (Open WebUI 0.13.4) until it has
+  /// its answer, then shows the chat as saved. Gives up after 10 minutes.
+  Future<void> _awaitQueued(String chatId, String messageId, int view) async {
+    final client = ref.read(clientProvider);
+    for (var i = 0; i < 200; i++) {
+      await Future<void>.delayed(const Duration(seconds: 3));
+      if (view != _view) return;
+      try {
+        final saved = await client.chat(chatId);
+        if (view != _view) return;
+        if (queuedAnswered(saved, messageId)) {
+          state = state.copyWith(chat: saved, clearStatus: true);
+          _markRead(chatId);
+          refreshChatLists(ref.invalidate);
+          return;
+        }
+      } catch (_) {
+        // Try again on the next tick.
+      }
+    }
+    if (view == _view) state = state.copyWith(clearStatus: true);
+  }
+
   Future<void> _poll(String chatId, _Run run) async {
     final client = ref.read(clientProvider);
     while (!run.finished.isCompleted) {
@@ -2491,3 +2599,20 @@ String _titleFrom(String text) {
 final chatControllerProvider = NotifierProvider<ChatController, ChatState>(
   ChatController.new,
 );
+
+/// Whether the queued message [messageId] in [chat] has a finished reply.
+bool queuedAnswered(Chat chat, String messageId) => chat.messages.values.any(
+  (m) =>
+      m.parentId == messageId &&
+      m.role == 'assistant' &&
+      (m.done || m.error != null),
+);
+
+/// The terminal saved with [chat] (Open WebUI 0.13.4 keeps `terminal_id`
+/// in the chat): its id, '' for none, or null when the chat doesn't say
+/// (older chats and servers), which keeps the current pick.
+String? chatTerminalChoice(Chat chat) {
+  if (!chat.extra.containsKey('terminal_id')) return null;
+  final v = chat.extra['terminal_id'];
+  return v is String ? v : '';
+}

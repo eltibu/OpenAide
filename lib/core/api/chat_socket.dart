@@ -44,6 +44,9 @@ class ChatSocket {
         _waiting.clear();
       })
       ..on('events', (data) {
+        if (data is Map && _typedEvent(data.cast<String, dynamic>())) {
+          return;
+        }
         if (data is Map && !_events.isClosed) {
           _events.add(data.cast<String, dynamic>());
         } else if (data is List &&
@@ -106,7 +109,48 @@ class ChatSocket {
       ..connect();
   }
 
+  /// Open WebUI 0.13.4 sends notes, comments, inbox, access and
+  /// encrypted-chat updates as typed messages on `events` (no chat id)
+  /// instead of their own event names. Hands them to the same streams as
+  /// the old names (still heard for older servers); true when it was one.
+  bool _typedEvent(Map<String, dynamic> m) {
+    final t = typedSocketEvent(m);
+    if (t == null) return false;
+    final d = t.$2;
+    void add(StreamController<Map<String, dynamic>> c) {
+      if (d != null && !c.isClosed) c.add(d);
+    }
+
+    switch (t.$1) {
+      case 'note:presence':
+        add(_notePresence);
+      case 'note:updated':
+        add(_noteEvents);
+      case 'notifications:changed':
+        if (!_inbox.isClosed) _inbox.add(null);
+      case 'comments:changed':
+        add(_comments);
+      case 'comments:unavailable':
+        // Access to a joined comment room ended; nothing to refresh.
+        break;
+      case 'access:updated':
+        if (!_dropped.isClosed) _dropped.add(null);
+      case 'encryption:available':
+        add(_encryption);
+      case 'terminals:changed':
+        if (!_terminals.isClosed) _terminals.add(null);
+      default:
+        return false;
+    }
+    return true;
+  }
+
   late final io.Socket _socket;
+  final _terminals = StreamController<void>.broadcast();
+
+  /// The terminals you can use changed (0.13.4: one was created, shared,
+  /// started or stopped, or a Tether computer came or went).
+  Stream<void> get terminalsChanged => _terminals.stream;
   final String _token;
   final _events = StreamController<Map<String, dynamic>>.broadcast();
   final _channelEvents = StreamController<Map<String, dynamic>>.broadcast();
@@ -261,6 +305,7 @@ class ChatSocket {
   void dispose() {
     _socket.dispose();
     _events.close();
+    _terminals.close();
     _channelEvents.close();
     _encryption.close();
     _calls.close();
@@ -295,3 +340,26 @@ class SocketCall {
     _reply(value);
   }
 }
+
+/// The (type, data) of a 0.13.4 typed socket message that isn't about a
+/// chat reply, or null. Pure so it can be tested.
+(String, Map<String, dynamic>?)? typedSocketEvent(Map<String, dynamic> m) {
+  if (m['chat_id'] != null || m['channel_id'] != null) return null;
+  final inner = m['data'];
+  if (inner is! Map) return null;
+  final type = inner['type'];
+  if (type is! String || !_typedEventNames.contains(type)) return null;
+  final d = inner['data'];
+  return (type, d is Map ? d.cast<String, dynamic>() : null);
+}
+
+const _typedEventNames = {
+  'note:presence',
+  'note:updated',
+  'notifications:changed',
+  'comments:changed',
+  'comments:unavailable',
+  'access:updated',
+  'encryption:available',
+  'terminals:changed',
+};

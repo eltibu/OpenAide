@@ -38,6 +38,7 @@ import 'formatting_toolbar.dart';
 import 'embeds_view.dart';
 import 'folder_home.dart';
 import 'markdown_extras.dart';
+import 'media_models.dart';
 import 'read_aloud.dart';
 import 'reply_actions.dart';
 import 'reply_parts.dart';
@@ -1440,7 +1441,7 @@ class _MessageActions extends ConsumerWidget {
               'Bad reply',
               () => rateReply(context, ref, message, -1),
             ),
-            if (!controller.isAgentChat)
+            if (!controller.agentLimited)
               RegenerateButton(reply: message, color: muted),
             action(
               Icons.call_split,
@@ -1798,10 +1799,16 @@ class _ComposerState extends ConsumerState<_Composer> {
         .value
         ?.where((m) => m.id == state.modelId)
         .firstOrNull;
-    final features = availableFeatures(
-      model,
-      ref.read(serverConfigProvider).value,
-    );
+    final features =
+        availableFeatures(model, ref.read(serverConfigProvider).value)
+            .where(
+              (f) => mediaFeatureUsable(
+                f,
+                ref.read(mediaModelsProvider('video_generation')).value ??
+                    const [],
+              ),
+            )
+            .toList();
     bool featureOn(String id) =>
         state.features[id] ?? model?.defaultFeatureIds.contains(id) ?? false;
     final compaction =
@@ -1972,11 +1979,13 @@ class _ComposerState extends ConsumerState<_Composer> {
           switch (id) {
             'web_search' => 'search',
             'image_generation' => 'image',
+            'video_generation' => 'video',
             _ => 'code',
           },
           '${featureOn(id) ? 'Turn off' : 'Turn on'} ${switch (id) {
             'web_search' => 'web search',
             'image_generation' => 'image generation',
+            'video_generation' => 'video generation',
             _ => 'the code interpreter',
           }} for this chat',
           _featureIcon(id),
@@ -2959,7 +2968,15 @@ class _FeaturesButton extends ConsumerWidget {
         ?.where((m) => m.id == state.modelId)
         .firstOrNull;
     final config = ref.watch(serverConfigProvider).value;
-    final features = availableFeatures(model, config);
+    final features = availableFeatures(model, config)
+        .where(
+          (f) => mediaFeatureUsable(
+            f,
+            ref.watch(mediaModelsProvider('video_generation')).value ??
+                const [],
+          ),
+        )
+        .toList();
     final tools = ref.watch(chatToolsProvider).value ?? const [];
     final skills = ref.watch(skillsProvider).value ?? const [];
     final terminals = ref.watch(chatTerminalsProvider).value ?? const [];
@@ -3023,6 +3040,11 @@ class _FeaturesButton extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.only(left: 6),
             child: Icon(Icons.image_outlined, size: 20, color: accent),
+          ),
+        if (on('video_generation') && features.contains('video_generation'))
+          Padding(
+            padding: const EdgeInsets.only(left: 6),
+            child: Icon(Icons.movie_outlined, size: 20, color: accent),
           ),
         // Where code runs, as the web's terminal chip: a terminal, the
         // sandbox, or nothing. Tap to switch or open its files.
@@ -3268,7 +3290,15 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
         ?.where((m) => m.id == state.modelId)
         .firstOrNull;
     final config = ref.watch(serverConfigProvider).value;
-    final features = availableFeatures(model, config);
+    final features = availableFeatures(model, config)
+        .where(
+          (f) => mediaFeatureUsable(
+            f,
+            ref.watch(mediaModelsProvider('video_generation')).value ??
+                const [],
+          ),
+        )
+        .toList();
     final tools = ref.watch(chatToolsProvider).value ?? const <Pickable>[];
     final skills = ref.watch(skillsProvider).value ?? const <Pickable>[];
     final terminals = ref.watch(chatTerminalsProvider).value ?? const [];
@@ -3458,13 +3488,16 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
                   features.length,
                 ),
                 children: [
-                  for (final id in features)
+                  for (final id in features) ...[
                     SwitchListTile(
                       secondary: Icon(_featureIcon(id)),
                       title: Text(featureLabels[id] ?? id),
                       value: featureOn(id),
                       onChanged: (v) => chat.setFeature(id, v),
                     ),
+                    if (mediaFeatures.contains(id) && featureOn(id))
+                      MediaModelPicker(feature: id),
+                  ],
                 ],
               ),
             if (terminals.isNotEmpty && query.isEmpty)
@@ -3622,6 +3655,7 @@ class _ToolsSheetState extends ConsumerState<_ToolsSheet> {
 IconData _featureIcon(String id) => switch (id) {
   'web_search' => Icons.language,
   'image_generation' => Icons.image_outlined,
+  'video_generation' => Icons.movie_outlined,
   _ => Icons.code,
 };
 

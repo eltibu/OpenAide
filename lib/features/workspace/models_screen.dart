@@ -344,13 +344,13 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
         const {};
     final tools = [
       for (final (key, label, feature) in builtinToolList)
-        if ((feature == null || features[feature] == true) &&
+        if (builtinToolOffered(feature, features) &&
             (key == 'files'
                 ? _caps['file_upload'] != false && !_preloadFiles
                 : _caps[key] != false))
           (key, label),
     ];
-    final on = tools.where((t) => _builtin[t.$1] != false).length;
+    final on = tools.where((t) => builtinToolOn(_builtin, t.$1)).length;
     final models = ref.watch(nonAgentModelsProvider).value ?? const [];
     final self = _isNew ? modelIdFrom(_id.text.trim()) : _m?.id;
     return Padding(
@@ -366,9 +366,11 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: T(label),
-              value: _builtin[key] != false,
+              value: builtinToolOn(_builtin, key),
               onChanged: (v) => setState(
-                () => v ? _builtin.remove(key) : _builtin[key] = false,
+                () => optInBuiltinTools.contains(key)
+                    ? (v ? _builtin[key] = true : _builtin.remove(key))
+                    : (v ? _builtin.remove(key) : _builtin[key] = false),
               ),
             ),
             if (key == 'subagents' && _builtin[key] != false)
@@ -1040,28 +1042,32 @@ class _ModelEditorState extends ConsumerState<ModelEditor> {
                     style: TextStyle(color: context.nexus.muted),
                   ),
                 ),
-                for (final c in modelCapabilities.entries) ...[
-                  SwitchListTile(
-                    title: Text(c.value),
-                    value: _caps[c.key] == true,
-                    onChanged: (on) => setState(() => _caps[c.key] = on),
-                  ),
-                  // Open WebUI 0.13.1: attached files are no longer put in
-                  // the conversation unless this is on (off by default with
-                  // native function calling, on with legacy), so a model
-                  // without tools needs it to see files.
-                  if (c.key == 'file_upload' && _caps['file_upload'] == true)
+                for (final c in modelCapabilities.entries)
+                  if (c.key != 'video_generation' ||
+                      (ref.watch(serverConfigProvider).value?['features']
+                              as Map?)?['enable_video_generation'] ==
+                          true) ...[
                     SwitchListTile(
-                      title: const T('Preload files'),
-                      subtitle: const T(
-                        'Put attached files in the conversation, instead of '
-                        'the model reading them with its file tools.',
-                      ),
-                      value: _preloadFiles,
-                      onChanged: (on) =>
-                          setState(() => _caps['file_context'] = on),
+                      title: Text(c.value),
+                      value: _caps[c.key] == true,
+                      onChanged: (on) => setState(() => _caps[c.key] = on),
                     ),
-                ],
+                    // Open WebUI 0.13.1: attached files are no longer put in
+                    // the conversation unless this is on (off by default with
+                    // native function calling, on with legacy), so a model
+                    // without tools needs it to see files.
+                    if (c.key == 'file_upload' && _caps['file_upload'] == true)
+                      SwitchListTile(
+                        title: const T('Preload files'),
+                        subtitle: const T(
+                          'Put attached files in the conversation, instead of '
+                          'the model reading them with its file tools.',
+                        ),
+                        value: _preloadFiles,
+                        onChanged: (on) =>
+                            setState(() => _caps['file_context'] = on),
+                      ),
+                  ],
                 if (_caps['builtin_tools'] == true) _builtinTools(),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),

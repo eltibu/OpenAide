@@ -258,11 +258,19 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       : PopupMenuButton<String>(
                           onSelected: (v) async {
                             Navigator.pop(sheet);
-                            v == 'default'
-                                ? await _run(() => _api.makeDefault(c.id))
-                                : await _deleteCalendar(c);
+                            if (v == 'edit') {
+                              await _newCalendar(edit: c);
+                            } else {
+                              v == 'default'
+                                  ? await _run(() => _api.makeDefault(c.id))
+                                  : await _deleteCalendar(c);
+                            }
                           },
                           itemBuilder: (_) => [
+                            const PopupMenuItem(
+                              value: 'edit',
+                              child: T('Rename or recolor'),
+                            ),
                             if (!c.isDefault)
                               const PopupMenuItem(
                                 value: 'default',
@@ -324,14 +332,15 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     if (ok == true) await _run(() => _api.deleteCalendar(c.id));
   }
 
-  Future<void> _newCalendar() async {
-    final name = TextEditingController();
-    var color = calendarColors.first;
+  /// A new calendar, or [edit]'s name and color.
+  Future<void> _newCalendar({Calendar? edit}) async {
+    final name = TextEditingController(text: edit?.name ?? '');
+    var color = edit?.color ?? calendarColors.first;
     final ok = await showDialog<bool>(
       context: context,
       builder: (d) => StatefulBuilder(
         builder: (d, setD) => AlertDialog(
-          title: const T('New calendar'),
+          title: T(edit == null ? 'New calendar' : 'Edit calendar'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -396,14 +405,18 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(d, true),
-              child: const T('Create'),
+              child: T(edit == null ? 'Create' : 'Save'),
             ),
           ],
         ),
       ),
     );
     if (ok == true && name.text.trim().isNotEmpty) {
-      await _run(() => _api.createCalendar(name.text.trim(), color));
+      await _run(
+        () => edit == null
+            ? _api.createCalendar(name.text.trim(), color)
+            : _api.updateCalendar(edit.id, name.text.trim(), color),
+      );
     }
   }
 }

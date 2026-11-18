@@ -182,6 +182,14 @@ class CalendarApi {
     body: {'name': name, 'color': colorHex(color)},
   );
 
+  /// Renames a calendar or gives it another color.
+  Future<void> updateCalendar(String id, String name, Color color) =>
+      client.send(
+        'POST',
+        '$_base/${Uri.encodeComponent(id)}/update',
+        body: {'name': name, 'color': colorHex(color)},
+      );
+
   Future<void> deleteCalendar(String id) =>
       client.send('DELETE', '$_base/${Uri.encodeComponent(id)}/delete');
 

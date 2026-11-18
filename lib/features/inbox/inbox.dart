@@ -61,7 +61,9 @@ class InboxItem {
       'comment.created' => tr('{{name}} commented'),
       'comment.replied' || 'channel.replied' => tr('{{name}} replied'),
       'comment.mentioned' ||
-      'channel.mentioned' => tr('{{name}} mentioned you'),
+      'channel.mentioned' ||
+      // Open WebUI 0.13.4: a model mentioned you in a chat's reply.
+      'chat.mentioned' => tr('{{name}} mentioned you'),
       'calendar.alert' => tr('Upcoming event'),
       'automation.run_failed' => tr('Automation failed'),
       'system.announcement' => tr('Announcement'),
@@ -73,6 +75,7 @@ class InboxItem {
   IconData get icon => switch (event.split('.').first) {
     'comment' => Icons.mode_comment_outlined,
     'channel' => Icons.tag,
+    'chat' => Icons.alternate_email,
     'calendar' => Icons.event_outlined,
     'automation' => Icons.error_outline,
     _ => Icons.notifications_none,
@@ -289,6 +292,11 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
             title: item.title,
           );
         }
+      } else if (item.objectType == 'chat_message' && type == 'chat') {
+        navigator.popUntil((r) => r.isFirst);
+        final chat = ref.read(chatControllerProvider.notifier);
+        await chat.open(id);
+        if (item.objectId != null) chat.showMessage(item.objectId!);
       } else if (item.objectType == 'comment' && type == 'note') {
         await navigator.push(
           MaterialPageRoute<void>(

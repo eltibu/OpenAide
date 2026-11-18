@@ -24,6 +24,9 @@ String permissionLabel(String key) => switch (key) {
   'stt' => 'Speech to text',
   'tts' => 'Text to speech',
   'api_keys' => 'API keys',
+  // Open WebUI 0.13.4.
+  'subagents' => 'Sub-agents',
+  'video_generation' => 'Video generation',
   _ => settingLabel(key.toUpperCase()),
 };
 

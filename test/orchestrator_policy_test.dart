@@ -24,7 +24,24 @@ class _FakeClient extends OpenWebUiClient {
   }
 }
 
+class _GoneClient extends OpenWebUiClient {
+  _GoneClient() : super(baseUrl: 'http://x');
+
+  @override
+  Future<dynamic> send(
+    String method,
+    String path, {
+    Object? body,
+    Map<String, String>? query,
+  }) async => throw ApiException(405, 'Method Not Allowed');
+}
+
 void main() {
+  test('Open WebUI 0.13.4 has no orchestrator policies', () async {
+    expect(await OrchestratorPolicy.supported(_GoneClient()), isFalse);
+    expect(await OrchestratorPolicy.supported(_FakeClient()), isTrue);
+  });
+
   test('policy data, environment lines and contexts', () {
     final p = OrchestratorPolicy(id: 'p')
       ..image = 'img:1'
@@ -100,7 +117,8 @@ void main() {
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    final policy = client.calls.firstWhere((c) => c.$1.endsWith('/policy'));
+    // The first call only asks whether the server still keeps policies.
+    final policy = client.calls.lastWhere((c) => c.$1.endsWith('/policy'));
     expect(policy.$2, {
       'url': 'http://orch',
       'key': 'k',

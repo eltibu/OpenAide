@@ -702,8 +702,10 @@ class OpenWebUiClient {
   ///
   /// [chatId] null starts a new chat. [options] carries what the web UI adds
   /// (tool_ids, filter_ids, terminal_id, features, params). Returns the chat
-  /// id and the task ids.
-  Future<({String chatId, List<String> taskIds})> startTurn({
+  /// id and the task ids. [queued] (Open WebUI 0.13.4): a reply in the chat
+  /// was still running, so the server holds the message and answers it as
+  /// soon as that reply reaches its next step; no reply [replyId] is made.
+  Future<({String chatId, List<String> taskIds, bool queued})> startTurn({
     required String model,
     required String? chatId,
     required ChatMessage userMessage,
@@ -741,6 +743,7 @@ class OpenWebUiClient {
     return (
       chatId: res['chat_id'] as String,
       taskIds: (res['task_ids'] as List? ?? []).whereType<String>().toList(),
+      queued: res['queued'] == true,
     );
   }
 

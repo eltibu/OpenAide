@@ -9,14 +9,22 @@ import '../../core/models/model_info.dart';
 const featureLabels = {
   'web_search': 'Web search',
   'image_generation': 'Image generation',
+  // Open WebUI 0.13.4.
+  'video_generation': 'Video generation',
   'code_interpreter': 'Code interpreter',
 };
 
 const _adminSwitch = {
   'web_search': 'enable_web_search',
   'image_generation': 'enable_image_generation',
+  'video_generation': 'enable_video_generation',
   'code_interpreter': 'enable_code_interpreter',
 };
+
+/// Features where Open WebUI 0.13.4 lets you pick the model that makes the
+/// picture or video: the pick rides on the feature itself as
+/// `{model: "<connection>:<model>"}` (plain `true` means the default).
+const mediaFeatures = {'image_generation', 'video_generation'};
 
 /// The features [model] may use on this server: the admin has them on and
 /// the model doesn't opt out.
@@ -69,6 +77,7 @@ Map<String, dynamic> requestOptions(
   String? terminalId,
   Map<String, dynamic> chatParams = const {},
   List<Map<String, dynamic>> toolServers = const [],
+  Map<String, String> mediaModels = const {},
 }) {
   final ui = (settings?['ui'] as Map?) ?? const {};
   final enabled = (config?['features'] as Map?) ?? const {};
@@ -94,6 +103,14 @@ Map<String, dynamic> requestOptions(
       features[e.key] = true;
     } else if (!e.value) {
       features.remove(e.key);
+    }
+  }
+  // The image or video model picked for this chat (0.13.4).
+  for (final e in mediaModels.entries) {
+    if (mediaFeatures.contains(e.key) &&
+        features[e.key] == true &&
+        e.value.isNotEmpty) {
+      features[e.key] = {'model': e.value};
     }
   }
   // Memory follows the person's own setting, else the site's switch.

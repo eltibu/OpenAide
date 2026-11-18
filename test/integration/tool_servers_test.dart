@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nexus_assistant/core/api/openwebui_client.dart';
+import 'package:nexus_assistant/core/api/server_version.dart';
 import 'package:nexus_assistant/core/auth/session.dart';
 import 'package:nexus_assistant/features/chat/chat_controller.dart';
 import 'package:nexus_assistant/features/settings/tool_servers.dart';
@@ -140,6 +141,12 @@ void main() {
     addTearDown(tools.close);
     final client = OpenWebUiClient(baseUrl: url!);
     await client.signIn(email!, password!);
+    // Open WebUI 0.13.4 moved your own connections and tool servers to the
+    // Tether app; the server no longer offers them to the phone.
+    if (isOwui0134(((await client.send('GET', '/api/config')) as Map).cast())) {
+      markTestSkipped('Direct connections are gone in Open WebUI 0.13.4');
+      return;
+    }
     final before = await client.send('GET', '/api/v1/configs/connections');
     await client.send(
       'POST',

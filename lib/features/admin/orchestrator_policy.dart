@@ -64,6 +64,27 @@ class OrchestratorPolicy {
     'auth_type': c['auth_type'] ?? 'bearer',
   };
 
+  /// Whether the server still keeps orchestrator policies. Open WebUI
+  /// 0.13.4 dropped them (Terminals 0.4.0 makes terminals from templates
+  /// instead), so the routes answer 404/405 there.
+  static Future<bool> supported(OpenWebUiClient client) async {
+    try {
+      await client.send(
+        'POST',
+        '/api/v1/configs/terminal_servers/policy',
+        body: const {},
+      );
+      return true;
+    } on ApiException catch (e) {
+      return !policyRouteGone(e.statusCode);
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// A status that means the policy route itself is gone, not a policy.
+  static bool policyRouteGone(int status) => status == 404 || status == 405;
+
   Future<void> load(OpenWebUiClient client, Map connection) async {
     final at = {..._target(connection), 'policy_id': id};
     try {

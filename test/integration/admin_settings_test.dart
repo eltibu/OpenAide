@@ -27,7 +27,7 @@ void main() {
       }
       expect(part, isNotEmpty, reason: s.title);
       for (final k in s.engines.keys) {
-        if (s.path.isEmpty || part.containsKey(k)) {
+        if ((s.path.isEmpty && !s.enginesOptional) || part.containsKey(k)) {
           expect(part.containsKey(k), isTrue, reason: '${s.title} $k');
         }
       }

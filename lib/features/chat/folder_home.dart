@@ -11,7 +11,9 @@ import '../../core/models/chat.dart';
 import '../../core/theme.dart';
 import 'chat_controller.dart';
 import 'emoji.dart';
+import 'folder_board.dart';
 import 'folder_settings.dart';
+import '../../core/api/server_version.dart';
 import '../../core/i18n/app_strings.dart';
 
 /// The folder as the server has it: name, meta (icon) and data (files).
@@ -155,6 +157,45 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
     ref.invalidate(folderDetailProvider(widget.folder.id));
   }
 
+  List<Widget> _automations(String id, Color muted) {
+    final list = ref.watch(folderAutomationsProvider(id));
+    final items = list.value ?? const [];
+    return [
+      if (list.isLoading)
+        const Padding(
+          padding: EdgeInsets.all(12),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (items.isEmpty)
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: T(
+            'No automations post into this folder yet. Make one in '
+            'Automations and pick this folder.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: muted),
+          ),
+        ),
+      for (final a in items)
+        ListTile(
+          dense: true,
+          leading: Icon(
+            a['is_active'] == false
+                ? Icons.pause_circle_outline
+                : Icons.schedule,
+            size: 18,
+            color: muted,
+          ),
+          title: Text(
+            '${a['name'] ?? ''}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          subtitle: Text(folderAutomationSummary(a)),
+        ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final f = widget.folder;
@@ -168,6 +209,8 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
     ];
     final muted = context.nexus.muted;
     final controller = ref.read(chatControllerProvider.notifier);
+    // Open WebUI 0.13.4: chat statuses, search and the folder's automations.
+    final board = isOwui0134(ref.watch(serverConfigProvider).value);
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 480),
       child: Padding(
@@ -220,12 +263,26 @@ class _FolderHomeState extends ConsumerState<FolderHome> {
                     files.isEmpty ? 'Knowledge' : 'Knowledge (${files.length})',
                   ),
                 ),
+                if (board)
+                  const ButtonSegment(
+                    value: 'automations',
+                    label: T('Automations'),
+                  ),
               ],
               selected: {_tab},
               onSelectionChanged: (s) => setState(() => _tab = s.first),
             ),
             const SizedBox(height: 4),
-            if (_tab == 'chats') ...[
+            if (_tab == 'chats' && board)
+              FolderBoard(
+                folderId: f.id,
+                folder: detail,
+                onStatusesChanged: () =>
+                    ref.invalidate(folderDetailProvider(f.id)),
+              )
+            else if (_tab == 'automations' && board)
+              ..._automations(f.id, muted)
+            else if (_tab == 'chats') ...[
               for (final c in _chats)
                 ListTile(
                   dense: true,

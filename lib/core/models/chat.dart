@@ -578,6 +578,8 @@ class Attachment {
 
   /// Videos, played in the app.
   bool get isVideo {
+    // Open WebUI 0.13.4's video generation marks its files 'video'.
+    if (type == 'video') return true;
     final base = (contentType ?? '').split(';').first.trim().toLowerCase();
     if (base.startsWith('video/')) return true;
     return RegExp(

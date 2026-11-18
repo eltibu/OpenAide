@@ -401,11 +401,22 @@ class _ServerEditorState extends ConsumerState<ServerEditor> {
   bool _resetTerminals = false;
   bool _saving = false;
 
-  bool get _orchestrator => !_tool && _c['server_type'] == 'orchestrator';
+  /// False on Open WebUI 0.13.4+, where connections carry no policy.
+  bool _policies = true;
+
+  bool get _orchestrator =>
+      !_tool && _policies && _c['server_type'] == 'orchestrator';
 
   @override
   void initState() {
     super.initState();
+    if (!_tool) _checkPolicies();
+  }
+
+  Future<void> _checkPolicies() async {
+    final ok = await OrchestratorPolicy.supported(ref.read(clientProvider));
+    if (!mounted) return;
+    setState(() => _policies = ok);
     if (_orchestrator && _policy.id.isNotEmpty && !widget.isNew) {
       _loadPolicy();
     }
